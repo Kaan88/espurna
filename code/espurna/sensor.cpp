@@ -1687,11 +1687,11 @@ unsigned char decimals(Unit unit) {
     case Unit::Ampere:
         return 3;
     case Unit::Volt:
-        return 0;
+        return 1;
     case Unit::Watt:
     case Unit::Voltampere:
     case Unit::VoltampereReactive:
-        return 0;
+        return 1;
     case Unit::Kilowatt:
     case Unit::Kilovoltampere:
     case Unit::KilovoltampereReactive:
