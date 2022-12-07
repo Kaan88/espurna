@@ -1756,6 +1756,10 @@
     // V9261F
     #define V9261F_SUPPORT          1
 
+    // Relay
+    #define RELAY1_PIN          0
+    #define RELAY1_TYPE         RELAY_TYPE_INVERSE
+
     // UART only reads data
     #define UART_SUPPORT            1
     #define UART_SOFTWARE_SUPPORT   1
