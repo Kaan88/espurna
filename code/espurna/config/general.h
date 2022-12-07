@@ -17,7 +17,7 @@
 #endif
 
 #ifndef USE_PASSWORD
-#define USE_PASSWORD            1               // Insecurity caution! Disabling this will disable password querying completely.
+#define USE_PASSWORD            0               // Insecurity caution! Disabling this will disable password querying completely.
 #endif
 
 #ifndef LOOP_DELAY_TIME
