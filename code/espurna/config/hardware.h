@@ -1756,6 +1756,18 @@
     // V9261F
     #define V9261F_SUPPORT          1
 
+    // Buttons
+    #define BUTTON1_PIN         2
+    #define BUTTON1_RELAY       1
+
+    // Touch button
+    #define BUTTON1_CONFIG          BUTTON_PUSHBUTTON | BUTTON_DEFAULT_HIGH
+    #define BUTTON1_PRESS           BUTTON_ACTION_TOGGLE
+    #define BUTTON1_CLICK           BUTTON_ACTION_NONE
+    #define BUTTON1_DBLCLICK        BUTTON_ACTION_NONE
+    #define BUTTON1_LNGCLICK        BUTTON_ACTION_NONE
+    #define BUTTON1_LNGLNGCLICK     BUTTON_ACTION_NONE
+
     // Relay
     #define RELAY1_PIN          0
     #define RELAY1_TYPE         RELAY_TYPE_INVERSE
