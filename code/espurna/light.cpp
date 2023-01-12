@@ -65,10 +65,6 @@ namespace build {
 
 constexpr float WhiteFactor { LIGHT_WHITE_FACTOR };
 
-constexpr bool relay() {
-    return 1 == LIGHT_RELAY_ENABLED;
-}
-
 constexpr bool color() {
     return 1 == LIGHT_USE_COLOR;
 }
@@ -287,10 +283,6 @@ String mqttGroup() {
     return getSetting("mqttGroupColor");
 }
 
-bool relay() {
-    return getSetting("ltRelay", build::relay());
-}
-
 bool color() {
     return getSetting("useColor", build::color());
 }
@@ -364,34 +356,10 @@ espurna::duration::Milliseconds saveDelay() {
 
 #if RELAY_SUPPORT
 
-// Setup virtual relays contolling the light's state
-// TODO: only do per-channel setup optionally
-
-class LightChannelProvider : public RelayProviderBase {
+class LightStateProvider : public RelayProviderBase {
 public:
-    LightChannelProvider() = delete;
-    explicit LightChannelProvider(size_t id) :
-        _id(id)
-    {}
-
-    const char* id() const override {
-        return "light_channel";
-    }
-
-    void change(bool status) override {
-        lightState(_id, status);
-        lightState(true);
-        lightUpdate();
-    }
-
-private:
-    size_t _id { RelaysMax };
-};
-
-class LightGlobalProvider : public RelayProviderBase {
-public:
-    const char* id() const override {
-        return "light_global";
+    espurna::StringView id() const override {
+        return STRING_VIEW("light-state");
     }
 
     void change(bool status) override {
@@ -706,7 +674,6 @@ auto _light_report_delay = espurna::light::build::reportDelay();
 std::forward_list<LightReportListener> _light_report;
 LightTimerValue<int> _light_report_timer(0);
 
-bool _light_has_controls = false;
 bool _light_has_cold_white = false;
 bool _light_has_warm_white = false;
 bool _light_has_color = false;
@@ -839,6 +806,10 @@ private:
 };
 
 LightTemperature _light_temperature;
+
+#if RELAY_SUPPORT
+auto _light_state_relay_id = RelaysMax;
+#endif
 
 bool _light_state_changed = false;
 LightStateListener _light_state_listener = nullptr;
@@ -2330,10 +2301,7 @@ void _lightMqttCallback(unsigned int type, espurna::StringView topic, espurna::S
 
         mqttSubscribe(MQTT_TOPIC_CHANNEL "/+");
         mqttSubscribe(MQTT_TOPIC_BRIGHTNESS);
-
-        if (!_light_has_controls) {
-            mqttSubscribe(MQTT_TOPIC_LIGHT);
-        }
+        mqttSubscribe(MQTT_TOPIC_LIGHT);
 
         if (_light_has_color) {
             mqttSubscribe(MQTT_TOPIC_COLOR_RGB);
@@ -2447,10 +2415,7 @@ void lightMQTT() {
     }
 
     mqttSend(MQTT_TOPIC_BRIGHTNESS, _light_brightness.toString().c_str());
-
-    if (!_light_has_controls) {
-        mqttSend(MQTT_TOPIC_LIGHT, _light_state ? "1" : "0");
-    }
+    mqttSend(MQTT_TOPIC_LIGHT, _light_state ? "1" : "0");
 }
 
 void lightMQTTGroup() {
@@ -2585,19 +2550,17 @@ void _lightApiSetup() {
         }
     );
 
-    if (!_light_has_controls) {
-        apiRegister(F(MQTT_TOPIC_LIGHT),
-            [](ApiRequest& request) {
-                request.send(lightState() ? "1" : "0");
-                return true;
-            },
-            [](ApiRequest& request) {
-                _lightParsePayload(request.param(F("value")));
-                lightUpdate();
-                return true;
-            }
-        );
-    }
+    apiRegister(F(MQTT_TOPIC_LIGHT),
+        [](ApiRequest& request) {
+            request.send(lightState() ? "1" : "0");
+            return true;
+        },
+        [](ApiRequest& request) {
+            _lightParsePayload(request.param(F("value")));
+            lightUpdate();
+            return true;
+        }
+    );
 }
 
 } // namespace
@@ -2609,9 +2572,9 @@ void _lightApiSetup() {
 namespace {
 
 bool _lightWebSocketOnKeyCheck(espurna::StringView key, const JsonVariant&) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("light"))
-        || espurna::settings::query::samePrefix(key, STRING_VIEW("use"))
-        || espurna::settings::query::samePrefix(key, STRING_VIEW("lt"));
+    return key.startsWith(STRING_VIEW("light"))
+        || key.startsWith(STRING_VIEW("use"))
+        || key.startsWith(STRING_VIEW("lt"));
 }
 
 void _lightWebSocketStatus(JsonObject& root) {
@@ -2645,6 +2608,9 @@ void _lightWebSocketOnVisible(JsonObject& root) {
     wsPayloadModule(root, PSTR("light"));
 
     JsonObject& light = root.createNestedObject("light");
+#if RELAY_SUPPORT
+    light["state_relay_id"] = _light_state_relay_id;
+#endif
 
     JsonArray& channels = light.createNestedArray("channels");
 
@@ -2672,11 +2638,6 @@ void _lightWebSocketOnConnected(JsonObject& root) {
     root["ltSaveDelay"] = _light_save_delay.count();
     root["ltTime"] = _light_transition_time.count();
     root["ltStep"] = _light_transition_step.count();
-#if RELAY_SUPPORT
-    root["ltRelay"] = espurna::light::settings::relay();
-#else
-    root["ltRelay"] = false;
-#endif
 }
 
 void _lightWebSocketOnAction(uint32_t client_id, const char* action, JsonObject& data) {
@@ -3523,24 +3484,6 @@ void _lightConfigure() {
     }
 }
 
-#if RELAY_SUPPORT
-
-void _lightRelayBoot() {
-    if (_light_has_controls) {
-        return;
-    }
-
-    auto next_id = relayCount();
-    if (relayAdd(std::make_unique<LightGlobalProvider>())) {
-        _light_state_listener = [next_id](bool state) {
-            relayStatus(next_id, state);
-        };
-        _light_has_controls = true;
-    }
-}
-
-#endif
-
 void _lightBoot() {
     const size_t Channels { _light_channels.size() };
     if (Channels) {
@@ -3640,11 +3583,30 @@ void _lightSettingsMigrate(int version) {
         moveSetting("lightColdMired", "ltColdMired");
         moveSetting("lightWarmMired", "ltWarmMired");
     }
+
+    if (version < 14) {
+        delSetting(F("ltRelay"));
+    }
 }
 
 } // namespace
 
 // -----------------------------------------------------------------------------
+
+RelayProviderBasePtr lightMakeStateRelayProvider(size_t id) {
+#if RELAY_SUPPORT
+    if (!_light_state_listener) {
+        _light_state_relay_id = id;
+        _light_state_listener = [id](bool state) {
+            relayStatus(id, state);
+        };
+
+        return std::make_unique<LightStateProvider>();
+    }
+#endif
+
+    return nullptr;
+}
 
 void lightSetup() {
     migrateVersion(_lightSettingsMigrate);
@@ -3700,12 +3662,6 @@ void lightSetup() {
 #endif
 
     _lightBoot();
-
-#if RELAY_SUPPORT
-    if (espurna::light::settings::relay()) {
-        _lightRelayBoot();
-    }
-#endif
 
     #if WEB_SUPPORT
         wsRegister()

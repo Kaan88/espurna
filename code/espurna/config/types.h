@@ -35,8 +35,6 @@
 #define BUTTON_ACTION_FAN_MEDIUM      ButtonAction::FanMedium
 #define BUTTON_ACTION_FAN_HIGH        ButtonAction::FanHigh
 
-#define BUTTON_ACTION_MAX             ButtonsActionMax
-
 // Deprecated: legacy mapping, changed to action from above
 #define BUTTON_MODE_NONE              BUTTON_ACTION_NONE
 #define BUTTON_MODE_TOGGLE            BUTTON_ACTION_TOGGLE
@@ -63,8 +61,10 @@
 
 // configure where do we get the button events
 #define BUTTON_PROVIDER_NONE        ButtonProvider::None
+#define BUTTON_PROVIDER_DUMMY       ButtonProvider::Dummy
 #define BUTTON_PROVIDER_GPIO        ButtonProvider::Gpio
 #define BUTTON_PROVIDER_ANALOG      ButtonProvider::Analog
+#define BUTTON_PROVIDER_LIGHTFOX    ButtonProvider::Lightfox
 
 //------------------------------------------------------------------------------
 // ENCODER
@@ -106,6 +106,10 @@
 #define RELAY_PROVIDER_GPIO         RelayProvider::Gpio
 #define RELAY_PROVIDER_DUAL         RelayProvider::Dual
 #define RELAY_PROVIDER_STM          RelayProvider::Stm
+#define RELAY_PROVIDER_LIGHT_STATE  RelayProvider::LightState
+#define RELAY_PROVIDER_FAN          RelayProvider::Fan
+#define RELAY_PROVIDER_LIGHTFOX     RelayProvider::Lightfox
+#define RELAY_PROVIDER_TUYA         RelayProvider::Tuya
 
 #define RFB_PROVIDER_RCSWITCH       0
 #define RFB_PROVIDER_EFM8BB1        1

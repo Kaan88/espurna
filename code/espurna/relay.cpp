@@ -14,8 +14,10 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include "api.h"
 #include "mqtt.h"
 #include "relay.h"
+#include "tuya.h"
 #include "rpc.h"
 #include "rtcmem.h"
+#include "light.h"
 #include "settings.h"
 #include "storage_eeprom.h"
 #include "terminal.h"
@@ -30,6 +32,53 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include <vector>
 
 // -----------------------------------------------------------------------------
+
+enum class RelayBoot {
+    Off,
+    On,
+    Same,
+    Toggle,
+    LockedOff,
+    LockedOn
+};
+
+enum class RelayLock {
+    None,
+    Off,
+    On
+};
+
+enum class RelayType {
+    Normal,
+    Inverse,
+    Latched,
+    LatchedInverse
+};
+
+enum class RelayMqttTopicMode {
+    Normal,
+    Inverse
+};
+
+enum class RelayProvider {
+    None,
+    Dummy,
+    Gpio,
+    Dual,
+    Stm,
+    LightState,
+    Fan,
+    Lightfox,
+    Tuya,
+};
+
+enum class RelaySync {
+    None,
+    ZeroOrOne,
+    JustOne,
+    All,
+    First
+};
 
 namespace espurna {
 namespace relay {
@@ -462,7 +511,7 @@ void trigger(Duration duration, size_t id, bool target) {
         return;
     }
 
-    bool rescheduled { false };
+    bool rescheduled [[gnu::unused]] { false };
     auto it = find(id);
     if (it != internal::timers.end()) {
         (*it).update(duration, target);
@@ -597,13 +646,21 @@ PROGMEM_STRING(RelayProviderDummy, "dummy");
 PROGMEM_STRING(RelayProviderGpio, "gpio");
 PROGMEM_STRING(RelayProviderDual, "dual");
 PROGMEM_STRING(RelayProviderStm, "stm");
+PROGMEM_STRING(RelayProviderLightState, "light-state");
+PROGMEM_STRING(RelayProviderFan, "fan");
+PROGMEM_STRING(RelayProviderLightfox, "lightfox");
+PROGMEM_STRING(RelayProviderTuya, "tuya");
 
-static constexpr std::array<Enumeration<RelayProvider>, 5> RelayProviderOptions PROGMEM {
+static constexpr std::array<Enumeration<RelayProvider>, 9> RelayProviderOptions PROGMEM {
     {{RelayProvider::None, RelayProviderNone},
-     {RelayProvider::Dummy, RelayProviderDummy},
-     {RelayProvider::Gpio, RelayProviderGpio},
-     {RelayProvider::Dual, RelayProviderDual},
-     {RelayProvider::Stm, RelayProviderStm}}
+    {RelayProvider::Dummy, RelayProviderDummy},
+    {RelayProvider::Gpio, RelayProviderGpio},
+    {RelayProvider::Dual, RelayProviderDual},
+    {RelayProvider::Stm, RelayProviderStm},
+    {RelayProvider::LightState, RelayProviderLightState},
+    {RelayProvider::Fan, RelayProviderFan},
+    {RelayProvider::Lightfox, RelayProviderLightfox},
+    {RelayProvider::Tuya, RelayProviderTuya}}
 };
 
 PROGMEM_STRING(RelayTypeNormal, "normal");
@@ -998,8 +1055,8 @@ static constexpr espurna::settings::query::IndexedSetting IndexedSettings[] PROG
 // No-op provider, available for purely virtual relays that are controlled only via API
 
 struct DummyProvider : public RelayProviderBase {
-    const char* id() const override {
-        return "dummy";
+    espurna::StringView id() const override {
+        return espurna::relay::settings::options::RelayProviderDummy;
     }
 
     void change(bool) override {
@@ -1229,8 +1286,8 @@ struct GpioProvider : public RelayProviderBase {
         _reset_pin(std::move(reset_pin))
     {}
 
-    const char* id() const override {
-        return "gpio";
+    espurna::StringView id() const override {
+        return espurna::relay::settings::options::RelayProviderGpio;
     }
 
     bool setup() override {
@@ -1301,8 +1358,8 @@ public:
             _instances.end());
     }
 
-    const char* id() const override {
-        return "dual";
+    espurna::StringView id() const override {
+        return espurna::relay::settings::options::RelayProviderDual;
     }
 
     bool setup() override {
@@ -1412,9 +1469,10 @@ public:
         _id(id)
     {}
 
-    const char* id() const override {
-        return "stm";
+    espurna::StringView id() const override {
+        return espurna::relay::settings::options::RelayProviderStm;
     }
+
 
     bool setup() override {
         static bool once = ([]() {
@@ -2420,6 +2478,16 @@ void _relayMqttReportAll() {
     }
 }
 
+void _relayMqttReportDescription() {
+    static const char Topic[] = MQTT_TOPIC_DESCRIPTION "/" MQTT_TOPIC_RELAY;
+    for (size_t id = 0; id < _relays.size(); ++id) {
+        const auto name = espurna::relay::settings::name(id);
+        if (name.length()) {
+            mqttSend(Topic, id, name.c_str());
+        }
+    }
+}
+
 } // namespace
 
 void relayStatusWrap(size_t id, PayloadStatus value, bool is_group_topic) {
@@ -2449,8 +2517,13 @@ void relayStatusWrap(size_t id, PayloadStatus value, bool is_group_topic) {
 namespace {
 
 bool _relayMqttHeartbeat(espurna::heartbeat::Mask mask) {
-    if (mask & espurna::heartbeat::Report::Relay)
+    if (mask & espurna::heartbeat::Report::Relay) {
         _relayMqttReportAll();
+    }
+
+    if (mask & espurna::heartbeat::Report::Description) {
+        _relayMqttReportDescription();
+    }
 
     return mqttConnected();
 }
@@ -2555,8 +2628,9 @@ String _relayTristateToPayload(T value) {
 }
 
 void _relayPrint(Print& out, const Relay& relay, size_t index) {
-    out.printf_P(PSTR("relay%u {Prov=%s TargetStatus=%s CurrentStatus=%s Lock=%s}\n"),
-        index, relay.provider->id(),
+    out.printf_P(PSTR("relay%u {Prov=%.*s TargetStatus=%s CurrentStatus=%s Lock=%s}\n"),
+        index,
+        relay.provider->id().length(), relay.provider->id().begin(),
         relay.target_status ? "on" : "off",
         relay.current_status ? "on" : "off",
         _relayTristateToPayload(relay.lock).c_str());
@@ -2845,19 +2919,47 @@ RelayProviderBasePtr _relaySetupProvider(size_t index) {
     case RelayProvider::Dummy:
         result = std::make_unique<DummyProvider>();
         break;
+
     case RelayProvider::Gpio:
         result = _relayGpioProvider(index, type);
         break;
+
     case RelayProvider::Stm:
 #if RELAY_PROVIDER_STM_SUPPORT
         result = std::make_unique<StmProvider>(index);
 #endif
         break;
+
     case RelayProvider::Dual:
 #if RELAY_PROVIDER_DUAL_SUPPORT
         result = std::make_unique<DualProvider>(index);
 #endif
         break;
+
+    case RelayProvider::LightState:
+#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+        result = lightMakeStateRelayProvider(index);
+#endif
+        break;
+
+    case RelayProvider::Fan:
+#if FAN_SUPPORT
+        result = fanMakeRelayProvider(index);
+#endif
+        break;
+
+    case RelayProvider::Lightfox:
+#ifdef FOXEL_LIGHTFOX_DUAL
+        result = lightfoxMakeRelayProvider(index);
+#endif
+        break;
+
+    case RelayProvider::Tuya:
+#if TUYA_SUPPORT
+        result = tuya::makeRelayProvider(index);
+#endif
+        break;
+
     case RelayProvider::None:
         break;
     }
@@ -2961,17 +3063,31 @@ void relaySetup() {
 
 }
 
-bool relayAdd(RelayProviderBasePtr&& provider) {
-    if (provider && provider->setup()) {
-        _relays.emplace_back(std::move(provider));
-        espurnaRegisterOnceUnique([]() {
-            _relayConfigure();
-            _relayBootAll();
-        });
-        return true;
+RelayAddResult relayAdd(RelayProviderBasePtr&& provider) {
+    RelayAddResult out;
+
+    const auto id = _relays.size();
+    if (espurna::relay::settings::provider(id) != RelayProvider::None) {
+        return out;
     }
 
-    return false;
+    if (!provider) {
+        return out;
+    }
+
+
+    if (!provider->setup()) {
+        return out;
+    }
+
+    out.id = id;
+    _relays.emplace_back(std::move(provider));
+    espurnaRegisterOnceUnique([]() {
+        _relayConfigure();
+        _relayBootAll();
+    });
+
+    return out;
 }
 
 #endif // RELAY_SUPPORT == 1

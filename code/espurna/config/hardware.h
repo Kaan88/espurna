@@ -827,6 +827,9 @@
     #define DEVICE              "BNSZ01"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // LEDs
     #define LED1_PIN            13
     #define LED1_PIN_INVERSE    1
@@ -876,6 +879,9 @@
     #define DEVICE              "SONOFF_B1"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
 
     #define MY92XX_MODEL        MY92XX_MODEL_MY9231
@@ -899,6 +905,9 @@
     #define MANUFACTURER        "ITEAD"
     #define DEVICE              "SONOFF_LED"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // LEDs
     #define LED1_PIN            13
@@ -1089,6 +1098,9 @@
 
     #define BUTTON4_PIN             14
     #define BUTTON4_CLICK           BUTTON_ACTION_FAN_HIGH
+
+    // Relay
+    #define RELAY1_PROVIDER         RELAY_PROVIDER_FAN
 
     // LEDs
     #define LED1_PIN                13
@@ -1304,6 +1316,9 @@
     #define DEVICE              "AI_LIGHT"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define MY92XX_MODEL        MY92XX_MODEL_MY9291
     #define MY92XX_CHIPS        1
@@ -1323,6 +1338,9 @@
     #define DEVICE              "RGB_LED"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define MY92XX_MODEL        MY92XX_MODEL_MY9291
     #define MY92XX_CHIPS        1
@@ -1341,6 +1359,9 @@
     #define MANUFACTURER        "MAGICHOME"
     #define DEVICE              "LED_CONTROLLER"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // LEDs
     #define LED1_PIN            2
@@ -1365,6 +1386,9 @@
     #define DEVICE              "LED_CONTROLLER_20"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // LEDs
     #define LED1_PIN            2
     #define LED1_PIN_INVERSE    1
@@ -1387,6 +1411,9 @@
     #define MANUFACTURER        "MAGICHOME"
     #define DEVICE              "ZJ_WFMN_A_11"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // LEDs
     #define LED1_PIN            2
@@ -1413,6 +1440,9 @@
     #define DEVICE              "ZJ_WFMN_B_11"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // LEDs
     #define LED1_PIN            2
     #define LED1_PIN_INVERSE    1
@@ -1437,6 +1467,9 @@
     #define DEVICE              "ZJ_WFMN_C_11"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Buttons
     #define BUTTON1_PIN         0
     #define BUTTON1_CONFIG      BUTTON_PUSHBUTTON | BUTTON_DEFAULT_HIGH
@@ -1455,6 +1488,9 @@
     #define MANUFACTURER        "MAGICHOME"
     #define DEVICE              "ZJ_ESPM_5CH_B_13"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Buttons
     #define BUTTON1_PIN         0
@@ -1479,6 +1515,9 @@
     #define DEVICE              "ZJ_LB_RGBWW_L"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       5       // RED
     #define LIGHT_CH2_PIN       4       // GREEN
@@ -1496,6 +1535,9 @@
     #define MANUFACTURER        "HUACANXING"
     #define DEVICE              "H801"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Debug
     #define UART1_TX_PIN        2
@@ -1518,6 +1560,9 @@
     #define MANUFACTURER        "HUACANXING"
     #define DEVICE              "H802"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Debug
     #define UART1_TX_PIN        2
@@ -1922,6 +1967,9 @@
     #define DEVICE              "QUINLED"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // LEDs
     #define LED1_PIN            5
     #define LED1_PIN_INVERSE    1
@@ -1941,6 +1989,9 @@
     #define DEVICE              "AL_LC01"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       5       // RED
     #define LIGHT_CH2_PIN       12      // GREEN
@@ -1952,6 +2003,9 @@
     #define MANUFACTURER        "ARILUX"
     #define DEVICE              "AL_LC02"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define LIGHT_CH1_PIN       12      // RED
@@ -1966,6 +2020,9 @@
     #define DEVICE              "AL_LC02_V14"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       14      // RED
     #define LIGHT_CH2_PIN       5       // GREEN
@@ -1978,6 +2035,9 @@
     #define MANUFACTURER        "ARILUX"
     #define DEVICE              "AL_LC06"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Buttons
     #define BUTTON1_PIN         0
@@ -1998,6 +2058,9 @@
     #define DEVICE              "AL_LC11"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       5       // RED
     #define LIGHT_CH2_PIN       4       // GREEN
@@ -2011,6 +2074,9 @@
     #define MANUFACTURER        "ARILUX"
     #define DEVICE              "E27"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define MY92XX_MODEL        MY92XX_MODEL_MY9291
@@ -2080,6 +2146,9 @@
     #define DEVICE              "LYT8266"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       13      // RED
     #define LIGHT_CH2_PIN       12      // GREEN
@@ -2094,6 +2163,9 @@
     #define MANUFACTURER        "GIZWITS"
     #define DEVICE              "WITTY_CLOUD"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Buttons
     #define BUTTON1_PIN         4
@@ -3724,6 +3796,9 @@
     #define DEVICE                      "AG_L4"
     #define LIGHT_PROVIDER              LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER             RELAY_PROVIDER_LIGHT_STATE
+
     // button 1: "power" button
     #define BUTTON1_PIN                 4
     #define BUTTON1_RELAY               1
@@ -3764,6 +3839,9 @@
     #define MANUFACTURER                "GENERIC"
     #define DEVICE                      "AG_L4_V3"
     #define LIGHT_PROVIDER              LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER             RELAY_PROVIDER_LIGHT_STATE
 
     // button 1: "power" button
     #define BUTTON1_PIN                 13
@@ -3989,6 +4067,9 @@
     #define DEVICE              "E27_9W"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define MY92XX_MODEL        MY92XX_MODEL_MY9231
     #define MY92XX_CHIPS        2
@@ -4008,6 +4089,9 @@
     #define DEVICE              "E26_A19"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       5       // RED
     #define LIGHT_CH2_PIN       4       // GREEN
@@ -4023,6 +4107,9 @@
     #define MANUFACTURER        "TECKIN"
     #define DEVICE              "SB53"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define LIGHT_CH1_PIN       4       // RED
@@ -4069,6 +4156,9 @@
     #define LIGHT_COLDWHITE_MIRED 153
     #define LIGHT_WARMWHITE_MIRED 370
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Encoder
     // If mode is ENCODER_MODE_RATIO, the value ratio between both channels is changed
     // when the button is not pressed, and the overall brightness when pressed
@@ -4090,6 +4180,9 @@
     #define DEVICE              "ESP12_RGB"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       4       // RED
     #define LIGHT_CH2_PIN       14      // GREEN
@@ -4106,6 +4199,9 @@
     #define MANUFACTURER        "IWOOLE"
     #define DEVICE              "LED_TABLE_LAMP"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define LIGHT_CH1_PIN       12      // RED
@@ -4125,6 +4221,9 @@
     #define DEVICE              "GU10"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       14      // RED
     #define LIGHT_CH2_PIN       12      // GREEN
@@ -4143,6 +4242,9 @@
     #define DEVICE              "E14"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       4       // RED
     #define LIGHT_CH2_PIN       12      // GREEN
@@ -4160,6 +4262,9 @@
     #define DEVICE              "SH_LEXXW"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       12      // WARM WHITE
     #define LIGHT_CH2_PIN       14      // COLD WHITE
@@ -4174,6 +4279,9 @@
     #define MANUFACTURER        "DELTACO"
     #define DEVICE              "SH_LEXXRGB"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define LIGHT_CH1_PIN       5        // RED
@@ -4194,6 +4302,9 @@
     #define DEVICE              "A19"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       12      // RED
     #define LIGHT_CH2_PIN       15      // GREEN
@@ -4210,6 +4321,9 @@
     #define MANUFACTURER        "LOMBEX"
     #define DEVICE              "LUX_NOVA2_TUNABLE_WHITE"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define MY92XX_MODEL        MY92XX_MODEL_MY9291
@@ -4233,6 +4347,9 @@
     #define MANUFACTURER        "LOMBEX"
     #define DEVICE              "LUX_NOVA2_WHITE_COLOR"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_MY92XX
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define MY92XX_MODEL        MY92XX_MODEL_MY9291
@@ -4284,8 +4401,10 @@
     #define BUTTON1_RELAY       1
 
     // Relays
-    #define RELAY1_PIN          15
-    #define RELAY1_TYPE         RELAY_TYPE_NORMAL
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
+    #define RELAY2_PIN          15
+    #define RELAY2_TYPE         RELAY_TYPE_NORMAL
 
     // Light RGBW
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
@@ -4314,13 +4433,10 @@
     #define BUTTON1_RELAY               1
 
     // Relays
-    #define RELAY1_PIN                  15
-    #define RELAY1_TYPE                 RELAY_TYPE_NORMAL
+    #define RELAY1_PROVIDER             RELAY_PROVIDER_LIGHT_STATE
 
-    // LEDs
-    //Red   LED: 0
-    //Green LED: 4
-    //Blue  LED: 2
+    #define RELAY2_PIN                  15
+    #define RELAY2_TYPE                 RELAY_TYPE_NORMAL
 
     // Light
     #define LIGHT_PROVIDER              LIGHT_PROVIDER_DIMMER
@@ -4429,19 +4545,24 @@
     #define LIGHTFOX_PORT           1
 
     // Relays
-    #define LIGHTFOX_RELAYS         2
+    #define RELAY1_PROVIDER         RELAY_PROVIDER_LIGHTFOX
+    #define RELAY2_PROVIDER         RELAY_PROVIDER_LIGHTFOX
 
     // Buttons
-    #define LIGHTFOX_BUTTONS        4
-
+    #define BUTTON1_PROVIDER        BUTTON_PROVIDER_LIGHTFOX
     #define BUTTON1_CLICK           BUTTON_ACTION_TOGGLE
-    #define BUTTON2_CLICK           BUTTON_ACTION_TOGGLE
-    #define BUTTON3_CLICK           BUTTON_ACTION_TOGGLE
-    #define BUTTON4_CLICK           BUTTON_ACTION_TOGGLE
-
     #define BUTTON1_RELAY           1
+
+    #define BUTTON2_PROVIDER        BUTTON_PROVIDER_LIGHTFOX
+    #define BUTTON2_CLICK           BUTTON_ACTION_TOGGLE
     #define BUTTON2_RELAY           2
+
+    #define BUTTON3_PROVIDER        BUTTON_PROVIDER_LIGHTFOX
+    #define BUTTON3_CLICK           BUTTON_ACTION_TOGGLE
     #define BUTTON3_RELAY           2
+
+    #define BUTTON4_PROVIDER        BUTTON_PROVIDER_LIGHTFOX
+    #define BUTTON4_CLICK           BUTTON_ACTION_TOGGLE
     #define BUTTON4_RELAY           1
 
 // -----------------------------------------------------------------------------
@@ -4538,6 +4659,9 @@
     #define DEVICE              "RGBW_CONTROLLER"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // LEDs
     #define LED1_PIN            13
     #define LED1_PIN_INVERSE    1
@@ -4609,10 +4733,11 @@
     #define TUYA_SUPPORT        1
     #define TUYA_PORT           1
 
-    #define TUYA_CH_STATE_DPID  1
-    #define TUYA_CH1_DPID       2
+    #define LIGHT_PROVIDER          LIGHT_PROVIDER_CUSTOM
+    #define TUYA_LIGHT_CH1_DPID     2
+    #define TUYA_LIGHT_STATE_DPID   1
 
-    #define LIGHT_PROVIDER      LIGHT_PROVIDER_CUSTOM
+    #define RELAY1_PROVIDER         RELAY_PROVIDER_LIGHT_STATE
 
     #define LED1_GPIO           14
 
@@ -4744,6 +4869,9 @@
     #define DEVICE              "MIOBULB001"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       14      // RED
     #define LIGHT_CH2_PIN       12      // GREEN
@@ -4872,6 +5000,9 @@
     #define MANUFACTURER        "LSC"
     #define DEVICE              "SMART_LED_LIGHT_STRIP"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light RGBW
     #define LIGHT_CH1_PIN       4       // RED
@@ -5089,6 +5220,9 @@
     #define DEVICE              "E27_7W_RGBW"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       4       // RED
     #define LIGHT_CH2_PIN       12      // GREEN
@@ -5106,6 +5240,9 @@
     #define MANUFACTURER        "BENEXMART"
     #define DEVICE              "GU53_RGBWW"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define LIGHT_CH1_PIN       4       // RED
@@ -5125,6 +5262,9 @@
     #define DEVICE              "E27_10W_WHITE"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
 
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
+
     // Light
     #define LIGHT_CH1_PIN       5       // WARM WHITE
     #define LIGHT_CH2_PIN       4       // COLD WHITE
@@ -5142,6 +5282,9 @@
     #define MANUFACTURER        "MIRABELLA"
     #define DEVICE              "GENIO_W_A60"
     #define LIGHT_PROVIDER      LIGHT_PROVIDER_DIMMER
+
+    // Relay
+    #define RELAY1_PROVIDER     RELAY_PROVIDER_LIGHT_STATE
 
     // Light
     #define LIGHT_CH1_PIN       14       // WHITE
