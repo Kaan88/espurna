@@ -19,8 +19,7 @@ bool sslFingerPrintArray(const char * fingerprint, unsigned char * bytearray);
 bool sslFingerPrintChar(const char * fingerprint, char * destination);
 
 char* strnstr(const char* buffer, const char* token, size_t n);
-bool isNumber(const char* begin, const char* end);
-bool isNumber(const String&);
+bool isNumber(espurna::StringView);
 
 double roundTo(double num, unsigned char positions);
 bool almostEqual(double lhs, double rhs, int ulp);
@@ -40,8 +39,13 @@ size_t hexEncode(const uint8_t* in, size_t in_size, char* out, size_t out_size);
 String hexEncode(const uint8_t* begin, const uint8_t* end);
 
 template <size_t Size>
-inline String hexEncode(const uint8_t (&buffer)[Size]) {
-    return hexEncode(std::begin(buffer), std::end(buffer));
+inline String hexEncode(const uint8_t (&data)[Size]) {
+    return hexEncode(std::begin(data), std::end(data));
+}
+
+template <size_t Size>
+inline String hexEncode(const std::array<uint8_t, Size>& data) {
+    return hexEncode(data.data(), data.data() + data.size());
 }
 
 inline String hexEncode(uint8_t value) {

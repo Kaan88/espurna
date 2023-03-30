@@ -297,9 +297,9 @@ void forEachError(T&& callback) {
 }
 
 struct ReadValue {
-    double raw;
-    double processed;
-    double filtered;
+    double raw;       // as the sensor returns it
+    double processed; // after applying units and decimals
+    double filtered;  // after applying filters, units and decimals
 };
 
 enum class Filter : int {
@@ -1068,12 +1068,13 @@ constexpr StringView get(unsigned char type) {
 namespace suffix {
 namespace {
 
-PROGMEM_STRING(Units, "Units");
-PROGMEM_STRING(Ratio, "Ratio");
 PROGMEM_STRING(Correction, "Correction");
-PROGMEM_STRING(ZeroThreshold, "ZeroThreshold");
-PROGMEM_STRING(MinDelta, "MinDelta");
 PROGMEM_STRING(MaxDelta, "MaxDelta");
+PROGMEM_STRING(MinDelta, "MinDelta");
+PROGMEM_STRING(Precision, "Precision");
+PROGMEM_STRING(Ratio, "Ratio");
+PROGMEM_STRING(Units, "Units");
+PROGMEM_STRING(ZeroThreshold, "ZeroThreshold");
 
 PROGMEM_STRING(Mains, "Mains");
 PROGMEM_STRING(Reference, "Reference");
@@ -1908,10 +1909,21 @@ Value safe_value_reported(size_t index) {
 
 } // namespace magnitude
 
+using TimeSource = espurna::time::CoreClock;
+
+enum class State {
+    None,
+    Initial,
+    Idle,
+    Resume,
+    Ready,
+    Reading,
+};
+
 namespace internal {
 
 std::vector<BaseSensorPtr> sensors;
-bool ready { false };
+size_t read_count;
 
 bool real_time { build::realTimeValues() };
 size_t report_every { build::reportEvery() };
@@ -2296,7 +2308,10 @@ void load() {
 
         auto* sensor = new MHZ19Sensor();
         sensor->setPort(port->stream);
-        sensor->setCalibrateAuto(getSetting("mhz19CalibrateAuto", false));
+        sensor->setCalibrateAuto(
+            getSetting("mhz19CalibrateAuto", MHZ19_CALIBRATE_AUTO == 1));
+        sensor->setDetectionRange(
+            getSetting("mhz19DetectionRange", uint32_t{ MHZ19_DETECTION_RANGE }));
         add(sensor);
     }
 #endif
@@ -3127,6 +3142,45 @@ namespace settings {
 namespace query {
 namespace {
 
+namespace getter {
+
+struct Type {
+    using Check = bool(*)(unsigned char);
+    using Get = String(*)(const Magnitude&);
+
+    StringView suffix;
+    Check check;
+    Get get;
+};
+
+#define EXACT_VALUE(NAME)\
+String NAME (const Magnitude& magnitude) {\
+    return espurna::settings::internal::serialize(magnitude.NAME);\
+}
+
+EXACT_VALUE(correction)
+EXACT_VALUE(decimals)
+EXACT_VALUE(filter_type)
+
+String ratio(const Magnitude& magnitude) {
+    const auto ptr = reinterpret_cast<BaseEmonSensor*>(magnitude.sensor.get());
+    return String(ptr->defaultRatio(magnitude.slot));
+}
+
+EXACT_VALUE(units)
+
+#undef EXACT_VALUE
+
+static constexpr std::array<Type, 5> List PROGMEM {{
+    {suffix::Correction, magnitude::traits::correction_supported, correction},
+    {suffix::Filter, nullptr, filter_type},
+    {suffix::Precision, nullptr, decimals},
+    {suffix::Ratio, magnitude::traits::ratio_supported, ratio},
+    {suffix::Units, nullptr, units},
+}};
+
+} // namespace getter
+
 bool check(StringView key) {
     if (key.length() < 3) {
         return false;
@@ -3150,39 +3204,20 @@ String get(StringView key) {
     String out;
 
     for (auto& magnitude : magnitude::internal::magnitudes) {
-        if (magnitude::traits::ratio_supported(magnitude.type)) {
-            const auto expected = keys::get(magnitude, suffix::Ratio);
-            if (key == expected.value()) {
-                out = String(reinterpret_cast<BaseEmonSensor*>(magnitude.sensor.get())->defaultRatio(magnitude.slot));
-                break;
+        for (const auto& type : getter::List) {
+            if (type.check && !type.check(magnitude.type)) {
+                continue;
             }
-        }
 
-        if (magnitude::traits::correction_supported(magnitude.type)) {
-            const auto expected = keys::get(magnitude, suffix::Correction);
+            const auto expected = keys::get(magnitude, type.suffix);
             if (key == expected.value()) {
-                out = String(magnitude.correction);
-                break;
-            }
-        }
-
-        {
-            const auto expected = keys::get(magnitude, suffix::Filter);
-            if (key == expected.value()) {
-                out = espurna::settings::internal::serialize(magnitude.filter_type);
-                break;
-            }
-        }
-
-        {
-            const auto expected = keys::get(magnitude, suffix::Units);
-            if (key == expected.value()) {
-                out = espurna::settings::internal::serialize(magnitude.units);
-                break;
+                out = type.get(magnitude);
+                goto out;
             }
         }
     }
 
+out:
     return out;
 }
 
@@ -3777,8 +3812,38 @@ void setup() {
 // Sensor initialization
 // -----------------------------------------------------------------------------
 
-void init() {
-    internal::ready = true;
+namespace internal {
+
+State state;
+
+TimeSource::time_point last_init;
+TimeSource::time_point last_reading;
+
+} // namespace internal
+
+void suspend() {
+    for (auto& sensor : internal::sensors) {
+        sensor->suspend();
+    }
+}
+
+void resume() {
+    internal::last_init = TimeSource::now();
+    internal::last_reading = TimeSource::now();
+    internal::read_count = 1;
+
+    magnitude::forEachInstance(
+        [](sensor::Magnitude& instance) {
+            instance.filter->reset();
+        });
+
+    for (auto& sensor : internal::sensors) {
+        sensor->resume();
+    }
+}
+
+bool init() {
+    bool out { true };
 
     for (auto sensor : internal::sensors) {
         // Do not process an already initialized sensor
@@ -3797,7 +3862,7 @@ void init() {
                 DEBUG_MSG_P(PSTR("[SENSOR]  -> ERROR %s (%hhu)\n"),
                     sensor::error(error).c_str(), error);
             }
-            internal::ready = false;
+            out = false;
             break;
         }
 
@@ -3815,43 +3880,73 @@ void init() {
         }
     }
 
-    if (internal::ready) {
+    if (out) {
+        internal::state = State::Ready;
         DEBUG_MSG_P(PSTR("[SENSOR] Finished initialization for %zu sensor(s) and %zu magnitude(s)\n"),
             sensor::count(), magnitude::count());
     }
 
+    return out;
+}
+
+bool try_init() {
+    const auto timestamp = TimeSource::now();
+    if (timestamp - internal::last_init > initInterval()) {
+        internal::last_init = timestamp;
+        return init();
+    }
+
+    return false;
+}
+
+bool ready_to_read() {
+    const auto timestamp = TimeSource::now();
+    if (timestamp - internal::last_reading > readInterval()) {
+        internal::last_reading = timestamp;
+        internal::read_count = (internal::read_count + 1) % reportEvery();
+        return true;
+    }
+
+    return false;
+}
+
+bool ready_to_report() {
+    return internal::read_count == 0;
 }
 
 void loop() {
-    // Continiously repeat initialization if there are still some un-initialized sensors after setup()
-    using TimeSource = espurna::time::CoreClock;
-    static auto last_init = TimeSource::now();
-
-    auto timestamp = TimeSource::now();
-    if (!internal::ready && (timestamp - last_init > initInterval())) {
-        last_init = timestamp;
-        sensor::init();
-    }
-
-    if (!magnitude::internal::magnitudes.size()) {
+    // TODO: allow to do nothing
+    if (internal::state == State::Idle) {
         return;
     }
 
-    static auto last_update = TimeSource::now();
-    static size_t report_count { 0 };
+    // Continiously repeat initialization if there are still some un-initialized sensors after setup()
+    if (internal::state == State::None) {
+        internal::state = State::Initial;
+    }
 
+    // General initialization, generate magnitudes from available sensors
+    if (internal::state == State::Initial) {
+        if (try_init()) {
+            internal::state = State::Ready;
+        }
+    }
+
+    // If magnitudes were initialized and we are ready, prepare to read sensor data
+    if (internal::state == State::Ready) {
+        if (magnitude::internal::magnitudes.size() != 0) {
+            internal::state = State::Reading;
+        }
+    }
+
+    if (internal::state != State::Reading) {
+        return;
+    }
+
+    // Tick hook, called every loop()
     sensor::tick();
 
-    if (timestamp - last_update > readInterval()) {
-        last_update = timestamp;
-        report_count = (report_count + 1) % reportEvery();
-
-        sensor::ReadValue value {
-            .raw = 0.0,         // as the sensor returns it
-            .processed = 0.0,   // after applying units and decimals
-            .filtered = 0.0     // after applying filters, units and decimals
-        };
-
+    if (ready_to_read()) {
         // Pre-read hook, called every reading
         sensor::pre();
 
@@ -3859,6 +3954,8 @@ void loop() {
 #if RELAY_SUPPORT && SENSOR_POWER_CHECK_STATUS
         const bool relay_off = (relayCount() == 1) && (relayStatus(0) == 0);
 #endif
+
+        auto value = sensor::ReadValue{};
 
         for (size_t index = 0; index < magnitude::count(); ++index) {
             auto& magnitude = magnitude::get(index);
@@ -3910,7 +4007,7 @@ void loop() {
             // -------------------------------------------------------------------
 
             // Initial status or after report counter overflows
-            bool report { 0 == report_count };
+            bool report { ready_to_report() };
 
             // In case magnitude was configured with ${name}MaxDelta, override report check
             // when the value change is greater than the delta
@@ -4042,9 +4139,11 @@ void configure() {
         // (specifically, when sensor has more or less precision than we expect)
         {
             const auto decimals = magnitude.sensor->decimals(magnitude.units);
-            magnitude.decimals = (decimals >= 0)
-                ? static_cast<unsigned char>(decimals)
-                : magnitude::decimals(magnitude.units);
+            magnitude.decimals = getSetting(
+                settings::keys::get(magnitude, settings::suffix::Precision),
+                    (decimals >= 0)
+                        ? static_cast<unsigned char>(decimals)
+                        : magnitude::decimals(magnitude.units));
         }
 
         // Per-magnitude min & max delta settings for reporting the value
@@ -4100,6 +4199,9 @@ void setup() {
 #if TERMINAL_SUPPORT
     terminal::setup();
 #endif
+
+    systemBeforeSleep(sensor::suspend);
+    systemAfterSleep(sensor::resume);
 
     espurnaRegisterLoop(sensor::loop);
     espurnaRegisterReload(sensor::configure);

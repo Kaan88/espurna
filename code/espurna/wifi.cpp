@@ -62,18 +62,6 @@ constexpr WiFiSleepType_t sleep() {
     return WIFI_SLEEP_MODE;
 }
 
-constexpr sleep_type_t forcedSleep() {
-    return MODEM_SLEEP_T;
-}
-
-constexpr uint8_t forcedSleepPin() {
-    return GPIO_NONE;
-}
-
-constexpr GPIO_INT_TYPE forcedSleepLevel() {
-    return GPIO_PIN_INTR_LOLEVEL;
-}
-
 } // namespace build
 
 namespace ap {
@@ -101,23 +89,10 @@ PROGMEM_STRING(None, "none");
 PROGMEM_STRING(Modem, "modem");
 PROGMEM_STRING(Light, "light");
 
-PROGMEM_STRING(Low, "low");
-PROGMEM_STRING(High, "high");
-
 static constexpr espurna::settings::options::Enumeration<WiFiSleepType_t> WiFiSleepTypeOptions[] PROGMEM {
     {WIFI_NONE_SLEEP, None},
     {WIFI_MODEM_SLEEP, Modem},
     {WIFI_LIGHT_SLEEP, Light},
-};
-
-static constexpr espurna::settings::options::Enumeration<sleep_type_t> ForcedSleepTypeOptions[] PROGMEM {
-    {MODEM_SLEEP_T, Modem},
-    {LIGHT_SLEEP_T, Light},
-};
-
-static constexpr espurna::settings::options::Enumeration<GPIO_INT_TYPE> ForcedSleepLevelOptions[] PROGMEM {
-    {GPIO_PIN_INTR_LOLEVEL, Low},
-    {GPIO_PIN_INTR_HILEVEL, High},
 };
 
 } // namespace options
@@ -156,24 +131,6 @@ WiFiSleepType_t convert(const String& value) {
 
 String serialize(WiFiSleepType_t sleep) {
     return serialize(wifi::settings::options::WiFiSleepTypeOptions, sleep);
-}
-
-template <>
-sleep_type_t convert(const String& value) {
-    return convert(wifi::settings::options::ForcedSleepTypeOptions, value, wifi::build::forcedSleep());
-}
-
-String serialize(sleep_type_t sleep) {
-    return serialize(wifi::settings::options::ForcedSleepTypeOptions, sleep);
-}
-
-template <>
-GPIO_INT_TYPE convert(const String& value) {
-    return convert(wifi::settings::options::ForcedSleepLevelOptions, value, wifi::build::forcedSleepLevel());
-}
-
-String serialize(GPIO_INT_TYPE interrupt) {
-    return serialize(wifi::settings::options::ForcedSleepLevelOptions, interrupt);
 }
 
 template <>
@@ -299,7 +256,7 @@ namespace internal {
 // current task and is free to take up another one. Allow to toggle OFF for the whole module,
 // discarding any actions involving an active WiFi. Default is ON
 
-bool enabled { true };
+bool enabled { false };
 ActionsQueue actions;
 
 } // namespace internal
@@ -318,6 +275,7 @@ void ensure_opmode(uint8_t mode) {
     // since we should enforce mode changes to happen *only* through the configuration loop
 
     if (!is_set()) {
+        const auto current = wifi_get_opmode();
         wifi_set_opmode_current(mode);
 
         espurna::time::blockingDelay(
@@ -329,6 +287,10 @@ void ensure_opmode(uint8_t mode) {
 
         if (!is_set()) {
             abort();
+        }
+
+        if (current == OpmodeNull) {
+            wakeupModemForcedSleep();
         }
     }
 }
@@ -472,9 +434,6 @@ namespace keys {
 
 PROGMEM_STRING(TxPower, "wifiTxPwr");
 PROGMEM_STRING(Sleep, "wifiSleep");
-PROGMEM_STRING(ForcedSleep, "wifiFrcSleep");
-PROGMEM_STRING(ForcedSleepPin, "wifiFrcSleepPin");
-PROGMEM_STRING(ForcedSleepLevel, "wifiFrcSleepLvl");
 
 } // namespace keys
 
@@ -484,18 +443,6 @@ float txPower() {
 
 WiFiSleepType_t sleep() {
     return getSetting(keys::Sleep, wifi::build::sleep());
-}
-
-sleep_type_t forcedSleep() {
-    return getSetting(keys::ForcedSleep, wifi::build::forcedSleep());
-}
-
-uint8_t forcedSleepPin() {
-    return getSetting(keys::ForcedSleepPin, wifi::build::forcedSleepPin());
-}
-
-GPIO_INT_TYPE forcedSleepLevel() {
-    return getSetting(keys::ForcedSleepLevel, wifi::build::forcedSleepLevel());
 }
 
 namespace query {
@@ -513,66 +460,10 @@ String NAME (size_t id) {\
 
 EXACT_VALUE(sleep, settings::sleep)
 EXACT_VALUE(txPower, settings::txPower)
-EXACT_VALUE(forcedSleep, settings::forcedSleep)
-EXACT_VALUE(forcedSleepPin, settings::forcedSleepPin)
-EXACT_VALUE(forcedSleepLevel, settings::forcedSleepLevel)
 
 } // namespace internal
 } // namespace query
 } // namespace settings
-
-// ::forceSleepBegin() remembers the previous mode and ::forceSleepWake() calls station connect when it has STA in it :/
-// while we *do* set opmode to 0 to avoid this uncertainty, preper to call wake through SDK instead of the Arduino wrapper
-//
-// 0xFFFFFFF is a magic number per the NONOS API reference, 3.7.5 wifi_fpm_do_sleep:
-// > If sleep_time_in_us is 0xFFFFFFF, the ESP8266 will sleep till be woke up as below:
-// > • If wifi_fpm_set_sleep_type is set to be LIGHT_SLEEP_T, ESP8266 can wake up by GPIO.
-// > • If wifi_fpm_set_sleep_type is set to be MODEM_SLEEP_T, ESP8266 can wake up by wifi_fpm_do_wakeup.
-//
-// In our case, both sleep modes are indefinite when OFF action is executed.
-//
-// TODO(esp8266): Wake-up GPIO pin is set to INPUT, should it be PULLUP when target level is LOW?
-// Wake-up GPIO pin is *not registered* through usual means, so any overlaps needs to be handled manually.
-//
-// TODO(esp32): Null mode turns off radio, no need for MODEM sleep
-
-bool sleep(sleep_type_t type) {
-    if (!enabled() && (opmode() == OpmodeNull)) {
-        if (type == LIGHT_SLEEP_T) {
-            const auto pin = settings::forcedSleepPin();
-            if (pin == GPIO_NONE) {
-                return false;
-            }
-
-            pinMode(pin, INPUT);
-            gpio_pin_wakeup_enable(pin, settings::forcedSleepLevel());
-        }
-
-        wifi_fpm_set_sleep_type(type);
-        yield();
-        wifi_fpm_open();
-        yield();
-
-        if (0 == wifi_fpm_do_sleep(0xFFFFFFF)) {
-            delay(10);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool wakeup() {
-    if (wifi_fpm_get_sleep_type() != NONE_SLEEP_T) {
-        wifi_fpm_do_wakeup();
-        wifi_fpm_close();
-        delay(10);
-        return true;
-    }
-
-    return false;
-}
-
 
 // We are guaranteed to have '\0' when <32 b/c the SDK zeroes out the data
 // But, these are byte arrays, not C strings. When ssid_len is available, use it.
@@ -763,8 +654,7 @@ struct IpSettings {
     explicit operator bool() const {
         return _ip.isSet()
             && _netmask.isSet()
-            && _gateway.isSet()
-            && _dns.isSet();
+            && _gateway.isSet();
     }
 
     ip_info toIpInfo() const {
@@ -2237,7 +2127,7 @@ void configure() {
 namespace settings {
 namespace query {
 
-static constexpr std::array<espurna::settings::query::Setting, 13> Settings PROGMEM {
+static constexpr std::array<espurna::settings::query::Setting, 10> Settings PROGMEM {
     {{wifi::ap::settings::keys::Ssid, wifi::ap::settings::ssid},
      {wifi::ap::settings::keys::Passphrase, wifi::ap::settings::passphrase},
      {wifi::ap::settings::keys::Captive, wifi::ap::settings::query::internal::captive},
@@ -2247,10 +2137,7 @@ static constexpr std::array<espurna::settings::query::Setting, 13> Settings PROG
      {wifi::sta::scan::settings::keys::Enabled, wifi::sta::scan::settings::query::enabled},
      {wifi::sta::scan::periodic::settings::keys::Threshold, wifi::sta::scan::periodic::settings::query::threshold},
      {wifi::settings::keys::TxPower, espurna::wifi::settings::query::internal::txPower},
-     {wifi::settings::keys::Sleep, espurna::wifi::settings::query::internal::sleep},
-     {wifi::settings::keys::ForcedSleep, espurna::wifi::settings::query::internal::forcedSleep},
-     {wifi::settings::keys::ForcedSleepPin, espurna::wifi::settings::query::internal::forcedSleepPin},
-     {wifi::settings::keys::ForcedSleepLevel, espurna::wifi::settings::query::internal::forcedSleepLevel}}
+     {wifi::settings::keys::Sleep, espurna::wifi::settings::query::internal::sleep}}
 };
 
 // indexed settings for 'sta' connections
@@ -2793,24 +2680,13 @@ State handleAction(State& state, Action action) {
             wifi::sta::disable();
             wifi::disable();
             publish(wifi::Event::Mode);
-
-            const auto type = settings::forcedSleep();
-            if (!wifi::sleep(type)) {
-                wifi::action(wifi::Action::TurnOn);
-                break;
-            }
-
-            if (type == LIGHT_SLEEP_T) {
-                wifi::action(wifi::Action::TurnOn);
-                break;
-            }
+            break;
         }
         break;
 
     case Action::TurnOn:
         if (!wifi::enabled()) {
             wifi::enable();
-            wifi::wakeup();
             wifi::settings::configure();
         }
         break;
@@ -3028,12 +2904,14 @@ void setup() {
     internal::init();
 
     migrateVersion(settings::migrate);
-    settings::configure();
     settings::query::setup();
+
+    action(wifi::Action::TurnOn);
 
 #if SYSTEM_CHECK_ENABLED
     if (!systemCheck()) {
         actions() = wifi::ActionsQueue{};
+        action(wifi::Action::TurnOn);
         action(wifi::Action::AccessPointStart);
     }
 #endif
@@ -3111,6 +2989,18 @@ void wifiToggleSta() {
 void wifiStartAp() {
     espurna::wifi::action(
         espurna::wifi::Action::AccessPointStart);
+}
+
+bool wifiDisabled() {
+    return espurna::wifi::opmode()
+        == espurna::wifi::OpmodeNull;
+}
+
+void wifiDisable() {
+    espurna::wifi::ap::fallback::remove();
+    espurna::wifi::sta::scan::periodic::stop();
+    espurna::wifi::ensure_opmode(
+        espurna::wifi::OpmodeNull);
 }
 
 void wifiTurnOff() {
