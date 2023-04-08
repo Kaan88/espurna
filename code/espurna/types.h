@@ -264,7 +264,8 @@ struct StringView {
         _len(len)
     {}
 
-    constexpr StringView(const char* ptr) noexcept :
+    template <typename T, typename = typename std::enable_if<std::is_pointer<T>::value>::type>
+    constexpr StringView(T ptr) noexcept :
         StringView(ptr, __builtin_strlen(ptr))
     {}
 
@@ -308,6 +309,10 @@ struct StringView {
     }
 
     constexpr const char* c_str() const {
+        return _ptr;
+    }
+
+    constexpr const char* data() const {
         return _ptr;
     }
 
@@ -394,5 +399,8 @@ inline String operator+=(String& lhs, StringView rhs) {
         alignas(4) static constexpr char __pstr__ ## NAME ##  __ [] PROGMEM_STRING_ATTR = (X);\
         constexpr auto NAME = ::espurna::StringView(__pstr__ ## NAME ## __)
 #endif
+
+#define STRING_VIEW_SETTING(X)\
+    ((__builtin_strlen(X) > 0) ? STRING_VIEW(X) : StringView())
 
 } // namespace espurna
