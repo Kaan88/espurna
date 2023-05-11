@@ -11,7 +11,14 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 
 #if RELAY_SUPPORT
 
+#if API_SUPPORT
 #include "api.h"
+#endif
+
+#if WEB_SUPPORT
+#include "ws.h"
+#endif
+
 #include "mqtt.h"
 #include "relay.h"
 #include "tuya.h"
@@ -22,7 +29,6 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include "storage_eeprom.h"
 #include "terminal.h"
 #include "utils.h"
-#include "ws.h"
 
 #include <ArduinoJson.h>
 
@@ -253,6 +259,14 @@ constexpr RelayProvider provider(size_t index) {
     );
 }
 
+#if MQTT_SUPPORT || API_SUPPORT
+PROGMEM_STRING(PayloadOn, RELAY_MQTT_ON);
+PROGMEM_STRING(PayloadOff, RELAY_MQTT_OFF);
+PROGMEM_STRING(PayloadToggle, RELAY_MQTT_TOGGLE);
+#endif
+
+#if MQTT_SUPPORT
+
 constexpr RelayMqttTopicMode mqttTopicMode(size_t index) {
     return (
         (index == 0) ? (RELAY1_MQTT_TOPIC_MODE) :
@@ -265,10 +279,6 @@ constexpr RelayMqttTopicMode mqttTopicMode(size_t index) {
         (index == 7) ? (RELAY8_MQTT_TOPIC_MODE) : RELAY_MQTT_TOPIC_MODE
     );
 }
-
-PROGMEM_STRING(PayloadOn, RELAY_MQTT_ON);
-PROGMEM_STRING(PayloadOff, RELAY_MQTT_OFF);
-PROGMEM_STRING(PayloadToggle, RELAY_MQTT_TOGGLE);
 
 #define RELAY_SETTING_STRING_RESULT(FIRST, SECOND, THIRD, FOURTH, FIFTH, SIXTH, SEVENTH, EIGHTH)\
     (index == 0) ? STRING_VIEW_SETTING(FIRST) :\
@@ -320,6 +330,8 @@ constexpr PayloadStatus mqttDisconnectionStatus(size_t index) {
         (index == 7) ? (RELAY8_MQTT_DISCONNECT_STATUS) : RELAY_MQTT_DISCONNECT_NONE
     );
 }
+
+#endif
 
 } // namespace
 } // namespace build
@@ -968,20 +980,19 @@ RelaySync syncMode() {
     return getSetting(keys::Sync, build::syncMode());
 }
 
-[[gnu::unused]]
+#if MQTT_SUPPORT || API_SUPPORT
 String payloadOn() {
     return getSetting(keys::PayloadOn, StringView(build::PayloadOn));
 }
 
-[[gnu::unused]]
 String payloadOff() {
     return getSetting(keys::PayloadOff, StringView(build::PayloadOff));
 }
 
-[[gnu::unused]]
 String payloadToggle() {
     return getSetting(keys::PayloadToggle, StringView(build::PayloadToggle));
 }
+#endif
 
 #if MQTT_SUPPORT
 String mqttTopicSub(size_t index) {
