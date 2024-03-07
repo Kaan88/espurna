@@ -29,6 +29,7 @@ set(COMMON_FLAGS
     -Dstrnlen_P=strnlen
     -Dmemcmp_P=memcmp
     -Dstrncasecmp_P=strncasecmp
+    -DUNITY_INCLUDE_DOUBLE
 )
 
 set(ESPURNA_PATH ${CMAKE_SOURCE_DIR}/../../../ CACHE PATH "ESPurna source code repo root")
@@ -57,6 +58,7 @@ FetchContent_GetProperties(unitygit SOURCE_DIR)
 
 target_compile_options(unity BEFORE PRIVATE
     -DUNITY_OUTPUT_COLOR
+    -DUNITY_INCLUDE_DOUBLE
 )
 
 set(esp8266_version a4a8782c5611c02df3c0dd4744c86d02a4f037d3)
@@ -190,7 +192,8 @@ list(APPEND CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
 function(build_tests)
     foreach(ARG IN LISTS ARGN)
-        add_executable(test-${ARG} src/${ARG}/${ARG}.cpp)
+        file(GLOB ${ARG}_sources "src/${ARG}/*.h" "src/${ARG}/*.cpp")
+        add_executable(test-${ARG} ${${ARG}_sources})
         target_link_libraries(test-${ARG} espurna unity)
         target_compile_options(test-${ARG} PRIVATE
             ${COMMON_FLAGS}
@@ -211,4 +214,5 @@ build_tests(
     types
     url
     utils
+    filters
 )
