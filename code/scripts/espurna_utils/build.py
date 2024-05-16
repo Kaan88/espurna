@@ -77,7 +77,11 @@ def app_add_builder_single_source(env):
     env.SideEffect(dep, source)
 
     # also allow to generate .E file from the .cpp, so we can inspect build flags
-    env.SetDefault(PREPROCESSCOM=env["CXXCOM"].replace("-c", "-M -MF $ESPURNA_SINGLE_SOURCE_DEP -E"))
+    env.SetDefault(
+        PREPROCESSCOM=env["CXXCOM"].replace(
+            "-c", "-M -MF $ESPURNA_SINGLE_SOURCE_DEP -E"
+        )
+    )
 
     # Create pseudo-builder and add to enviroment
     def builder_generator(target, source, env, for_signature):
@@ -168,22 +172,18 @@ def app_add_target_build_and_copy(env):
 def app_add_target_build_re2c(env):
     from SCons.Script import COMMAND_LINE_TARGETS
 
-    targets = []
-
-    for target in COMMAND_LINE_TARGETS:
-        if target.endswith(".re.ipp"):
-            targets.append(target)
-
-    if targets:
-        action = env.VerboseAction(
-            "re2c --no-generation-date --case-ranges -W -Werror -o $TARGET $SOURCE",
-            "Generating $TARGET",
+    def action(target, source, env):
+        return env.VerboseAction(
+            f"re2c --no-generation-date --case-ranges --conditions -W -Werror -o {target} {source}",
+            f"Generating {target}",
         )
 
+    targets = [target for target in COMMAND_LINE_TARGETS if target.endswith(".re.ipp")]
+
+    if targets:
         for target in targets:
-            action(
-                [env.File(target)], [env.File(target.replace(".re.ipp", ".re"))], env
-            )
+            if env.Execute(action(target, target.replace(".re.ipp", ".re"), env)):
+                env.Exit(1)
         env.Exit(0)
 
 

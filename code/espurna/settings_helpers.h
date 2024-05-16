@@ -222,7 +222,7 @@ private:
 namespace options {
 
 struct EnumerationNumericHelper {
-    static bool check(const String& value);
+    static bool check(const String&);
 };
 
 template <typename Value>
@@ -262,7 +262,7 @@ struct alignas(8) Enumeration {
 
 
     Enumeration() = delete;
-    constexpr Enumeration(ValueType value, const char* string) noexcept :
+    constexpr Enumeration(ValueType value, StringView string) noexcept :
         _value(value),
         _string(string)
     {}
@@ -275,26 +275,22 @@ struct alignas(8) Enumeration {
         return static_cast<UnderlyingType>(_value);
     }
 
-    constexpr const char* string() const {
+    constexpr StringView string() const {
         return _string;
     }
 
-    bool operator==(const String& string) const {
-        return strcmp_P(string.c_str(), _string) == 0;
+    bool operator==(StringView other) const {
+        return _string == other;
     }
 
 private:
     ValueType _value;
-    const char* _string;
+    StringView _string;
 };
 
 } // namespace options
 
 namespace query {
-
-inline bool samePrefix(StringView key, StringView prefix) {
-    return key.startsWith(prefix);
-}
 
 struct StringViewIterator {
     using Element = const StringView*;
@@ -351,6 +347,8 @@ private:
 // both require a linear iterators as input e.g. most commonly - a static array
 // (either a plain [], or an std::array. template should treat both equally)
 
+struct Result;
+
 // single key variant, exact match of the provided string
 struct alignas(8) Setting {
     using ValueFunc = String(*)();
@@ -375,20 +373,6 @@ struct alignas(8) Setting {
 
     bool operator==(StringView key) const {
         return _key == key;
-    }
-
-    static const Setting* findFrom(const Setting* begin, const Setting* end, StringView key);
-
-    template <typename T>
-    static const Setting* findFrom(const T& settings, StringView key) {
-        return findFrom(std::begin(settings), std::end(settings), key);
-    }
-
-    static String findValueFrom(const Setting* begin, const Setting* end, StringView key);
-
-    template <typename T>
-    static String findValueFrom(const T& settings, StringView key) {
-        return findValueFrom(std::begin(settings), std::end(settings), key);
     }
 
 private:
@@ -419,30 +403,111 @@ struct alignas(8) IndexedSetting {
         return _prefix;
     }
 
-    static bool findSamePrefix(const IndexedSetting* begin, const IndexedSetting* end, StringView key);
-
-    template <typename T>
-    static bool findSamePrefix(const T& settings, StringView key) {
-        return findSamePrefix(std::begin(settings), std::end(settings), key);
-    }
-
-    static String findValueFrom(Iota iota, const IndexedSetting* begin, const IndexedSetting* end, StringView key);
-
-    template <typename T>
-    static String findValueFrom(Iota iota, const T& settings, StringView key) {
-        return findValueFrom(iota, std::begin(settings), std::end(settings), key);
-    }
-
-    template <typename T>
-    static String findValueFrom(size_t size, const T& settings, StringView key) {
-        return findValueFrom(Iota{size}, settings, key);
-    }
-
 private:
     StringView _prefix;
     ValueFunc _func;
 };
 
+// generic way to retrieve specific settings entry or report its absence
+struct Result {
+    static constexpr size_t IndexMax = std::numeric_limits<size_t>::max();
+
+    Result(Result&&) = default;
+    Result& operator=(Result&&) = default;
+
+    Result() = default;
+
+    explicit Result(const String& value) :
+        _value(std::make_unique<String>(value))
+    {}
+
+    explicit Result(String&& value) :
+        _value(std::make_unique<String>(std::move(value)))
+    {}
+
+    explicit Result(const Setting* setting) :
+        _ptr(setting)
+    {}
+
+    Result(const IndexedSetting* setting, size_t index) :
+        _ptr(setting),
+        _index(index)
+    {}
+
+    bool ok() const {
+        return _ptr != nullptr || _value != nullptr;
+    }
+
+    explicit operator bool() const {
+        return ok();
+    }
+
+    String value() const;
+
+    const void* pointer() const {
+        return _ptr;
+    }
+
+private:
+    const void* _ptr { nullptr };
+    size_t _index { IndexMax };
+
+    std::unique_ptr<String> _value;
+};
+
+Result findFrom(const Setting* begin, const Setting* end, StringView key);
+
+template <typename T>
+inline Result findFrom(const T& settings, StringView key) {
+    return findFrom(std::begin(settings), std::end(settings), key);
+}
+
+String findValueFrom(const Setting* begin, const Setting* end, StringView key);
+
+template <typename T>
+inline String findValueFrom(const T& settings, StringView key) {
+    return findValueFrom(std::begin(settings), std::end(settings), key);
+}
+
+Result findFrom(Iota iota, const IndexedSetting* begin, const IndexedSetting* end, StringView key);
+
+template <typename T>
+inline Result findFrom(Iota iota, const T& settings, StringView key) {
+    return findFrom(iota, std::begin(settings), std::end(settings), key);
+}
+
+template <typename T>
+inline Result findFrom(size_t size, const T& settings, StringView key) {
+    return findFrom(Iota{size}, settings, key);
+}
+
+String findValueFrom(Iota iota, const IndexedSetting* begin, const IndexedSetting* end, StringView key);
+
+template <typename T>
+inline String findValueFrom(Iota iota, const T& settings, StringView key) {
+    return findValueFrom(iota, std::begin(settings), std::end(settings), key);
+}
+
+template <typename T>
+inline String findValueFrom(size_t size, const T& settings, StringView key) {
+    return findValueFrom(Iota{size}, settings, key);
+}
+
+const IndexedSetting* findSamePrefix(const IndexedSetting* begin, const IndexedSetting* end, StringView key);
+
+template <typename T>
+inline const IndexedSetting* findSamePrefix(const T& settings, StringView key) {
+    return findSamePrefix(std::begin(settings), std::end(settings), key);
+}
+
+inline bool hasSamePrefix(const IndexedSetting* begin, const IndexedSetting* end, StringView key) {
+    return nullptr != findSamePrefix(begin, end, key);
+}
+
+template <typename T>
+inline bool hasSamePrefix(const T& settings, StringView key) {
+    return hasSamePrefix(std::begin(settings), std::end(settings), key);
+}
 
 } // namespace query
 } // namespace settings

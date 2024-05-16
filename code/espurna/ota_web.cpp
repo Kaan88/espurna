@@ -19,8 +19,10 @@ namespace ota {
 namespace web {
 namespace {
 
+STRING_VIEW_INLINE(Prefix, "ota");
+
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("ota"));
+    wsPayloadModule(root, Prefix);
 }
 
 void sendResponse(AsyncWebServerRequest *request, int code, const String& payload = "") {

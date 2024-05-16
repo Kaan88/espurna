@@ -68,6 +68,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "i2c.h"
 #endif
 
+#if ONE_WIRE_SUPPORT
+#include "driver_onewire.h"
+#endif
+
 #if INFLUXDB_SUPPORT
 #include "influxdb.h"
 #endif

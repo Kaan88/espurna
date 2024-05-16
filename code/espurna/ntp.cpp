@@ -31,6 +31,7 @@ static_assert(
     "lwip must be configured with SNTP_SERVER_DNS"
 );
 
+#include "datetime.h"
 #include "ntp.h"
 #include "ntp_timelib.h"
 #include "utils.h"
@@ -60,8 +61,9 @@ static_assert((StartMin <= StartDelay) && (StartDelay <= StartMax), "");
 // >    than 15 seconds.
 // (and notice that in case things break, sntp app itself will handle retries)
 static constexpr auto UpdateMin = espurna::duration::Seconds { 15 };
-static constexpr auto UpdateMax = espurna::duration::Seconds { espurna::duration::Days { 30 } };
-static constexpr espurna::duration::Seconds UpdateInterval { NTP_UPDATE_INTERVAL };
+static constexpr auto UpdateMax = espurna::duration::Seconds { espurna::duration::Hours { 24 * 30 } };
+
+static constexpr auto UpdateInterval = espurna::duration::Seconds { NTP_UPDATE_INTERVAL };
 static_assert((UpdateMin <= UpdateInterval) && (UpdateInterval <= UpdateMax), "");
 
 // We don't adjust update time(s) more than once, unlike NTP clients such as chrony or timesyncd.
@@ -84,6 +86,8 @@ constexpr bool dhcp() {
 } // namespace build
 
 namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "ntp");
 
 espurna::duration::Seconds startDelay() {
     return std::clamp(
@@ -380,11 +384,11 @@ time_t now() {
 namespace web {
 
 bool onKeyCheck(StringView key, const JsonVariant&) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("ntp"));
+    return key.startsWith(settings::Prefix);
 }
 
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("ntp"));
+    wsPayloadModule(root, settings::Prefix);
 }
 
 void onData(JsonObject& root) {
@@ -413,28 +417,10 @@ String activeServer() {
     return server;
 }
 
-String datetime(tm* timestruct) {
-    char buffer[32];
-    snprintf_P(buffer, sizeof(buffer),
-        PSTR("%04d-%02d-%02d %02d:%02d:%02d"),
-        timestruct->tm_year + 1900,
-        timestruct->tm_mon + 1,
-        timestruct->tm_mday,
-        timestruct->tm_hour,
-        timestruct->tm_min,
-        timestruct->tm_sec
-    );
-    return String(buffer);
-}
-
-String datetime(time_t ts) {
-    tm timestruct;
-    localtime_r(&ts, &timestruct);
-    return datetime(&timestruct);
-}
-
-String datetime() {
-    return synced() ? datetime(timelib::now()) : String();
+String format_datetime() {
+    return synced()
+        ? datetime::format_local(timelib::now())
+        : String();
 }
 
 NtpInfo makeInfo() {
@@ -443,20 +429,20 @@ NtpInfo makeInfo() {
     const auto sync = internal::status.timestamp();
     tm sync_datetime{};
     gmtime_r(&sync, &sync_datetime);
-    result.sync = datetime(&sync_datetime);
+    result.sync = datetime::format(sync_datetime);
 
     const auto now = timelib::now();
     result.now = now;
 
     tm now_datetime{};
     gmtime_r(&now, &now_datetime);
-    result.utc = datetime(&now_datetime);
+    result.utc = datetime::format(now_datetime);
 
     const char* cfg_tz = getenv("TZ");
     if ((cfg_tz != nullptr) && (strcmp(cfg_tz, "UTC0") != 0)) {
         tm local_datetime{};
         localtime_r(&now, &local_datetime);
-        result.local = datetime(&local_datetime);
+        result.local = datetime::format(local_datetime);
         result.tz = cfg_tz;
     }
 
@@ -549,7 +535,7 @@ void set_strptime(::terminal::CommandContext&& ctx) {
     }
 
     ctx.output.printf_P(PSTR("Setting time to %s\n"),
-        datetime(&out).c_str());
+        datetime::format(out).c_str());
 
     auto ts = mktime(&out);
     setTimestamp(ts);
@@ -913,16 +899,8 @@ NtpInfo ntpInfo() {
     return ::espurna::ntp::makeInfo();
 }
 
-String ntpDateTime(tm* timestruct) {
-    return ::espurna::ntp::datetime(timestruct);
-}
-
-String ntpDateTime(time_t ts) {
-    return ::espurna::ntp::datetime(ts);
-}
-
 String ntpDateTime() {
-    return ::espurna::ntp::datetime();
+    return ::espurna::ntp::format_datetime();
 }
 
 bool ntpSynced() {

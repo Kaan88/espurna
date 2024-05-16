@@ -2242,6 +2242,9 @@ void configure() {
 // -----------------------------------------------------------------------------
 
 namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "wifi");
+
 namespace query {
 
 static constexpr std::array<espurna::settings::query::Setting, 11> Settings PROGMEM {
@@ -2261,43 +2264,34 @@ static constexpr std::array<espurna::settings::query::Setting, 11> Settings PROG
 
 // indexed settings for 'sta' connections
 bool checkIndexedPrefix(StringView key) {
-    return espurna::settings::query::IndexedSetting::findSamePrefix(
+    return espurna::settings::query::hasSamePrefix(
         sta::settings::query::Settings, key);
 }
 
 // generic 'ap' and 'modem' configuration
 bool checkExactPrefix(StringView key) {
-    PROGMEM_STRING(Prefix, "wifi");
-    if (espurna::settings::query::samePrefix(key, Prefix)) {
-        return true;
-    }
-
-    return false;
+    return key.startsWith(Prefix);
 }
 
-String findIndexedValueFrom(StringView key) {
-    using espurna::settings::query::IndexedSetting;
-    return IndexedSetting::findValueFrom(
+espurna::settings::query::Result findIndexedFrom(StringView key) {
+    return espurna::settings::query::findFrom(
         sta::countNetworks(),
         sta::settings::query::Settings, key);
 }
 
-String findValueFrom(StringView key) {
-    using espurna::settings::query::Setting;
-    return Setting::findValueFrom(Settings, key);
+espurna::settings::query::Result findFrom(StringView key) {
+    return espurna::settings::query::findFrom(Settings, key);
 }
 
 void setup() {
-    // TODO: small implementation detail - when searching, these
-    // should be registered like this so the 'exact' is processed first
     settingsRegisterQueryHandler({
         .check = checkIndexedPrefix,
-        .get = findIndexedValueFrom,
+        .get = findIndexedFrom,
     });
 
     settingsRegisterQueryHandler({
         .check = checkExactPrefix,
-        .get = findValueFrom,
+        .get = findFrom,
     });
 }
 

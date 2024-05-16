@@ -109,6 +109,9 @@ constexpr unsigned long delay() {
 } // namespace build
 
 namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "rpn");
+
 namespace keys {
 
 PROGMEM_STRING(Sticky, "rpnSticky");
@@ -391,11 +394,11 @@ size_t countMqttNames() {
 #endif
 
 bool onKeyCheck(espurna::StringView key, const JsonVariant& value) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("rpn"));
+    return key.startsWith(settings::Prefix);
 }
 
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("rpn"));
+    wsPayloadModule(root, settings::Prefix);
 }
 
 void onConnected(JsonObject& root) {

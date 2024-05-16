@@ -112,7 +112,7 @@ void migrate(int version) {
 #if WEB_SUPPORT
 namespace web {
 
-PROGMEM_STRING(Prefix, "alexa");
+STRING_VIEW_INLINE(Prefix, "alexa");
 
 void onVisible(JsonObject& root) {
     wsPayloadModule(root, Prefix);

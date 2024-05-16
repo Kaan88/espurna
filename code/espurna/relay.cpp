@@ -453,8 +453,12 @@ struct Timer {
     using Duration = timer::SystemTimer::Duration;
 
     Timer() = delete;
+
     Timer(const Timer&) = delete;
-    Timer(Timer&&) = delete;
+    Timer& operator=(const Timer&) = delete;
+
+    Timer(Timer&&) = default;
+    Timer& operator=(Timer&&) = default;
 
     Timer(Duration duration, size_t id, bool status) :
         _duration(duration),
@@ -465,9 +469,6 @@ struct Timer {
     ~Timer() {
         _timer.stop();
     }
-
-    Timer& operator=(const Timer&) = delete;
-    Timer& operator=(Timer&&) = delete;
 
     explicit operator bool() const {
         return static_cast<bool>(_timer);
@@ -502,17 +503,7 @@ struct Timer {
         _timer.stop();
     }
 
-    void start() {
-        const auto id = _id;
-        const auto status = _status;
-        _timer.once(
-            (_duration.count() > 0)
-                ? _duration
-                : timer::SystemTimer::DurationMin,
-            [id, status]() {
-                relayStatus(id, status);
-            });
-    }
+    void start();
 
 private:
     Duration _duration;
@@ -528,7 +519,10 @@ std::forward_list<Timer> timers;
 
 } // namespace internal
 
-auto find(size_t id) -> decltype(internal::timers.begin()) {
+using Iterator = decltype(internal::timers)::iterator;
+
+// Note that timer list maintains uniqueness, there can be only one instance per relay
+Iterator find(size_t id) {
     return std::find_if(
         internal::timers.begin(),
         internal::timers.end(),
@@ -537,57 +531,61 @@ auto find(size_t id) -> decltype(internal::timers.begin()) {
         });
 }
 
-void trigger(Duration duration, size_t id, bool target) {
-    if (duration.count() == 0) {
-        bool found { false };
-        internal::timers.remove_if(
-            [&](const Timer& timer) {
-                if (id == timer.id()) {
-                    found = true;
-                    return true;
-                }
-
-                return false;
-            });
-
-        if (found) {
-            DEBUG_MSG_P(PSTR("[RELAY] #%zu pulse stopped\n"), id);
-        }
-
-        return;
+template <typename T>
+bool find(size_t id, T&& callback) {
+    auto it = find(id);
+    if (it != internal::timers.end()) {
+        callback(*it);
+        return true;
     }
 
-    bool rescheduled [[gnu::unused]] { false };
+    return false;
+}
+
+void reset(size_t id) {
+    internal::timers.remove_if(
+        [&](const Timer& timer) {
+            return id == timer.id();
+        });
+}
+
+void reset(const Timer& timer) {
+    internal::timers.remove(timer);
+}
+
+// Place timer in the queue, which is going to be started when
+// relay changes status to the opposite of the one specified by the timer
+Iterator schedule(Duration duration, size_t id, bool target) {
     auto it = find(id);
     if (it != internal::timers.end()) {
         (*it).update(duration, target);
-        rescheduled = true;
     } else {
         internal::timers.emplace_front(duration, id, target);
         it = internal::timers.begin();
     }
 
-    (*it).start();
-
-    DEBUG_MSG_P(PSTR("[RELAY] #%zu pulse %s %sscheduled in %lu (ms)\n"),
-        id, target ? "ON" : "OFF",
-        rescheduled ? "re" : "",
-        duration.count());
+    return it;
 }
 
-// Update the pulse counter when the relay is already in the opposite state (#454)
-void poll(size_t id, bool target) {
+// Update or create pulse timer and immediately start it
+void trigger(Duration duration, size_t id, bool target) {
+    auto it = schedule(duration, id, target);
+    (*it).start();
+}
+
+// Restart when the relay is already in the opposite state (#454)
+void restart(size_t id) {
     auto it = find(id);
-    if ((it != internal::timers.end()) && ((*it).status() != target)) {
+    if (it != internal::timers.end()) {
         (*it).start();
     }
 }
 
-void expire() {
-    internal::timers.remove_if([](const Timer& timer) {
-        return !static_cast<bool>(timer)
-            || (relayStatus(timer.id()) == timer.status());
-    });
+void removeCompleted() {
+    internal::timers.remove_if(
+        [](const Timer& timer) {
+            return relayStatus(timer.id()) == timer.status();
+        });
 }
 
 [[gnu::unused]]
@@ -617,6 +615,22 @@ bool isNormalStatus(Mode pulse, bool status) {
 
 bool isActive(Mode pulse) {
     return pulse != Mode::None;
+}
+
+bool wouldChange(Mode mode, bool status) {
+    return isActive(mode) && !isNormalStatus(mode, status);
+}
+
+void Timer::start() {
+    const auto id = _id;
+    const auto status = _status;
+    _timer.once(
+        (_duration.count() > 0)
+            ? _duration
+            : timer::SystemTimer::DurationMin,
+        [id, status]() {
+            relayStatus(id, status);
+        });
 }
 
 } // namespace
@@ -1662,35 +1676,54 @@ bool _relayHandlePayload(size_t id, espurna::StringView payload) {
 // Initialize pulse timers after ON or OFF event
 // TODO: integrate with scheduled ON or OFF?
 
-bool _relayPulseActive(size_t id, bool status) {
-    using namespace espurna::relay::pulse;
-    if (isActive(_relays[id].pulse)) {
-        return isNormalStatus(_relays[id].pulse, status);
+void _relayProcessPulse(const Relay& relay, size_t id, bool status) {
+    using namespace espurna::relay;
+
+    bool restarted { false };
+    pulse::find(id,
+        [&](pulse::Timer& timer) {
+            if (timer.status() == status) {
+                pulse::reset(timer);
+                DEBUG_MSG_P(PSTR("[RELAY] #%zu pulse %s stopped\n"),
+                    id, status ? PSTR("ON") : PSTR("OFF"));
+            } else {
+                restarted = true;
+                timer.start();
+                DEBUG_MSG_P(PSTR("[RELAY] #%zu pulse %s rescheduled in %lu (ms)\n"),
+                    id, timer.status() ? PSTR("ON") : PSTR("OFF"),
+                    timer.duration().count());
+            }
+        });
+
+    if (restarted) {
+        return;
     }
 
-    return false;
-}
-
-void _relayProcessActivePulse(const Relay& relay, size_t id, bool status) {
-    using namespace espurna::relay::pulse;
-    if (isActive(relay.pulse) && !isNormalStatus(relay.pulse, status)) {
-        trigger(relay.pulse_time, id, !status);
+    if ((relay.pulse_time.count() > 0) && pulse::wouldChange(relay.pulse, status)) {
+        pulse::trigger(relay.pulse_time, id, !status);
+        DEBUG_MSG_P(PSTR("[RELAY] #%zu pulse %s scheduled in %lu (ms)\n"),
+            id, status ? PSTR("ON") : PSTR("OFF"),
+            relay.pulse_time.count());
     }
 }
 
-// start pulse for the current status as 'target'
+// expects generic time input which is converted to float first
+// duration equal to 0 would cancel existing timer
+// duration greater than 0 would toggle relay and schedule a timer
 [[gnu::unused]]
 bool _relayHandlePulsePayload(size_t id, espurna::StringView payload) {
-    const auto status = relayStatus(id);
-    if (_relayPulseActive(id, status)) {
-        return false;
-    }
 
-    using namespace espurna::relay::pulse::settings;
-    const auto pulse = parse_time(payload);
+    using namespace espurna::relay;
+    const auto duration = pulse::settings::parse_time(payload);
 
-    if (pulse.ok) {
-        espurna::relay::pulse::trigger(native_duration(pulse), id, status);
+    if (duration.ok) {
+        const auto native = pulse::settings::native_duration(duration);
+        if (native.count() == 0) {
+            pulse::reset(id);
+            return true;
+        }
+
+        pulse::schedule(native, id, relayStatus(id));
         relayToggle(id, true, false);
 
         return true;
@@ -1700,8 +1733,8 @@ bool _relayHandlePulsePayload(size_t id, espurna::StringView payload) {
 }
 
 // Make sure expired pulse timers are removed, so any API calls don't try to re-use those
-void _relayProcessPulse() {
-    espurna::relay::pulse::expire();
+void _relayRemoveCompletedPulse() {
+    espurna::relay::pulse::removeCompleted();
 }
 
 [[gnu::unused]]
@@ -1949,10 +1982,10 @@ bool _relayStatus(size_t id, bool status, bool report, bool group_report) {
     auto& relay = _relays[id];
 
     if (!_relayStatusCheckLock(relay, status)) {
-        DEBUG_MSG_P(PSTR("[RELAY] #%u is locked to %s\n"),
-            id, relay.current_status ? PSTR("ON") : PSTR("OFF"));
         relay.report = true;
         relay.group_report = true;
+        DEBUG_MSG_P(PSTR("[RELAY] #%u is locked to %s\n"),
+            id, relay.current_status ? PSTR("ON") : PSTR("OFF"));
         return false;
     }
 
@@ -1960,7 +1993,6 @@ bool _relayStatus(size_t id, bool status, bool report, bool group_report) {
 
     if (relay.current_status == status) {
         if (relay.target_status != status) {
-            DEBUG_MSG_P(PSTR("[RELAY] #%u scheduled change cancelled\n"), id);
             relay.target_status = status;
             relay.report = false;
             relay.group_report = false;
@@ -1973,7 +2005,11 @@ bool _relayStatus(size_t id, bool status, bool report, bool group_report) {
             notify(id, status);
         }
 
-        espurna::relay::pulse::poll(id, status);
+        espurna::relay::pulse::restart(id);
+
+        if (changed) {
+            DEBUG_MSG_P(PSTR("[RELAY] #%u scheduled change cancelled\n"), id);
+        }
     } else {
         auto current_time = Relay::TimeSource::now();
         auto change_delay = status
@@ -2294,8 +2330,11 @@ void _relayConfigure() {
 
 namespace {
 
+STRING_VIEW_INLINE(RelayPrefix, "relay");
+STRING_VIEW_INLINE(MultiRelay, "multirelay");
+
 bool _relayWebSocketOnKeyCheck(espurna::StringView key, const JsonVariant&) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("relay"));
+    return key.startsWith(RelayPrefix);
 }
 
 void _relayWebSocketUpdate(JsonObject& root) {
@@ -2332,14 +2371,14 @@ void _relayWebSocketOnVisible(JsonObject& root) {
     }
 
     if (relays > 1) {
-        wsPayloadModule(root, PSTR("multirelay"));
+        wsPayloadModule(root, MultiRelay);
         root[FPSTR(espurna::relay::settings::keys::Sync)] =
             espurna::settings::internal::serialize(espurna::relay::settings::syncMode());
         root[FPSTR(espurna::relay::settings::keys::Interlock)] =
             espurna::relay::settings::interlockDelay().count();
     }
 
-    wsPayloadModule(root, PSTR("relay"));
+    wsPayloadModule(root, RelayPrefix);
 }
 
 void _relayWebSocketOnConnected(JsonObject& root) {
@@ -2848,8 +2887,8 @@ static void _relayCommand(::terminal::CommandContext&& ctx) {
 PROGMEM_STRING(PulseCommand, "PULSE");
 
 static void _relayCommandPulse(::terminal::CommandContext&& ctx) {
-    if (ctx.argv.size() < 3) {
-        terminalError(ctx, F("PULSE <ID> <TIME> [<TOGGLE>]"));
+    if (ctx.argv.size() < 2) {
+        terminalError(ctx, F("PULSE <ID> [<TIME>] [<TOGGLE>]"));
         return;
     }
 
@@ -2859,31 +2898,71 @@ static void _relayCommandPulse(::terminal::CommandContext&& ctx) {
         return;
     }
 
-    const auto time = espurna::relay::pulse::settings::parse_time(ctx.argv[2]);
-    if (!time.ok) {
-        terminalError(ctx, F("Invalid pulse time"));
+    using namespace espurna::relay;
+    auto duration = pulse::Duration{ 0 };
+
+    if (ctx.argv.size() >= 3) {
+        const auto parsed = pulse::settings::parse_time(ctx.argv[2]);
+        if (!parsed.ok) {
+            terminalError(ctx, F("Invalid pulse time"));
+            return;
+        }
+
+        duration = pulse::settings::native_duration(parsed);
+    }
+
+    if (duration.count() == 0) {
+        pulse::reset(id);
+        terminalOK(ctx);
         return;
     }
 
-    const auto duration = espurna::relay::pulse::settings::native_duration(time);
-
     bool toggle = true;
-    if (ctx.argv.size() == 4) {
-        auto* convert= espurna::settings::internal::convert<bool>;
+    if (ctx.argv.size() >= 4) {
+        auto* convert = espurna::settings::internal::convert<bool>;
         toggle = convert(ctx.argv[3]);
     }
 
     const auto status = relayStatus(id);
-    if (toggle && _relayPulseActive(id, status)) {
-        terminalError(ctx, F("Pulse already active!"));
+    auto timer = pulse::schedule(
+        duration, id,
+        toggle
+            ? status
+            : !status);
+
+    if (toggle) {
+        relayToggle(id, true, false);
+    } else {
+        (*timer).start();
+    }
+
+    terminalOK(ctx);
+}
+
+PROGMEM_STRING(PulseTimersCommand, "PULSE.TIMERS");
+
+static void _relayCommandPulseTimers(::terminal::CommandContext&& ctx) {
+    using namespace espurna::relay;
+    if (pulse::internal::timers.empty()) {
+        terminalError(ctx, STRING_VIEW("no pulse timers").toString());
         return;
     }
 
-    const auto target = toggle ? status : !status;
-    espurna::relay::pulse::trigger(duration, id, target);
+    for (auto& timer : pulse::internal::timers) {
+        espurna::StringView type;
+        if (relayStatus(timer.id()) == timer.status()) {
+            type = STRING_VIEW("Stalled");
+        } else if (static_cast<bool>(timer)) {
+            type = STRING_VIEW("Active");
+        } else {
+            type = STRING_VIEW("Pending");
+        }
 
-    if ((duration.count() > 0) && toggle) {
-        relayToggle(id, true, false);
+        ctx.output.printf_P(
+            PSTR("pulse%zu\t{%.*s Duration=%u Status=#%c}\n"),
+            type.length(), type.data(),
+            timer.id(), timer.duration().count(),
+            timer.status() ? 't' : 'f');
     }
 
     terminalOK(ctx);
@@ -2959,6 +3038,7 @@ static void _relayCommandUnlock(::terminal::CommandContext&& ctx) {
 static constexpr ::terminal::Command RelayCommands[] PROGMEM {
     {RelayCommand, _relayCommand},
     {PulseCommand, _relayCommandPulse},
+    {PulseTimersCommand, _relayCommandPulseTimers},
     {LockCommand, _relayCommandLock},
     {UnlockCommand, _relayCommandUnlock},
 };
@@ -3022,7 +3102,7 @@ bool _relayProcess(bool mode) {
             _relayReport(id, target);
 
             // try to immediately schedule 'normal' state
-            _relayProcessActivePulse(_relays[id], id, target);
+            _relayProcessPulse(_relays[id], id, target);
 
             // and make sure relay values are persisted in RAM and flash
             _relayScheduleSave(id);
@@ -3050,7 +3130,7 @@ void _relayLoop() {
     };
 
     if (changed[0] || changed[1]) {
-        _relayProcessPulse();
+        _relayRemoveCompletedPulse();
         _relayPrepareUnlock();
     }
 
@@ -3238,36 +3318,26 @@ namespace {
 
 bool checkSamePrefix(StringView key) {
     PROGMEM_STRING(Prefix, "relay");
-    return espurna::settings::query::samePrefix(key, Prefix);
+    return key.startsWith(Prefix);
 }
 
-String findIndexedValueFrom(StringView key) {
-    return espurna::settings::query::IndexedSetting::findValueFrom(_relays.size(), IndexedSettings, key);
+espurna::settings::query::Result findFromIndexed(StringView key) {
+    return espurna::settings::query::findFrom(_relays.size(), IndexedSettings, key);
 }
 
-bool checkExact(StringView key) {
-    for (const auto& setting : Settings) {
-        if (key == setting.key()) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-String findValueFrom(StringView key) {
-    return espurna::settings::query::Setting::findValueFrom(Settings, key);
+espurna::settings::query::Result findFrom(StringView key) {
+    return espurna::settings::query::findFrom(Settings, key);
 }
 
 void setup() {
     ::settingsRegisterQueryHandler({
         .check = checkSamePrefix,
-        .get = findIndexedValueFrom
+        .get = findFromIndexed,
     });
 
     ::settingsRegisterQueryHandler({
-        .check = checkExact,
-        .get = findValueFrom
+        .check = nullptr,
+        .get = findFrom,
     });
 }
 

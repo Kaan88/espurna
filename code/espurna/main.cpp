@@ -307,6 +307,9 @@ void setup() {
     #if I2C_SUPPORT
         i2cSetup();
     #endif
+    #if ONE_WIRE_SUPPORT
+        oneWireSetup();
+    #endif
     #if RFB_SUPPORT
         rfbSetup();
     #endif
@@ -355,8 +358,8 @@ void setup() {
     #if TUYA_SUPPORT
         tuya::setup();
     #endif
-    #if KINGART_CURTAIN_SUPPORT
-        kingartCurtainSetup();
+    #if CURTAIN_SUPPORT
+        curtainSetup();
     #endif
     #if FAN_SUPPORT
         fanSetup();

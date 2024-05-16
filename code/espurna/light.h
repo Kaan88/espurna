@@ -221,7 +221,11 @@ void lightHs(long hue, long saturation);
 void lightHsv(espurna::light::Hsv);
 
 void lightTemperature(espurna::light::Kelvin);
+void lightAdjustKelvin(espurna::StringView);
+
 void lightTemperature(espurna::light::Mireds);
+void lightAdjustMireds(espurna::StringView);
+
 espurna::light::TemperatureRange lightMiredsRange();
 
 void lightRed(long value);
@@ -245,13 +249,16 @@ bool lightState(size_t id);
 void lightState(bool state);
 bool lightState();
 
+long lightBrightness();
+void lightBrightness(long brightness);
+void lightAdjustBrightness(espurna::StringView);
+
 // TODO: overload with struct Percent { ... }, struct Brightness { ... }, etc.
 void lightBrightnessPercent(long percent);
-void lightBrightness(long brightness);
-long lightBrightness();
 
 long lightChannel(size_t id);
 void lightChannel(size_t id, long value);
+void lightAdjustChannel(size_t id, espurna::StringView);
 
 void lightBrightnessStep(long steps);
 void lightBrightnessStep(long steps, long multiplier);

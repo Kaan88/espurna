@@ -336,19 +336,22 @@ void _rfbSendImpl(const RfbMessage& message);
 
 namespace rfbridge {
 namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "rfb");
+
 namespace keys {
 
-PROGMEM_STRING(On, "rfbON");
-PROGMEM_STRING(Off, "rfbOFF");
+STRING_VIEW_INLINE(On, "rfbON");
+STRING_VIEW_INLINE(Off, "rfbOFF");
 
 } // namespace keys
 
 String off(size_t id) {
-    return getSetting({FPSTR(keys::Off), id});
+    return getSetting({keys::Off, id});
 }
 
 String on(size_t id) {
-    return getSetting({FPSTR(keys::On), id});
+    return getSetting({keys::On, id});
 }
 
 void store(espurna::StringView prefix, size_t id, const String& value) {
@@ -393,9 +396,9 @@ String _rfbRetrieve(size_t id, bool status) {
 #if WEB_SUPPORT
 
 void _rfbWebSocketOnVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("rfb"));
+    wsPayloadModule(root, rfbridge::settings::Prefix);
 #if RFB_PROVIDER == RFB_PROVIDER_RCSWITCH
-    wsPayloadModule(root, PSTR("rfbdirect"));
+    wsPayloadModule(root, STRING_VIEW("rfbdirect"));
 #endif
 }
 
@@ -459,7 +462,7 @@ void _rfbWebSocketOnAction(uint32_t client_id, const char* action, JsonObject& d
 }
 
 bool _rfbWebSocketOnKeyCheck(espurna::StringView key, const JsonVariant& value) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("rfb"));
+    return key.startsWith(rfbridge::settings::Prefix);
 }
 
 #endif // WEB_SUPPORT

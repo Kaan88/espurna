@@ -257,8 +257,13 @@
 #define DALLAS_PIN                      14
 #endif
 
-#define DALLAS_RESOLUTION               9           // Not used atm
-#define DALLAS_READ_INTERVAL            2000        // Force sensor read & cache every 2 seconds
+#ifndef DALLAS_PARASITE
+#define DALLAS_PARASITE                 1           // Use parasite power mode by default (set to 0 to use normally powered sensors)
+#endif
+
+#ifndef DALLAS_RESOLUTION
+#define DALLAS_RESOLUTION               0           // Forcibly set resolution of the sensor after booting. Valid values are 9, 10, 11 and 12. Set to 0 to keep the default resolution
+#endif
 
 //------------------------------------------------------------------------------
 // DHTXX temperature/humidity sensor
@@ -1438,6 +1443,14 @@
 #define I2C_PERFORM_SCAN                1       // Perform a bus scan on boot
 #endif
 
+// -----------------------------------------------------------------------------
+// OneWire
+// -----------------------------------------------------------------------------
+
+#ifndef ONE_WIRE_SUPPORT
+#define ONE_WIRE_SUPPORT                0       // disabled OneWire support by default
+#endif
+
 // =============================================================================
 // Configuration helpers
 // =============================================================================
@@ -1480,7 +1493,13 @@
     HDC1080_SUPPORT \
 )
 #undef I2C_SUPPORT
-#define I2C_SUPPORT                 1
+#define I2C_SUPPORT 1
+#endif
+
+// OneWire support when sensor needs it
+#if DALLAS_SUPPORT
+#undef ONE_WIRE_SUPPORT
+#define ONE_WIRE_SUPPORT 1
 #endif
 
 // Can't have ADC reading something else

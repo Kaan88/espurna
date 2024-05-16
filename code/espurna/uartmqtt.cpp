@@ -63,40 +63,9 @@ Stream* port;
 
 } // namespace internal
 
-struct Span {
-    Span() = delete;
-    constexpr Span(const uint8_t* data, size_t size) :
-        _data(data),
-        _size(size)
-    {}
+using Bytes = Span<const uint8_t>;
 
-    constexpr Span(const uint8_t* begin, const uint8_t* end) :
-        _data(begin),
-        _size(end - begin)
-    {}
-
-    constexpr const uint8_t* data() const {
-        return _data;
-    }
-
-    constexpr size_t size() const {
-        return _size;
-    }
-
-    constexpr const uint8_t* begin() const {
-        return _data;
-    }
-
-    constexpr const uint8_t* end() const {
-        return _data + _size;
-    }
-
-private:
-    const uint8_t* _data;
-    size_t _size;
-};
-
-String serialize(Span bytes, bool encode) {
+String serialize(Bytes bytes, bool encode) {
     String out;
 
     Serialized string;
@@ -110,7 +79,7 @@ String serialize(Span bytes, bool encode) {
         }
     } else {
         const auto length = std::min(string.size(), bytes.size());
-        bytes = Span(bytes.begin(), length);
+        bytes = Bytes(bytes.begin(), length);
             
         std::copy(bytes.begin(), bytes.end(),
             string.begin());
@@ -129,8 +98,8 @@ void send(String data) {
         data.c_str(), false, 0);
 }
 
-void send(Span span, bool encode) {
-    send(serialize(span, encode));
+void send(Bytes bytes, bool encode) {
+    send(serialize(bytes, encode));
 }
 
 void read_no_termination(Stream& stream, bool encode) {
@@ -186,7 +155,7 @@ void read(Stream& stream, uint8_t termination, bool encode) {
             }
 
             // `std::find` points to `termination`
-            const auto data = Span(begin, it - 1);
+            const auto data = Bytes(begin, it - 1);
             if (data.size()) {
                 send(data, encode);
             }

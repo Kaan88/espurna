@@ -39,8 +39,6 @@ struct NtpInfo {
 void ntpOnTick(NtpTickCallback);
 NtpInfo ntpInfo();
 
-String ntpDateTime(tm* timestruct);
-String ntpDateTime(time_t ts);
 String ntpDateTime();
 bool ntpSynced();
 

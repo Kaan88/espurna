@@ -425,6 +425,9 @@ size_t ports() {
 }
 
 namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "uart");
+
 namespace query {
 
 #define ID_VALUE(NAME)\
@@ -454,12 +457,11 @@ static constexpr espurna::settings::query::IndexedSetting IndexedSettings[] PROG
 };
 
 bool checkSamePrefix(StringView key) {
-    PROGMEM_STRING(Prefix, "uart");
-    return espurna::settings::query::samePrefix(key, Prefix);
+    return key.startsWith(Prefix);
 }
 
-String findIndexedValueFrom(StringView key) {
-    return espurna::settings::query::IndexedSetting::findValueFrom(
+espurna::settings::query::Result findFrom(StringView key) {
+    return espurna::settings::query::findFrom(
         ports(), IndexedSettings, key);
 
 }
@@ -467,7 +469,7 @@ String findIndexedValueFrom(StringView key) {
 void setup() {
     settingsRegisterQueryHandler({
         .check = checkSamePrefix,
-        .get = findIndexedValueFrom,
+        .get = findFrom,
     });
 }
 

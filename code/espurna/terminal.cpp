@@ -659,8 +659,10 @@ private:
 constexpr espurna::duration::Seconds Output::Timeout;
 constexpr espurna::duration::Milliseconds Output::Wait;
 
+STRING_VIEW_INLINE(Prefix, "cmd");
+
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("cmd"));
+    wsPayloadModule(root, Prefix);
 }
 
 void onAction(uint32_t client_id, const char* action, JsonObject& data) {

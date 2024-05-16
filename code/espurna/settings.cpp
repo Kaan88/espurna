@@ -41,53 +41,77 @@ static kvs_type kv_store(
 
 namespace query {
 
-const Setting* Setting::findFrom(const Setting* begin, const Setting* end, StringView key) {
+String Result::value() const {
+    if (_value) {
+        return *_value;
+    }
+
+    if (_ptr == nullptr) {
+        return String();
+    }
+
+    return (_index == IndexMax)
+        ? (*reinterpret_cast<const Setting*>(_ptr)).value()
+        : (*reinterpret_cast<const IndexedSetting*>(_ptr)).value(_index);
+}
+
+Result findFrom(const Setting* begin, const Setting* end, StringView key) {
     for (auto it = begin; it != end; ++it) {
         if ((*it) == key) {
-            return it;
+            return Result(it);
         }
     }
 
-    return end;
+    return Result(nullptr);
 }
 
-String Setting::findValueFrom(const Setting* begin, const Setting* end, StringView key) {
+String findValueFrom(const Setting* begin, const Setting* end, StringView key) {
     String out;
 
-    const auto value = findFrom(begin, end, key);
-    if (value != end) {
-        out = (*value).value();
+    const auto result = findFrom(begin, end, key);
+    if (result.ok()) {
+        out = result.value();
     }
 
     return out;
 }
 
-bool IndexedSetting::findSamePrefix(const IndexedSetting* begin, const IndexedSetting* end, StringView key) {
+const IndexedSetting* findSamePrefix(const IndexedSetting* begin, const IndexedSetting* end, StringView key) {
+    const IndexedSetting* out { nullptr };
+
     for (auto it = begin; it != end; ++it) {
-        if (samePrefix(key, (*it).prefix())) {
-            return true;
+        if (key.startsWith((*it).prefix())) {
+            out = it;
+            break;
         }
     }
 
-    return false;
+    return out;
 }
 
-String IndexedSetting::findValueFrom(Iota iota, const IndexedSetting* begin, const IndexedSetting* end, StringView key) {
-    String out;
-
+Result findFrom(Iota iota, const IndexedSetting* begin, const IndexedSetting* end, StringView key) {
     while (iota) {
         for (auto it = begin; it != end; ++it) {
             const auto expected = Key(
                 (*it).prefix().toString(), *iota);
             if (key == expected.value()) {
-                out = (*it).value(*iota);
-                goto output;
+                return Result(it, *iota);
             }
         }
         ++iota;
     }
 
-output:
+    return Result(nullptr);
+}
+
+String findValueFrom(Iota iota, const IndexedSetting* begin, const IndexedSetting* end, StringView key) {
+    String out;
+
+    const auto result = findFrom(iota, begin, end, key);
+    if (result.pointer() != end) {
+        out = result.value();
+    }
+
     return out;
 }
 
@@ -99,17 +123,19 @@ std::forward_list<Handler> handlers;
 } // namespace
 } // namespace internal
 
-String find(StringView key) {
-    String out;
-
+Result find(StringView key) {
     for (const auto& handler : internal::handlers) {
-        if (handler.check(key)) {
-            out = handler.get(key);
-            break;
+        if (handler.check != nullptr && !handler.check(key)) {
+            continue;
+        }
+
+        auto result = handler.get(key);
+        if (result.ok()) {
+            return result;
         }
     }
 
-    return out;
+    return Result(nullptr);
 }
 
 } // namespace query
@@ -180,7 +206,7 @@ void foreach_prefix(PrefixResultCallback&& callback, query::StringViewIterator p
     kv_store.foreach([&](kvs_type::KeyValueResult&& kv) {
         auto key = kv.key.read();
         for (auto it = prefixes.begin(); it != prefixes.end(); ++it) {
-            if (query::samePrefix(StringView{key}, (*it))) {
+            if (StringView{key}.startsWith(*it)) {
                 callback((*it), std::move(key), kv.value);
             }
         }
@@ -347,10 +373,10 @@ void get(::terminal::CommandContext&& ctx) {
     for (auto it = (ctx.argv.cbegin() + 1); it != ctx.argv.cend(); ++it) {
         auto result = settings::get(*it);
         if (!result) {
-            const auto maybeValue = query::find(*it);
-            if (maybeValue.length()) {
+            const auto result = query::find(*it);
+            if (result.ok()) {
                 ctx.output.printf_P(PSTR("> %s => %s (default)\n"),
-                    (*it).c_str(), maybeValue.c_str());
+                    (*it).c_str(), result.value().c_str());
             } else {
                 ctx.output.printf_P(PSTR("> %s =>\n"), (*it).c_str());
             }
@@ -432,7 +458,7 @@ void settingsRegisterQueryHandler(espurna::settings::query::Handler handler) {
     espurna::settings::query::internal::handlers.push_front(handler);
 }
 
-String settingsQuery(espurna::StringView key) {
+espurna::settings::query::Result settingsQuery(espurna::StringView key) {
     return espurna::settings::query::find(key);
 }
 

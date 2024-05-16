@@ -7,6 +7,9 @@ Copyright (C) 2019 by Albert Weterings
 
 */
 
-void kingartCurtainSetup();
-void curtainSetPosition(unsigned char id, int value);
-unsigned char curtainCount();
+#include <cstddef>
+
+void curtainSetup();
+
+size_t curtainCount();
+void curtainUpdate(size_t id, int value);

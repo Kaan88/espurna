@@ -219,7 +219,7 @@ label {
 
 .button-reboot,
 .button-reconnect,
-.button-ha-del,
+.button-ha-clear,
 .button-rfb-forget,
 .button-lightfox-clear,
 .button-del-parent,
@@ -232,14 +232,12 @@ label {
     background: rgb(192, 0, 0); /* redish */
 }
 
-.button-update,
 .button-setup-password,
 .button-add-settings-group,
 .button-upgrade-browse,
 .button-rfb-learn,
 .button-lightfox-learn,
-.button-ha-add,
-.button-ha-config,
+.button-ha-publish,
 .button-settings-backup,
 .button-settings-restore,
 .button-garland-set-default,
@@ -247,6 +245,11 @@ label {
 .button-apikey,
 .button-emon-expected-calculate {
     background: rgb(0, 192, 0); /* green */
+}
+
+.button-save {
+    --save-background: grey;
+    background: var(--save-background);
 }
 
 .button-wifi-scan,
@@ -486,6 +489,14 @@ input[disabled] + .toggle .toggle__handler {
     border-bottom: 1px solid #eee;
     margin-bottom: 10px;
     padding: 10px 0 10px 0;
+}
+
+.schedule {
+    margin-bottom: 10px;
+}
+
+.schedule .button-del-parent {
+    margin-left: auto;
 }
 
 #networks .more {

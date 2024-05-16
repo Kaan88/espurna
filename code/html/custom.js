@@ -927,14 +927,7 @@ function styleVisible(selector, value) {
 }
 
 function moduleVisible(module) {
-    if (module === "sch") {
-        styleInject([
-            `li.module-${module} { display: inherit; }`,
-            `div.module-${module} { display: flex; }`
-        ]);
-    } else {
-        styleInject([`.module-${module} { display: inherit; }`]);
-    }
+    styleInject([`.module-${module} { display: inherit; }`]);
 }
 
 // Update <input> and <select> elements that were set externally. Generic change handler will allow to compare with user input,
@@ -1062,9 +1055,13 @@ function initGenericKeyValueElement(key, value) {
 // (also see {create,update}Checkboxes())
 
 function fillTemplateLineFromCfg(line, id, cfg) {
+    let local = {"template-id": id};
     if (cfg === undefined) {
         cfg = {};
     }
+
+    Object.assign(local, cfg);
+    cfg = local;
 
     for (let elem of line.querySelectorAll("input,select,span")) {
         let key = elem.name || elem.dataset.key;
@@ -1092,9 +1089,16 @@ function fillTemplateLineFromCfg(line, id, cfg) {
     setOriginalsFromValuesForNode(line);
 }
 
-
 function delParent(event) {
-    event.target.parentElement.dispatchEvent(
+    let target = event.target;
+    let parent = target.parentElement;
+
+    while (!parent.classList.contains("settings-group")) {
+        target = parent;
+        parent = target.parentElement;
+    }
+
+    target.dispatchEvent(
         new CustomEvent("settings-group-del", {bubbles: true}));
 }
 
@@ -1197,6 +1201,7 @@ function applySettings(settings) {
 function resetOriginals() {
     setOriginalsFromValues();
     resetSettingsGroup();
+
     Settings.resetCounters();
     Settings.saved = false;
 }
@@ -1302,6 +1307,20 @@ function handleFirmwareUpgrade(event) {
     });
 }
 
+function greyoutSave() {
+    const elems = document.querySelectorAll(".button-save");
+    for (let elem of elems) {
+        elem.style.removeProperty("--save-background");
+    }
+}
+
+function greenifySave() {
+    const elems = document.querySelectorAll(".button-save");
+    for (let elem of elems) {
+        elem.style.setProperty("--save-background", "rgb(0, 192, 0)");
+    }
+}
+
 function afterSaved() {
     var response;
 
@@ -1323,6 +1342,7 @@ function afterSaved() {
     }
 
     resetOriginals();
+    greyoutSave();
 }
 
 function waitForSaved(){
@@ -1652,28 +1672,8 @@ function ledAdd(cfg) {
 // Date and time scheduler
 // -----------------------------------------------------------------------------
 
-function schAdd(cfg) {
-    if (cfg.schType === undefined) {
-        return;
-    }
-
-    let container = document.getElementById("schedules");
-
-    let id = idForTemplateContainer(container);
-    if (id < 0) {
-        return;
-    }
-
-    let line = loadConfigTemplate("schedule-config");
-
-    if (cfg.schType !== "none") {
-        mergeTemplate(line.querySelector(".schedule-action"),
-            loadConfigTemplate("schedule-action-".concat(cfg.schType)));
-    }
-
-    fillTemplateLineFromCfg(line, id, cfg);
-    mergeTemplate(container, line);
-    return;
+function schedulerAdd(cfg) {
+    addFromTemplate(document.getElementById("schedules"), "schedule-config", cfg);
 }
 
 // -----------------------------------------------------------------------------
@@ -1730,6 +1730,23 @@ function initRelayConfig(id, cfg) {
     let line = loadConfigTemplate("relay-config");
     fillTemplateLineFromCfg(line, id, cfg);
     mergeTemplate(document.getElementById("relayConfig"), line);
+}
+
+// -----------------------------------------------------------------------------
+// Home Assistant
+// -----------------------------------------------------------------------------
+
+function haActionPublish(event, state) {
+    event.preventDefault();
+    sendAction("ha-publish", {state});
+}
+
+function haPublish(event) {
+    haActionPublish(event, 1);
+}
+
+function haClear(event) {
+    haActionPublish(event, 0);
 }
 
 // -----------------------------------------------------------------------------
@@ -2756,7 +2773,7 @@ function processData(data) {
             container.dataset["settingsMax"] = value.max;
 
             value.schedules.forEach((entries) => {
-                schAdd(fromSchema(entries, value.schema));
+                schedulerAdd(fromSchema(entries, value.schema));
             });
 
             return;
@@ -2942,6 +2959,7 @@ function onElementChange(event) {
             }
         }
         setChangedElement(event.target);
+        greenifySave();
     } else {
         if (changed) {
             --Settings.counters.changed;
@@ -2950,6 +2968,7 @@ function onElementChange(event) {
             }
         }
         resetChangedElement(event.target);
+        greyoutSave();
     }
 }
 
@@ -3049,7 +3068,7 @@ function main() {
     // Sidebar menu & buttons
     elementSelectorOnClick(".menu-link", toggleMenu);
     elementSelectorOnClick(".pure-menu-link", showPanel);
-    elementSelectorOnClick(".button-update", (event) => {
+    elementSelectorOnClick(".button-save", (event) => {
         event.preventDefault();
         applySettingsFromAllForms();
     });
@@ -3072,6 +3091,10 @@ function main() {
     });
 
     // Module specific elements
+
+    // HA discovery
+    elementSelectorOnClick(".button-ha-publish", haPublish);
+    elementSelectorOnClick(".button-ha-clear", haClear);
 
     //removeIf(!sensor)
     elementSelectorListener(".button-emon-expected", "click", showPanel);
@@ -3190,10 +3213,7 @@ function main() {
     });
 
     groupSettingsOnAdd("schedules", () => {
-        if (event.detail.target) {
-            schAdd({schType: event.detail.target});
-            return;
-        }
+        schedulerAdd();
     });
 
     groupSettingsOnAdd("rpn-rules", () => {

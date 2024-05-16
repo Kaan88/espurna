@@ -215,8 +215,10 @@ void _rfm69Clear() {
 
 #if WEB_SUPPORT
 
+STRING_VIEW_INLINE(Rfm69Prefix, "rfm69");
+
 void _rfm69WebSocketOnVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("rfm69"));
+    wsPayloadModule(root, Rfm69Prefix);
 }
 
 void _rfm69WebSocketOnConnected(JsonObject& root) {
@@ -242,7 +244,7 @@ void _rfm69WebSocketOnConnected(JsonObject& root) {
 }
 
 bool _rfm69WebSocketOnKeyCheck(espurna::StringView key, const JsonVariant& value) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("rfm69"));
+    return key.startsWith(Rfm69Prefix);
 }
 
 void _rfm69WebSocketOnAction(uint32_t client_id, const char* action, JsonObject& data) {

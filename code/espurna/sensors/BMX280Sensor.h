@@ -48,15 +48,17 @@
 #define BMX280_REGISTER_TEMPDATA        0xFA
 #define BMX280_REGISTER_HUMIDDATA       0xFD
 
+#define BMX280_ADC_SKIPPED              0x8000
+
 class BMX280Sensor : public I2CSensor<> {
 
     public:
         static constexpr Magnitude Bmp280Magnitudes[] {
 #if BMX280_TEMPERATURE
-            MAGNITUDE_TEMPERATURE,
+            {MAGNITUDE_TEMPERATURE},
 #endif
 #if BMX280_PRESSURE
-            MAGNITUDE_PRESSURE,
+            {MAGNITUDE_PRESSURE},
 #endif
         };
 
@@ -64,13 +66,13 @@ class BMX280Sensor : public I2CSensor<> {
 
         static constexpr Magnitude Bme280Magnitudes[] {
 #if BMX280_TEMPERATURE
-            MAGNITUDE_TEMPERATURE,
+            {MAGNITUDE_TEMPERATURE},
 #endif
 #if BMX280_HUMIDITY
-            MAGNITUDE_HUMIDITY,
+            {MAGNITUDE_HUMIDITY},
 #endif
 #if BMX280_PRESSURE
-            MAGNITUDE_PRESSURE,
+            {MAGNITUDE_PRESSURE},
 #endif
         };
 
@@ -96,6 +98,10 @@ class BMX280Sensor : public I2CSensor<> {
                 (_chip == BMX280_CHIP_BMP280) ? PSTR("BMP280") :
                 PSTR("BMX280"), lockedAddress());
             return String(buffer);
+        }
+
+        String description(unsigned char) const override {
+            return description();
         }
 
         // Type for slot # index
@@ -146,11 +152,6 @@ class BMX280Sensor : public I2CSensor<> {
 
         // Pre-read hook (usually to populate registers with up-to-date data)
         void pre() override {
-            if (_run_init) {
-                i2cClearBus();
-                _init(lockedAddress());
-            }
-
             if (_chip == 0) {
                 return;
             }
@@ -158,20 +159,26 @@ class BMX280Sensor : public I2CSensor<> {
             _error = SENSOR_ERROR_OK;
 
             const auto address = lockedAddress();
+            if (_force_init) {
+                _error = _forceInit(address);
+                _force_init = false;
+            }
+
+            if (_error != SENSOR_ERROR_OK) {
+                return;
+            }
+
 #if BMX280_MODE == 1
             _forceRead(address);
 #endif
 
             if (!_wait(address)) {
                 _error = SENSOR_ERROR_NOT_READY;
+                _force_init = true;
                 return;
             }
 
-            _error = _read(address);
-            if (_error != SENSOR_ERROR_OK) {
-                _run_init = true;
-            }
-
+            _read(address);
         }
 
         // Current value for slot # index
@@ -181,10 +188,7 @@ class BMX280Sensor : public I2CSensor<> {
                 case MAGNITUDE_TEMPERATURE:
                     return _temperature;
                 case MAGNITUDE_HUMIDITY:
-                    if (_chip == BMX280_CHIP_BME280) {
-                        return _humidity;
-                    }
-                    break;
+                    return _humidity;
                 case MAGNITUDE_PRESSURE:
                     return _pressure;
                 }
@@ -195,10 +199,19 @@ class BMX280Sensor : public I2CSensor<> {
 
         // Initialization method, must be idempotent
         void begin() override {
-            if (!_dirty) return;
-            if (!_find()) return;
-            _init(lockedAddress());
-            _dirty = !_ready;
+            if (!_dirty) {
+                return;
+            }
+
+            if (!_find()) {
+                return;
+            }
+
+            _error = _init(lockedAddress());
+            if (_error == SENSOR_ERROR_OK) {
+                _ready = true;
+                _dirty = false;
+            }
         }
 
         void suspend() override {
@@ -209,7 +222,7 @@ class BMX280Sensor : public I2CSensor<> {
         }
 
         void resume() override {
-            _run_init = true;
+            _force_init = true;
         }
 
     protected:
@@ -246,15 +259,14 @@ class BMX280Sensor : public I2CSensor<> {
             return _chip != 0;
         }
 
-        void _init(uint8_t address) {
+        int _init(uint8_t address) {
             if (_chip == 0) {
-                return;
+                return SENSOR_ERROR_UNKNOWN_ID;
             }
 
             i2c_write_uint8(address, BMX280_REGISTER_SOFTRESET, 0xB6);
             if (!_wait(address)) {
-                _error = SENSOR_ERROR_NOT_READY;
-                return;
+                return SENSOR_ERROR_NOT_READY;
             }
 
             _readCoefficients(address);
@@ -276,9 +288,12 @@ class BMX280Sensor : public I2CSensor<> {
 
             _measurement_delay = _measurementTime();
 
-            _run_init = false;
-            _ready = true;
+            return SENSOR_ERROR_OK;
+        }
 
+        int _forceInit(unsigned char address) {
+            i2cClearBus();
+            return _init(address);
         }
 
         static bool _measurementsReady(uint8_t status) {
@@ -361,11 +376,13 @@ class BMX280Sensor : public I2CSensor<> {
             espurna::time::blockingDelay(_measurement_delay);
         }
 
-        unsigned char _read(unsigned char address) {
-
+        int _readTemperature(unsigned char address) {
 #if BMX280_TEMPERATURE
             int32_t adc_T = i2c_read_uint16(address, BMX280_REGISTER_TEMPDATA);
-            if (0xFFFF == adc_T) return SENSOR_ERROR_OUT_OF_RANGE;
+            if (BMX280_ADC_SKIPPED == adc_T) {
+                return SENSOR_ERROR_NOT_READY;
+            }
+
             adc_T <<= 8;
             adc_T |= i2c_read_uint8(address, BMX280_REGISTER_TEMPDATA+2);
             adc_T >>= 4;
@@ -379,33 +396,42 @@ class BMX280Sensor : public I2CSensor<> {
                 ((adc_T>>4) - ((int32_t)_bmx280_calib.dig_T1))) >> 12) *
                 ((int32_t)_bmx280_calib.dig_T3)) >> 14;
 
-            int32_t t_fine = var1t + var2t;
+            _t_fine = var1t + var2t;
 
-            double T  = (t_fine * 5 + 128) >> 8;
+            double T  = (_t_fine * 5 + 128) >> 8;
             _temperature = T / 100;
+
+            return SENSOR_ERROR_OK;
 #else
-            int32_t t_fine = 102374; // ~20ºC
+            return SENSOR_ERROR_SUPPORT;
 #endif
+        }
 
-            // -----------------------------------------------------------------
-
+        int _readPressure(unsigned char address) {
 #if BMX280_PRESSURE
             int64_t var1, var2, p;
 
             int32_t adc_P = i2c_read_uint16(address, BMX280_REGISTER_PRESSUREDATA);
-            if (0xFFFF == adc_P) return SENSOR_ERROR_OUT_OF_RANGE;
+            if (BMX280_ADC_SKIPPED == adc_P) {
+                return SENSOR_ERROR_NOT_READY;
+            }
+
             adc_P <<= 8;
             adc_P |= i2c_read_uint8(address, BMX280_REGISTER_PRESSUREDATA+2);
             adc_P >>= 4;
 
-            var1 = ((int64_t)t_fine) - 128000;
+            var1 = ((int64_t)_t_fine) - 128000;
             var2 = var1 * var1 * (int64_t)_bmx280_calib.dig_P6;
             var2 = var2 + ((var1*(int64_t)_bmx280_calib.dig_P5)<<17);
             var2 = var2 + (((int64_t)_bmx280_calib.dig_P4)<<35);
             var1 = ((var1 * var1 * (int64_t)_bmx280_calib.dig_P3)>>8) +
                 ((var1 * (int64_t)_bmx280_calib.dig_P2)<<12);
             var1 = (((((int64_t)1)<<47)+var1))*((int64_t)_bmx280_calib.dig_P1)>>33;
-            if (var1 == 0) return SENSOR_ERROR_OUT_OF_RANGE;  // avoid exception caused by division by zero
+
+            // avoid exception caused by division by zero
+            if (var1 == 0) {
+                return SENSOR_ERROR_OUT_OF_RANGE;
+            }
 
             p = 1048576 - adc_P;
             p = (((p<<31) - var2)*3125) / var1;
@@ -414,37 +440,78 @@ class BMX280Sensor : public I2CSensor<> {
 
             p = ((p + var1 + var2) >> 8) + (((int64_t)_bmx280_calib.dig_P7)<<4);
             _pressure = ((double) p / 256) / 100;
-#endif
-
-            // -----------------------------------------------------------------
-
-#if BMX280_HUMIDITY
-            if (_chip == BMX280_CHIP_BME280) {
-                int32_t adc_H = i2c_read_uint16(address, BMX280_REGISTER_HUMIDDATA);
-                if (0xFFFF == adc_H) return SENSOR_ERROR_OUT_OF_RANGE;
-
-                int32_t v_x1_u32r;
-
-                v_x1_u32r = (t_fine - ((int32_t)76800));
-
-                v_x1_u32r = (((((adc_H << 14) - (((int32_t)_bmx280_calib.dig_H4) << 20) -
-                    (((int32_t)_bmx280_calib.dig_H5) * v_x1_u32r)) + ((int32_t)16384)) >> 15) *
-                    (((((((v_x1_u32r * ((int32_t)_bmx280_calib.dig_H6)) >> 10) *
-                    (((v_x1_u32r * ((int32_t)_bmx280_calib.dig_H3)) >> 11) + ((int32_t)32768))) >> 10) +
-                    ((int32_t)2097152)) * ((int32_t)_bmx280_calib.dig_H2) + 8192) >> 14));
-
-                v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) *
-                    ((int32_t)_bmx280_calib.dig_H1)) >> 4));
-
-                v_x1_u32r = (v_x1_u32r < 0) ? 0 : v_x1_u32r;
-                v_x1_u32r = (v_x1_u32r > 419430400) ? 419430400 : v_x1_u32r;
-                double h = (v_x1_u32r >> 12);
-                _humidity = h / 1024.0;
-            }
-#endif
 
             return SENSOR_ERROR_OK;
+#else
+            return SENSOR_ERROR_SUPPORT;
+#endif
+        }
 
+        int _readHumidity(unsigned char address) {
+#if BMX280_HUMIDITY
+            if (_chip != BMX280_CHIP_BME280) {
+                return SENSOR_ERROR_SUPPORT;
+            }
+
+            int32_t adc_H = i2c_read_uint16(address, BMX280_REGISTER_HUMIDDATA);
+            if (BMX280_ADC_SKIPPED == adc_H) {
+                return SENSOR_ERROR_NOT_READY;
+            }
+
+            int32_t v_x1_u32r;
+
+            v_x1_u32r = (_t_fine - ((int32_t)76800));
+
+            v_x1_u32r = (((((adc_H << 14) - (((int32_t)_bmx280_calib.dig_H4) << 20) -
+                                (((int32_t)_bmx280_calib.dig_H5) * v_x1_u32r)) + ((int32_t)16384)) >> 15) *
+                    (((((((v_x1_u32r * ((int32_t)_bmx280_calib.dig_H6)) >> 10) *
+                         (((v_x1_u32r * ((int32_t)_bmx280_calib.dig_H3)) >> 11) + ((int32_t)32768))) >> 10) +
+                       ((int32_t)2097152)) * ((int32_t)_bmx280_calib.dig_H2) + 8192) >> 14));
+
+            v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) *
+                            ((int32_t)_bmx280_calib.dig_H1)) >> 4));
+
+            v_x1_u32r = (v_x1_u32r < 0) ? 0 : v_x1_u32r;
+            v_x1_u32r = (v_x1_u32r > 419430400) ? 419430400 : v_x1_u32r;
+
+            double h = (v_x1_u32r >> 12);
+            _humidity = h / 1024.0;
+
+            return SENSOR_ERROR_OK;
+#else
+            return SENSOR_ERROR_SUPPORT;
+#endif
+        }
+
+        // in case t_fine is not updated by temperature readings
+        void _preRead() {
+            static constexpr int32_t DefaultTFine{ 102374 }; // ~20ºC
+            _t_fine = DefaultTFine;
+        }
+
+        // ready every available register from the given address
+        void _read(unsigned char address) {
+            _preRead();
+
+            for (size_t index = 0; index < _count; ++index) {
+                switch (_magnitudes[index].type) {
+                case MAGNITUDE_TEMPERATURE:
+                    _error = _readTemperature(address);
+                    break;
+
+                case MAGNITUDE_HUMIDITY:
+                    _error = _readHumidity(address);
+                    break;
+
+                case MAGNITUDE_PRESSURE:
+                    _error = _readPressure(address);
+                    break;
+                }
+
+                if (_error != SENSOR_ERROR_OK) {
+                    break;
+                }
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -454,15 +521,17 @@ class BMX280Sensor : public I2CSensor<> {
 
         espurna::duration::Milliseconds _measurement_delay;
 
-        bool _run_init = false;
-        double _temperature = 0;
-        double _humidity = 0;
-        double _pressure = 0;
+        double _temperature{};
+        double _humidity{};
+        double _pressure{};
 
-        uint8_t _chip = 0;
+        uint8_t _chip { 0 };
+        bool _force_init { false };
 
-        const Magnitude* _magnitudes = nullptr;
-        size_t _count = 0;
+        const Magnitude* _magnitudes { nullptr };
+        size_t _count { 0 };
+
+        int32_t _t_fine;
 
         struct bmx280_calib_t {
             uint16_t dig_T1;

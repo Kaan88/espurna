@@ -205,6 +205,9 @@ constexpr uint16_t mfln() {
 } // namespace build
 
 namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "mqtt");
+
 namespace keys {
 namespace {
 
@@ -404,17 +407,17 @@ static constexpr espurna::settings::query::Setting Settings[] PROGMEM {
 };
 
 bool checkSamePrefix(espurna::StringView key) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("mqtt"));
+    return key.startsWith(settings::Prefix);
 }
 
-String findValueFrom(espurna::StringView key) {
-    return espurna::settings::query::Setting::findValueFrom(Settings, key);
+espurna::settings::query::Result findFrom(espurna::StringView key) {
+    return espurna::settings::query::findFrom(Settings, key);
 }
 
 void setup() {
     ::settingsRegisterQueryHandler({
         .check = checkSamePrefix,
-        .get = findValueFrom
+        .get = findFrom,
     });
 }
 
@@ -931,9 +934,9 @@ bool _mqttWebSocketOnKeyCheck(espurna::StringView key, const JsonVariant&) {
 }
 
 void _mqttWebSocketOnVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("mqtt"));
+    wsPayloadModule(root, mqtt::settings::Prefix);
 #if SECURE_CLIENT != SECURE_CLIENT_NONE
-    wsPayloadModule(root, PSTR("mqttssl"));
+    wsPayloadModule(root, STRING_VIEW("mqttssl"));
 #endif
 }
 

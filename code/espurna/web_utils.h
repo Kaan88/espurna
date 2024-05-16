@@ -82,11 +82,10 @@ struct StringTraits<::espurna::StringView, void> {
     template <typename Buffer>
     static const char* duplicate(::espurna::StringView string, Buffer* buffer) {
         if (string.length()) {
-            const auto size = string.length();
-            auto* dup = reinterpret_cast<char*>(buffer->alloc(size));
+            auto* dup = reinterpret_cast<char*>(buffer->alloc(string.length() + 1));
             if (dup) {
-                memcpy_P(dup, string.begin(), size);
-                dup[size] = '\0';
+                memcpy_P(dup, string.begin(), string.length());
+                dup[string.length()] = '\0';
                 return dup;
             }
         }

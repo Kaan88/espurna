@@ -163,7 +163,7 @@
                         </li>
 
                         <li class="pure-menu-item module module-sch">
-                            <a href="#" class="pure-menu-link" data-panel="schedule">SCHEDULE</a>
+                            <a href="#" class="pure-menu-link" data-panel="sch">SCHEDULE</a>
                         </li>
 
                         <!-- removeIf(!sensor) -->
@@ -195,7 +195,7 @@
                     </ul>
 
                     <div class="main-buttons">
-                        <button type="button" class="pure-button button-update">Save</button>
+                        <button type="button" class="pure-button button-save">Save</button>
                         <button type="button" class="pure-button button-reconnect">Reconnect</button>
                         <button type="button" class="pure-button button-reboot">Reboot</button>
                     </div>
@@ -961,28 +961,28 @@
                     </div>
                 </form>
 
-                <form id="form-schedule" class="pure-form pure-form-aligned form-settings">
-                    <div class="panel" id="panel-schedule">
+                <form id="form-sch" class="pure-form pure-form-aligned form-settings">
+                    <div class="panel" id="panel-sch">
                         <div class="header">
                             <h1>SCHEDULE</h1>
                             <h2>Executes actions based on the current time.</h2>
                         </div>
 
+                        <p>At least one time string element must be specified</p>
+                        <ul>
+                            <li><samp>YEAR-MONTH-DAY</samp> or <samp>MONTH-DAY</samp></li>
+                            <li><samp>Weekday</samp> in English (abbreviated of full). Or, number in range <samp>1&ndash;7</samp>, starting from Monday (1) and ending in Sunday (7)</li>
+                            <li><samp>HOUR:MINUTE</samp></li>
+                            <li><samp>UTC</samp> either immediately following the time, or instead of it (would default to 00:00)</li>
+                        </ul>
+
+                        <a href="https://github.com/xoseperez/espurna/wiki/Scheduler">See full documentation</a>
+
                         <div class="page">
                             <fieldset>
-                                <legend>Schedules</legend>
-                                <div id="schedules" class="settings-group" data-settings-target="schTarget schType" data-settings-schema="schTarget schType schHour schMinute schUTC schWDs schAction schRestore schEnabled"></div>
-                            </fieldset>
-
-                            <fieldset>
-                                <legend>Add schedule</legend>
-                                <button type="button" class="pure-button button-add-settings-group module module-relay" data-settings-group="schedules" data-settings-group-detail-target="relay">Relay</button>
-                                <!-- removeIf(!light) -->
-                                <button type="button" class="pure-button button-add-settings-group module module-light" data-settings-group="schedules" data-settings-group-detail-target="light">Light</button>
-                                <!-- endRemoveIf(!light) -->
-                                <!-- removeIf(!curtain) -->
-                                <button type="button" class="pure-button button-add-settings-group module module-curtain" data-settings-group="schedules" data-settings-group-detail-target="curtain">Curtain</button>
-                                <!-- endRemoveIf(!curtain) -->
+                                <legend>List of schedules</legend>
+                                <div id="schedules" class="settings-group" data-settings-target="schType" data-settings-schema="schType schRestore schTime schAction"></div>
+                                <button type="button" class="pure-button button-add-settings-group pure-input-1" data-settings-group="schedules">Add</button>
                             </fieldset>
                         </div>
                     </div>
@@ -1584,30 +1584,64 @@
                                     <label>Enabled</label>
                                     <div><input type="checkbox" name="haEnabled"></div>
                                     <span class="pure-form-message">
-                                        Home Assistant MQTT discovery. Enable / disable, then save to trigger an update.
+                                        Publish discovery messages after establishing <strong>MQTT connection</strong> and when <strong>birth</strong> message is received.
                                     </span>
                                 </div>
 
-                                <div class="pure-control-group">
-                                    <label>Prefix</label>
-                                    <input name="haPrefix" type="text">
-                                    <span class="pure-form-message">
-                                        The prefix for the discovery topic e.g. <code><strong>&lt;prefix&gt;</strong>/switch/espurna-123456/config</code>
-                                    </span>
-                                </div>
                             </fieldset>
 
                             <fieldset>
                                 <legend>MQTT</legend>
 
                                 <div class="pure-control-group">
+                                    <label>Prefix</label>
+                                    <input name="haPrefix" type="text">
+                                    <span class="pure-form-message">
+                                        The prefix for the discovery topic e.g.
+                                        <code>
+                                            <strong>&lt;prefix&gt;</strong>/switch/espurna-123456/config
+                                        </code>
+                                    </span>
+                                </div>
+
+                                <div class="pure-control-group">
+                                    <label>Birth topic</label>
+                                    <input name="haBirthTopic" type="text">
+                                </div>
+
+                                <div class="pure-control-group">
+                                    <label>Birth payload</label>
+                                    <input name="haBirthPayload" type="text">
+                                    <span class="pure-form-message">
+                                        By default, Home Assistant sends 'online' and 'offline' to <code>homeassistant/status</code>. Instead of sending discovery message only when device makes MQTT connection, also publish it every time this <strong>topic</strong> receives the specified <strong>payload</strong>.<br>
+                                        <a href="https://www.home-assistant.io/integrations/mqtt/#birth-and-last-will-messages">See MQTT integration documentation for more information.</a>
+                                    </span>
+                                </div>
+
+                                <div class="pure-control-group">
                                     <label>Retain</label>
                                     <div><input type="checkbox" name="haRetain"></div>
                                     <span class="pure-form-message">
-                                        Whether to set the <strong>Retain</strong> flag on outgoing MQTT messages.
+                                        Whether to set <strong>Retain</strong> flag on outgoing MQTT messages. When enabled, published discovery messages for the current state are be persisted by the broker and would be received by subscribers even when the device is offline.
                                     </span>
                                 </div>
+
                             </fieldset>
+
+                            <fieldset>
+                                <legend>Publish &amp; Clear</legend>
+                                <span class="pure-form-message">
+                                    Manually trigger discovery messages for the configured
+                                    <code>
+                                        <strong>&lt;prefix&gt;</strong>
+                                    </code>
+                                </span>
+                                <div class="pure-control-group">
+                                    <button type="button" class="pure-button button-ha-publish pure-input-1">Publish</button>
+                                    <button type="button" class="pure-button button-ha-clear pure-input-1">Clear</button>
+                                </div>
+                            </fieldset>
+
                         </div>
 
                     </div>
@@ -1813,7 +1847,7 @@
 
                                 <div class="pure-control-group terminal">
                                     <textarea class="pure-input-1" id="cmd-output" name="log" wrap="soft" readonly></textarea>
-                                    <input id="cmd-input" class="pure-input-1 module module-cmd" name="cmd" type="text" autocomplete="none" data-action="none">
+                                    <input id="cmd-input" class="pure-input-1 module module-cmd" name="cmd" type="text" autocomplete="off" data-action="none">
                                 </div>
 
                                 <div class="pure-controls module module-cmd">
@@ -1930,6 +1964,7 @@
                                         Reset gas sensor calibration. Check the sensor datasheet for calibration conditions.
                                     </span>
                                 </div>
+
                             </fieldset>
 
                             <fieldset class="module module-emon">
@@ -2170,7 +2205,7 @@
             <div>
                 <div class="pure-control-group">
                     <label>SSID</label>
-                    <input name="ssid" type="text" value="" data-action="reconnect" required autocomplete="false">
+                    <input name="ssid" type="text" value="" data-action="reconnect" required autocomplete="off">
                     <button type="button" class="pure-button button-more-parent">...</button>
                 </div>
 
@@ -2182,25 +2217,25 @@
 
                 <div class="pure-control-group more">
                     <label>Static IP</label>
-                    <input name="ip" type="text" data-action="reconnect" maxlength="15" autocomplete="false">
+                    <input name="ip" type="text" data-action="reconnect" maxlength="15" autocomplete="off">
                     <span class="pure-form-message-inline">Leave empty to enable DHCP</span>
                 </div>
 
                 <div class="pure-control-group more">
                     <label>Gateway IP</label>
-                    <input name="gw" type="text" data-action="reconnect" maxlength="15" autocomplete="false">
+                    <input name="gw" type="text" data-action="reconnect" maxlength="15" autocomplete="off">
                     <span class="pure-form-message-inline">Set when using a static IP</span>
                 </div>
 
                 <div class="pure-control-group more">
                     <label>Network Mask</label>
-                    <input name="mask" type="text" data-action="reconnect" maxlength="15" autocomplete="false">
+                    <input name="mask" type="text" data-action="reconnect" maxlength="15" autocomplete="off">
                     <span class="pure-form-message-inline">Usually 255.255.255.0 for /24 networks</span>
                 </div>
 
                 <div class="pure-control-group more">
                     <label>DNS IP</label>
-                    <input name="dns" type="text" value="" data-action="reconnect" maxlength="15" autocomplete="false">
+                    <input name="dns" type="text" value="" data-action="reconnect" maxlength="15" autocomplete="off">
                     <span class="pure-form-message-inline">Set the Domain Name Server IP to use when using a static IP</span>
                 </div>
 
@@ -2209,98 +2244,33 @@
         </template>
 
         <template id="template-schedule-config" >
-            <div>
-                <div class="pure-control-group">
-                    <label>Time</label>
-                    <input name="schHour" type="number" min="0" step="1" max="23" placeholder="Hour" value="0">
-                    <span class="pure-form-message-inline">(hour)</span>
-                    <input name="schMinute" type="number" min="0" step="1" max="59" placeholder="Minute" value="0">
-                    <span class="pure-form-message-inline">(minute)</span>
+            <div class="schedule">
+                <div class="pure-group">
+                    <input name="schTime" type="text" class="pure-input-1" autocomplete="off" placeholder="*-* 1..7 00:00">
+                    <input name="schAction" type="text" class="pure-input-1" autocomplete="off" placeholder="Terminal command">
                 </div>
 
-                <div class="pure-control-group">
-                    <label>Weekday(s)</label>
-                    <input name="schWDs" type="text" maxlength="15" value="1,2,3,4,5,6,7">
+                <div class="pure-g">
+                    <div class="pure-control-group pure-u-1 pure-u-lg-1-4">
+                        <select class="pure-input-2-3" name="schType">
+                            <option selected disabled value="unknown"></option>
+                            <option value="disabled">Disabled</option>
+                            <option value="calendar">Calendar</option>
+                        </select>
+                    </div>
 
-                    <span class="pure-form-message-inline">
-                        (comma-separated numbers) 1 for Monday, 2 for Tuesday etc.
-                    </span>
+                    <div class="pure-control-group pure-u-1 pure-u-lg-1-4">
+                        <label>Restore on boot</label>
+                        <div><input type="checkbox" name="schRestore"></div>
+                    </div>
+
+                    <button class="pure-button button-del-parent pure-u-1 pure-u-lg-1-8" type="button">
+                            Delete
+                    </button>
                 </div>
 
-                <div class="pure-control-group">
-                    <label>Use UTC time</label>
-                    <div><input type="checkbox" name="schUTC"></div>
-                    <span class="pure-form-message-inline">
-                        This schedule will trigger based on the UTC time instead of the local one.
-                    </span>
-                </div>
-
-                <div class="schedule-action">
-                </div>
-
-                <div class="pure-control-group">
-                    <label>Restore on boot</label>
-                    <div><input type="checkbox" name="schRestore"></div>
-                </div>
-
-                <div class="pure-control-group">
-                    <label>Enabled</label>
-                    <div><input type="checkbox" name="schEnabled"></div>
-                </div>
-
-                <button class="pure-button button-del-parent pure-input-1-4" type="button">
-                    Delete schedule
-                </button>
             </div>
         </template>
-
-        <template id="template-schedule-action-relay">
-            <div class="pure-control-group">
-                <label>Action</label>
-                <select class="pure-input-2-3" name="schAction" data-changed="true">
-
-                    <option value="0">Turn OFF</option>
-                    <option value="1">Turn ON</option>
-                    <option value="2">Toggle</option>
-                </select>
-
-                <label>Relay</label>
-                <select class="pure-input-2-3 enumerable enumerable-relay" name="schTarget" ></select>
-
-                <input type="hidden" name="schType" value="relay">
-            </div>
-        </template>
-
-        <!-- removeIf(!light) -->
-        <template id="template-schedule-action-light">
-            <div class="pure-control-group">
-                <label>Value</label>
-                <input name="schAction" class="pure-input-2-3" type="number" min="0" step="1" max="255" value="0">
-
-                <label>Channel</label>
-                <select class="pure-input-2-3 enumerable enumerable-channel" name="schTarget" ></select>
-
-                <input type="hidden" name="schType" value="light">
-            </div>
-        </template>
-        <!-- endRemoveIf(!light) -->
-
-        <!-- removeIf(!curtain) -->
-        <template id="template-schedule-action-curtain" class="template">
-            <div class="pure-control-group">
-                <label>Curtain position</label>
-                <input class="pure-input-2-3" name="schAction" type="number" min="0" step="1" max="100" value="0">
-                <span class="pure-form-message-inline">
-                    (%) 0 for open and 100 for closed
-                </span>
-
-                <label>Curtain</label>
-                <select class="pure-input-2-3 enumerable enumerable-curtain" name="schTarget" ></select>
-
-                <input type="hidden" name="schType" value="curtain">
-            </div>
-        </template>
-        <!-- endRemoveIf(!curtain) -->
 
         <template id="template-relay-control">
             <div class="pure-control-group">
@@ -2455,7 +2425,7 @@
         <!-- removeIf(!rfm69) -->
         <template id="template-rfm69-node">
             <div class="pure-control-group">
-                <input name="rfm69Node" type="text" placeholder="Node ID" size="8" autocomplete="false">
+                <input name="rfm69Node" type="text" placeholder="Node ID" size="8" autocomplete="off">
                 <input name="rfm69Key" type="text" placeholder="Key" size="8">
                 <input name="rfm69Topic" type="text" placeholder="MQTT Topic" size="8">
                 <button type="button" class="pure-button button-del-parent pure-input-1-4">Del</button>
@@ -2465,15 +2435,15 @@
 
         <template id="template-rpn-rule">
             <div class="pure-control-group">
-                <input class="pure-input-3-4" name="rpnRule" type="text" placeholder="RPN expression" autocomplete="false">
+                <input class="pure-input-3-4" name="rpnRule" type="text" placeholder="RPN expression" autocomplete="off">
                 <button type="button" class="pure-button button-del-parent">Del</button>
             </div>
         </template>
 
         <template id="template-rpn-topic">
             <div class="pure-control-group">
-                <input name="rpnTopic" class="pure-input-1-2" type="text" placeholder="Topic" autocomplete="false">
-                <input name="rpnName" class="pure-input-1-2" type="text" placeholder="Variable name" autocomplete="false">
+                <input name="rpnTopic" class="pure-input-1-2" type="text" placeholder="Topic" autocomplete="off">
+                <input name="rpnName" class="pure-input-1-2" type="text" placeholder="Variable name" autocomplete="off">
                 <button type="button" class="pure-button button-del-parent">Del</button>
             </div>
         </template>

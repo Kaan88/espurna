@@ -828,12 +828,12 @@ bool wsConnected(uint32_t client_id) {
     return _ws.hasClient(client_id);
 }
 
-void wsPayloadModule(JsonObject& root, const char* name) {
-    PROGMEM_STRING(Key, "modulesVisible");
-    JsonArray& modules = root.containsKey(FPSTR(Key))
-        ? root[FPSTR(Key)]
-        : root.createNestedArray(FPSTR(Key));
-    modules.add(FPSTR(name));
+void wsPayloadModule(JsonObject& root, espurna::StringView name) {
+    STRING_VIEW_INLINE(Key, "modulesVisible");
+    JsonArray& modules = root.containsKey(Key)
+        ? root[Key]
+        : root.createNestedArray(Key);
+    modules.add(name);
 }
 
 ws_callbacks_t& wsRegister() {

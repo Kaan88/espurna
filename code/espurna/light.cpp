@@ -836,6 +836,10 @@ std::unique_ptr<LightProvider> _light_provider;
 
 namespace {
 
+void _lightBrightness(long brightness) {
+    _light_brightness = std::clamp(brightness, espurna::light::BrightnessMin, espurna::light::BrightnessMax);
+}
+
 void _lightBrightnessPercent(long value) {
     _light_brightness.percent(value);
 }
@@ -1541,48 +1545,12 @@ String _lightGroupPayload() {
 // Basic value adjustments. Expression can be:
 // +offset, -offset or the new value
 
-long _lightAdjustValue(long value, espurna::StringView operation) {
-    const auto dot = std::find(operation.begin(), operation.end(), '.');
-    if (dot != operation.end()) {
-        operation = espurna::StringView(operation.begin(), dot);
-    }
-    
-    if (operation.length()) {
-        switch (operation[0]) {
-        case '+':
-        case '-':
-        {
-            const long multiplier = (operation[0] == '-') ? -1 : 1;
-            operation = espurna::StringView(
-                operation.begin() + 1, operation.end());
-
-            const auto result = parseUnsigned(operation, 10);
-            if (result.ok && result.value < std::numeric_limits<long>::max()) {
-                return value + (static_cast<long>(result.value) * multiplier);
-            }
-            break;
-        }
-
-        default:
-        {
-            const auto result = parseUnsigned(operation, 10);
-            if (result.ok && result.value < std::numeric_limits<long>::max()) {
-                return result.value;
-            }
-        }
-
-        }
-    }
-
-    return value;
-}
-
 void _lightAdjustBrightness(espurna::StringView payload) {
-    lightBrightness(_lightAdjustValue(_light_brightness.value(), payload));
+    lightBrightness(adjustNumber(_light_brightness.value(), payload));
 }
 
 void _lightAdjustChannel(LightChannel& channel, espurna::StringView payload) {
-    channel = _lightAdjustValue(channel.inputValue, payload);
+    channel = adjustNumber(channel.inputValue, payload);
 }
 
 void _lightAdjustChannel(size_t id, espurna::StringView payload) {
@@ -1593,7 +1561,7 @@ void _lightAdjustChannel(size_t id, espurna::StringView payload) {
 
 void _lightAdjustKelvin(espurna::StringView payload) {
     const auto kelvin = _light_temperature.kelvin();
-    const auto adjusted = _lightAdjustValue(kelvin.value, payload);
+    const auto adjusted = adjustNumber(kelvin.value, payload);
     _lightTemperature(espurna::light::Kelvin{
         .value = adjusted,
     });
@@ -1601,7 +1569,7 @@ void _lightAdjustKelvin(espurna::StringView payload) {
 
 void _lightAdjustMireds(espurna::StringView payload) {
     const auto mireds = _light_temperature.mireds();
-    const auto adjusted = _lightAdjustValue(mireds.value, payload);
+    const auto adjusted = adjustNumber(mireds.value, payload);
     _lightTemperature(espurna::light::Mireds{
         .value = adjusted,
     });
@@ -2571,10 +2539,14 @@ void _lightApiSetup() {
 
 namespace {
 
+STRING_VIEW_INLINE(PrefixLightLong, "light");
+STRING_VIEW_INLINE(PrefixLightShort, "lt");
+STRING_VIEW_INLINE(PrefixLightUse, "use");
+
 bool _lightWebSocketOnKeyCheck(espurna::StringView key, const JsonVariant&) {
-    return key.startsWith(STRING_VIEW("light"))
-        || key.startsWith(STRING_VIEW("use"))
-        || key.startsWith(STRING_VIEW("lt"));
+    return key.startsWith(PrefixLightLong)
+        || key.startsWith(PrefixLightShort)
+        || key.startsWith(PrefixLightUse);
 }
 
 void _lightWebSocketStatus(JsonObject& root) {
@@ -2605,7 +2577,7 @@ void _lightWebSocketStatus(JsonObject& root) {
 }
 
 void _lightWebSocketOnVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("light"));
+    wsPayloadModule(root, PrefixLightLong);
 
     JsonObject& light = root.createNestedObject("light");
 #if RELAY_SUPPORT
@@ -2649,7 +2621,7 @@ void _lightWebSocketOnAction(uint32_t client_id, const char* action, JsonObject&
     bool update { false };
 
     STRING_VIEW_INLINE(State, "state");
-    if (data.containsKey("state")) {
+    if (data.containsKey(State)) {
         lightState(data[State].as<bool>());
         update = true;
     }
@@ -3304,8 +3276,16 @@ void lightTemperature(espurna::light::Mireds mireds) {
     _lightTemperature(mireds);
 }
 
-void lightMireds(espurna::light::Kelvin kelvin) {
+void lightAdjustMireds(espurna::StringView payload) {
+    _lightAdjustMireds(payload);
+}
+
+void lightTemperature(espurna::light::Kelvin kelvin) {
     _lightTemperature(kelvin);
+}
+
+void lightAdjustKelvin(espurna::StringView payload) {
+    _lightAdjustKelvin(payload);
 }
 
 espurna::light::TemperatureRange lightMiredsRange() {
@@ -3334,6 +3314,10 @@ void lightChannelStep(size_t id, long steps) {
     lightChannelStep(id, steps, espurna::light::ValueStep);
 }
 
+void lightAdjustChannel(size_t id, espurna::StringView payload) {
+    _lightAdjustChannel(id, payload);
+}
+
 long lightBrightness() {
     return _light_brightness.value();
 }
@@ -3343,15 +3327,19 @@ void lightBrightnessPercent(long percent) {
 }
 
 void lightBrightness(long brightness) {
-    _light_brightness = std::clamp(brightness, espurna::light::BrightnessMin, espurna::light::BrightnessMax);
+    _lightBrightness(brightness);
 }
 
 void lightBrightnessStep(long steps, long multiplier) {
-    lightBrightness(_light_brightness.value() + (steps * multiplier));
+    _lightBrightness(_light_brightness.value() + (steps * multiplier));
 }
 
 void lightBrightnessStep(long steps) {
     lightBrightnessStep(steps, espurna::light::ValueStep);
+}
+
+void lightAdjustBrightness(espurna::StringView payload) {
+    _lightAdjustBrightness(payload);
 }
 
 espurna::duration::Milliseconds lightTransitionTime() {

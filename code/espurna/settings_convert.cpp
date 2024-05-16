@@ -122,7 +122,8 @@ bool validNextType(Type lhs, Type rhs) {
     case Type::Unknown:
         return true;
     case Type::Hours:
-        return (rhs == Type::Minutes) || (rhs == Type::Seconds);
+        return (rhs == Type::Minutes)
+            || (rhs == Type::Seconds);
     case Type::Minutes:
         return (rhs == Type::Seconds);
     case Type::Seconds:
@@ -454,6 +455,22 @@ unsigned short convert(const String& value) {
 template <>
 unsigned char convert(const String& value) {
     return convert<unsigned long>(value);
+}
+
+String serialize(duration::Seconds value) {
+    return serialize(value.count());
+}
+
+String serialize(duration::Milliseconds value) {
+    return serialize(value.count());
+}
+
+String serialize(duration::Minutes value) {
+    return serialize(value.count()) + 'm';
+}
+
+String serialize(duration::Hours value) {
+    return serialize(value.count()) + 'h';
 }
 
 } // namespace internal

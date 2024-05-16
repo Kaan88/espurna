@@ -94,7 +94,7 @@ void foreach_prefix(PrefixResultCallback&&, settings::query::StringViewIterator)
 namespace query {
 
 using Check = bool(*)(StringView key);
-using Get = String(*)(StringView key);
+using Get = Result(*)(StringView key);
 
 struct Handler {
     Check check;
@@ -106,7 +106,7 @@ struct Handler {
 } // namespace espurna
 
 void settingsRegisterQueryHandler(espurna::settings::query::Handler);
-String settingsQuery(espurna::StringView key);
+espurna::settings::query::Result settingsQuery(espurna::StringView key);
 
 // --------------------------------------------------------------------------
 
@@ -134,13 +134,27 @@ T getSetting(const espurna::settings::Key& key, T defaultValue) {
     return defaultValue;
 }
 
-template <typename T, typename = typename espurna::settings::traits::enable_if_arduino_string<T>::type>
-bool setSetting(const espurna::settings::Key& key, T&& value) {
+template <typename T>
+inline bool setSetting(const espurna::settings::Key& key, T&& value) {
+    return espurna::settings::set(key.value(), ::espurna::settings::internal::serialize(value));
+}
+
+template <>
+inline bool setSetting(const espurna::settings::Key& key, const String& value) {
     return espurna::settings::set(key.value(), value);
 }
 
-template <typename T, typename = typename espurna::settings::traits::enable_if_not_arduino_string<T>::type>
-bool setSetting(const espurna::settings::Key& key, T value) {
+template <>
+inline bool setSetting(const espurna::settings::Key& key, String& value) {
+    return espurna::settings::set(key.value(), std::cref(value).get());
+}
+
+inline bool setSetting(const espurna::settings::Key& key, String value) {
+    return espurna::settings::set(key.value(), std::cref(value).get());
+}
+
+template <size_t Size>
+inline bool setSetting(const espurna::settings::Key& key, const char (&value)[Size]) {
     return setSetting(key, String(value));
 }
 

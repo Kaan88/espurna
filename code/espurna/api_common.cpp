@@ -65,12 +65,14 @@ String key() {
 namespace web {
 #if WEB_SUPPORT
 
+STRING_VIEW_INLINE(Prefix, "api");
+
 bool onKeyCheck(espurna::StringView key, const JsonVariant&) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("api"));
+    return key.startsWith(Prefix);
 }
 
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("api"));
+    wsPayloadModule(root, Prefix);
 }
 
 void onConnected(JsonObject& root) {

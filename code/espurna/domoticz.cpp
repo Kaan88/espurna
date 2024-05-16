@@ -434,10 +434,10 @@ void send(unsigned char index, const espurna::sensor::Value& value) {
 namespace web {
 namespace {
 
-PROGMEM_STRING(Prefix, "dcz");
+STRING_VIEW_INLINE(Prefix, "dcz");
 
 bool onKeyCheck(espurna::StringView key, const JsonVariant&) {
-    return espurna::settings::query::samePrefix(key, Prefix);
+    return key.startsWith(Prefix);
 }
 
 void onVisible(JsonObject& root) {
@@ -472,7 +472,7 @@ void onConnected(JsonObject& root) {
 #endif
 
 #if SENSOR_SUPPORT
-    sensorWebSocketMagnitudes(root, PSTR("dcz"), [](JsonArray& out, size_t index) {
+    sensorWebSocketMagnitudes(root, Prefix, [](JsonArray& out, size_t index) {
         out.add(settings::magnitudeIdx(index).value());
     });
 #endif

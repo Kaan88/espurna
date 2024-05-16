@@ -144,6 +144,10 @@ public:
     virtual void resume() {
     }
 
+    // Custom hook (usually to update sensor state outside of normal methods)
+    virtual void notify() {
+    }
+
     // Loop-like method, call it in your main loop
     virtual void tick() {
     }
@@ -253,12 +257,7 @@ public:
     // Current value for slot # index
     virtual double value(unsigned char index) = 0;
 
-    // Return status (true if no errors)
-    bool status() const {
-        return 0 == _error;
-    }
-
-    // Return ready status (true for ready)
+    // Return ready status (true if ready to be read)
     bool ready() const {
         return _ready;
     }
@@ -269,7 +268,7 @@ public:
     }
 
 protected:
-    int _error = 0;
+    int _error = SENSOR_ERROR_OK;
     bool _dirty = true;
     bool _ready = false;
 };

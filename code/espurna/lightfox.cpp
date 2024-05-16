@@ -142,7 +142,7 @@ RelayProviderBasePtr make_relay(size_t index) {
 #if WEB_SUPPORT
 namespace web {
 
-PROGMEM_STRING(Module, "lightfox");
+STRING_VIEW_INLINE(Module, "lightfox");
 
 void onVisible(JsonObject& root) {
     wsPayloadModule(root, Module);

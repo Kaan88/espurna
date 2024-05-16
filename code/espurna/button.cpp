@@ -625,6 +625,12 @@ constexpr ButtonProvider provider(size_t index) {
 } // namespace build
 
 namespace settings {
+namespace {
+
+STRING_VIEW_INLINE(Prefix, "btn");
+
+} // namespace
+
 namespace internal {
 namespace {
 
@@ -824,18 +830,18 @@ static constexpr espurna::settings::query::IndexedSetting IndexedSettings[] PROG
 };
 
 bool checkSamePrefix(StringView key) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("btn"));
+    return key.startsWith(espurna::button::settings::Prefix);
 }
 
-String findValueFrom(StringView key) {
-    return espurna::settings::query::IndexedSetting::findValueFrom(
+espurna::settings::query::Result findFrom(StringView key) {
+    return espurna::settings::query::findFrom(
         button::internal::buttons.size(), IndexedSettings, key);
 }
 
 void setup() {
     settingsRegisterQueryHandler({
         .check = checkSamePrefix,
-        .get = findValueFrom
+        .get = findFrom,
     });
 }
 
@@ -1052,7 +1058,7 @@ void _buttonRelayAction(size_t id, ButtonAction action) {
 namespace {
 
 void _buttonWebSocketOnVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("btn"));
+    wsPayloadModule(root, espurna::button::settings::Prefix);
 }
 
 void _buttonWebSocketOnConnected(JsonObject& root) {

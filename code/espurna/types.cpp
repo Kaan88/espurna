@@ -151,4 +151,21 @@ bool StringView::endsWith(StringView other) const {
     return false;
 }
 
+bool SplitStringView::next() {
+    if (!_view.length()) {
+        return false;
+    }
+
+    const auto delim = std::find(_view.begin(), _view.end(), _delim);
+    if (delim != _view.end()) {
+        _current = StringView(_view.begin(), delim);
+        _view = StringView(delim + 1, _view.end());
+    } else {
+        _current = _view;
+        _view = StringView(_view.end(), _view.end());
+    }
+
+    return true;
+}
+
 } // namespace espurna

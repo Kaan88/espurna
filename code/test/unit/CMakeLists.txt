@@ -208,11 +208,12 @@ endfunction()
 build_tests(
     basic
     embedis
+    filters
+    scheduler
     settings
     terminal
     tuya
     types
     url
     utils
-    filters
 )

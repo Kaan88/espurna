@@ -150,6 +150,16 @@ inline String serialize(double value) {
     return String(value, 3);
 }
 
+String serialize(duration::Microseconds);
+
+String serialize(duration::Milliseconds);
+
+String serialize(duration::Seconds);
+
+String serialize(duration::Minutes);
+
+String serialize(duration::Hours);
+
 template <typename Container, typename T>
 T convert(const Container& options, const String& value, T defaultValue) {
     if (value.length()) {
@@ -176,7 +186,7 @@ String serialize(const Container& options, T value) {
 
     for (auto it = std::begin(options); it != std::end(options); ++it) {
         if ((*it).value() == value) {
-            out = FPSTR((*it).string());
+            out = (*it).string().toString();
             break;
         }
     }

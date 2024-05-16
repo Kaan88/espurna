@@ -591,8 +591,10 @@ void send(const char* message, size_t len, Timestamp timestamp) {
 #if DEBUG_WEB_SUPPORT
 namespace web {
 
+STRING_VIEW_INLINE(Prefix, "dbg");
+
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, PSTR("dbg"));
+    wsPayloadModule(root, Prefix);
 }
 
 } // namespace web

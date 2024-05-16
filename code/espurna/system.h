@@ -133,26 +133,6 @@ struct SystemClock {
     }
 };
 
-// on esp8266 this is a sntp timeshift'ed timestamp plus `micros64()`
-// resulting value is available from either
-// - `_gettimeofday_r(nullptr, &timeval_struct, nullptr);`, as both seconds and microseconds
-// - `std::time(...)` just as seconds
-//
-// notice that on boot it should be equal to the build timestamp when NTP_SUPPORT=1
-// (also, only works correctly with Cores >= 3, otherwise there are two different sources)
-struct RealtimeClock {
-    using duration = std::chrono::duration<int64_t>;
-    using rep = duration::rep;
-    using period = duration::period;
-    using time_point = std::chrono::time_point<RealtimeClock, duration>;
-
-    static constexpr bool is_steady { false };
-
-    static time_point now() noexcept {
-        return time_point(duration(::std::time(nullptr)));
-    }
-};
-
 // common 'Arduino Core' clock, fallback to 32bit and `millis()` to utilize certain math quirks
 // ref.
 // - https://github.com/esp8266/Arduino/issues/3078
@@ -235,8 +215,12 @@ struct SystemTimer {
     SystemTimer(SystemTimer&&) = default;
     SystemTimer& operator=(SystemTimer&&) = default;
 
-    explicit operator bool() const {
+    bool armed() const {
         return _armed != nullptr;
+    }
+
+    explicit operator bool() const {
+        return armed();
     }
 
     void once(Duration duration, Callback callback) {
@@ -277,6 +261,28 @@ private:
 };
 
 } // namespace timer
+
+struct ReadyFlag {
+    bool wait(duration::Milliseconds);
+    void stop();
+
+    bool stop_wait(duration::Milliseconds duration) {
+        stop();
+        return wait(duration);
+    }
+
+    bool ready() const {
+        return _ready;
+    }
+
+    explicit operator bool() const {
+        return ready();
+    }
+
+private:
+    bool _ready { true };
+    timer::SystemTimer _timer;
+};
 
 namespace heartbeat {
 
@@ -369,8 +375,6 @@ template <>
 heartbeat::Mode convert(const String&);
 
 String serialize(heartbeat::Mode);
-String serialize(duration::Seconds);
-String serialize(duration::Milliseconds);
 String serialize(duration::ClockCycles);
 
 } // namespace internal

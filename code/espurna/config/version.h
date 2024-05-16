@@ -9,7 +9,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION             "1.15.0-dev"
+#define APP_VERSION             "1.16.0-dev"
 #endif
 
 #ifndef APP_AUTHOR
@@ -21,5 +21,5 @@
 #endif
 
 #ifndef CFG_VERSION
-#define CFG_VERSION             14
+#define CFG_VERSION             15
 #endif

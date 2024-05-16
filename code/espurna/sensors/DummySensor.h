@@ -8,22 +8,31 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 
 // In sensor.cpp:
 // - #include "sensors/DummySensor.h"
-// - add `_sensors.push_back(new DummySensor());` at the end of _sensorLoad();
+// - wrap w/ DUMMY_SENSOR_SUPPORT
+// - add `_sensors.push_back(new driver::dummy::Sensor());` at the end of _sensorLoad();
+
+#if SENSOR_SUPPORT && DUMMY_SENSOR_SUPPORT
 
 #include "BaseEmonSensor.h"
 
-struct DummySensor : public BaseEmonSensor {
+namespace espurna {
+namespace sensor {
+namespace driver {
+namespace dummy {
+namespace {
+
+struct Sensor : public BaseEmonSensor {
 
     static constexpr Magnitude Magnitudes[] {
-        MAGNITUDE_TEMPERATURE,
-        MAGNITUDE_HUMIDITY,
-        MAGNITUDE_PRESSURE,
-        MAGNITUDE_LUX,
-        MAGNITUDE_ENERGY_DELTA,
-        MAGNITUDE_ENERGY,
+        {MAGNITUDE_TEMPERATURE},
+        {MAGNITUDE_HUMIDITY},
+        {MAGNITUDE_PRESSURE},
+        {MAGNITUDE_LUX},
+        {MAGNITUDE_ENERGY_DELTA},
+        {MAGNITUDE_ENERGY},
     };
 
-    DummySensor() :
+    Sensor() :
         BaseEmonSensor(Magnitudes)
     {}
 
@@ -36,16 +45,22 @@ struct DummySensor : public BaseEmonSensor {
     }
 
     void begin() override {
-        _ready = true;
+        if (_fail_begin) {
+            _fail_begin = false;
+            _error = SENSOR_ERROR_NOT_READY;
+            return;
+        }
+
         _error = SENSOR_ERROR_OK;
+        _ready = true;
     }
 
     String description() const override {
-        return F("DummySensor");
+        return STRING_VIEW("DummySensor").toString();
     }
 
     String address(unsigned char) const override {
-        return F("/dev/null");
+        return STRING_VIEW("/dev/null").toString();
     }
 
     unsigned char type(unsigned char index) const override {
@@ -78,6 +93,13 @@ struct DummySensor : public BaseEmonSensor {
     }
 
     void pre() override {
+        _error = SENSOR_ERROR_OK;
+        if (_fail_pre) {
+            _fail_pre = false;
+            _error = SENSOR_ERROR_TIMEOUT;
+            return;
+        }
+
         ++_temperature;
         ++_humidity;
         ++_pressure;
@@ -104,11 +126,13 @@ struct DummySensor : public BaseEmonSensor {
             _delta = 0.0;
         }
 
-        _energy[0] += espurna::sensor::Energy(
-            espurna::sensor::WattSeconds(_delta));
+        _energy[0] += Energy(WattSeconds(_delta));
     }
 
 private:
+    bool _fail_begin { true };
+    bool _fail_pre { true };
+
     double _temperature { 25.0 };
     double _humidity { 50.0 };
     double _pressure { 1000.0 };
@@ -117,5 +141,13 @@ private:
 };
 
 #if __cplusplus < 201703L
-constexpr BaseSensor::Magnitude DummySensor::Magnitudes[];
+constexpr BaseSensor::Magnitude Sensor::Magnitudes[];
+#endif
+
+} // namespace
+} // namespace dummy
+} // namespace driver
+} // namespace sensor
+} // namespace espurna
+
 #endif

@@ -77,9 +77,10 @@ constexpr bool authentication() {
 } // namespace build
 
 namespace settings {
-namespace keys {
 
-PROGMEM_STRING(Prefix, "telnet");
+STRING_VIEW_INLINE(Prefix, "telnet");
+
+namespace keys {
 
 PROGMEM_STRING(Station, "telnetSTA");
 PROGMEM_STRING(Authentication, "telnetAuth");
@@ -126,17 +127,17 @@ static constexpr std::array<espurna::settings::query::Setting, 3> Settings PROGM
 }};
 
 bool checkExactPrefix(StringView key) {
-    return espurna::settings::query::samePrefix(key, keys::Prefix);
+    return key.startsWith(settings::Prefix);
 }
 
-String findValueFrom(StringView key) {
-    return espurna::settings::query::Setting::findValueFrom(Settings, key);
+espurna::settings::query::Result findFrom(StringView key) {
+    return espurna::settings::query::findFrom(Settings, key);
 }
 
 void setup() {
     settingsRegisterQueryHandler({
         .check = checkExactPrefix,
-        .get = findValueFrom,
+        .get = findFrom,
     });
 }
 
@@ -1045,7 +1046,7 @@ bool onKeyCheck(espurna::StringView key, const JsonVariant&) {
 }
 
 void onVisible(JsonObject& root) {
-    wsPayloadModule(root, settings::keys::Prefix);
+    wsPayloadModule(root, settings::Prefix);
 }
 
 void onConnected(JsonObject& root) {

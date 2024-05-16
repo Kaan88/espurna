@@ -5,6 +5,8 @@ SCHEDULER MODULE
 Copyright (C) 2017 by faina09
 Adapted by Xose Pérez <xose dot perez at gmail dot com>
 
+Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
+
 */
 
 #include "espurna.h"
@@ -12,6 +14,7 @@ Adapted by Xose Pérez <xose dot perez at gmail dot com>
 #if SCHEDULER_SUPPORT
 
 #include "api.h"
+#include "datetime.h"
 #include "light.h"
 #include "mqtt.h"
 #include "ntp.h"
@@ -21,129 +24,62 @@ Adapted by Xose Pérez <xose dot perez at gmail dot com>
 #include "scheduler.h"
 #include "ws.h"
 
+#include "libs/EphemeralPrint.h"
+#include "libs/PrintString.h"
+
+#include <bitset>
+
 // -----------------------------------------------------------------------------
+
+#include "scheduler_common.ipp"
+#include "scheduler_time.re.ipp"
+
+#if SCHEDULER_SUN_SUPPORT
+#include "scheduler_sun.ipp"
+#endif
 
 namespace espurna {
 namespace scheduler {
 
-enum class Type {
-    None,
+// TODO recurrent in addition to calendar?
+enum class Type : int {
+    Unknown = 0,
+    Disabled,
+    Calendar,
+};
+
+namespace v1 {
+
+enum class Type : int {
+    None = 0,
     Relay,
     Channel,
-    Curtain
+    Curtain,
 };
+
+} // namespace v1
 
 namespace {
 
-struct Weekdays {
-    Weekdays() = default;
+bool initial { true };
 
-    // TimeLib mask, with Monday as 1 and Sunday as 7
-    // ctime order is Sunday as 0 and Saturday as 6
-    explicit Weekdays(const String& pattern) {
-        const char* p = pattern.c_str();
-        while (*p != '\0') {
-            switch (*p) {
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-                _mask |= 1 << (*p - '1');
-                break;
-            }
-            ++p;
-        }
-    }
+#if SCHEDULER_SUN_SUPPORT
+namespace sun {
 
-    String toString() const {
-        String out;
-        for (int day = 0; day < 7; ++day) {
-            if (_mask & (1 << day)) {
-                if (out.length()) {
-                    out += ',';
-                }
-                out += static_cast<char>('0' + day + 1);
-            }
-        }
-
-        return out;
-    }
-
-    bool match(const tm& other) const {
-        switch (other.tm_wday) {
-        case 0:
-            return _mask & (1 << 6);
-        case 1 ... 6:
-            return _mask & (1 << (other.tm_wday - 1));
-        }
-
-        return false;
-    }
-
-    int mask() const {
-        return _mask;
-    }
-
-private:
-    int _mask { 0 };
+struct Match {
+    TimeMatch m;
+    time_t timestamp { -1 };
 };
 
-struct Schedule {
-    bool enabled;
-    size_t target;
-    Type type;
-    int action;
-    bool restore;
-    bool utc;
-    Weekdays weekdays;
-    int hour;
-    int minute;
-};
+Location location;
 
-using Schedules = std::vector<Schedule>;
+Match match_rising;
+Match match_setting;
 
-} // namespace
-} // namespace scheduler
+void setup();
 
-namespace settings {
-namespace options {
-namespace {
-
-PROGMEM_STRING(None, "none");
-PROGMEM_STRING(Relay, "relay");
-PROGMEM_STRING(Channel, "channel");
-PROGMEM_STRING(Curtain, "curtain");
-
-static constexpr std::array<Enumeration<scheduler::Type>, 4> SchedulerTypeOptions PROGMEM {
-    {{scheduler::Type::None, None},
-     {scheduler::Type::Relay, Relay},
-     {scheduler::Type::Channel, Channel},
-     {scheduler::Type::Curtain, Curtain}}
-};
-
-} // namespace
-} // namespace options
-
-namespace internal {
-
-template<>
-espurna::scheduler::Type convert(const String& value) {
-    return convert(options::SchedulerTypeOptions, value,
-        espurna::scheduler::Type::None);
-}
-
-String serialize(scheduler::Type value) {
-    return serialize(options::SchedulerTypeOptions, value);
-}
-
-} // namespace internal
-} // namespace settings
-
-namespace scheduler {
-namespace {
+} // namespace sun
+#endif
 
 namespace build {
 
@@ -151,164 +87,172 @@ constexpr size_t max() {
     return SCHEDULER_MAX_SCHEDULES;
 }
 
-constexpr int restoreOffsetMax() {
-    return 2; // today and yesterday
+constexpr Type type() {
+    return Type::Unknown;
 }
 
-constexpr size_t defaultTarget() {
-    return 0; // aka relay#0 or channel#0
-}
-
-constexpr Type defaultType() {
-    return Type::None;
-}
-
-constexpr bool utc() {
-    return false; // use local time by default
-}
-
-constexpr int hour() {
-    return 0;
-}
-
-constexpr int minute() {
-    return 0;
-}
-
-constexpr int action() {
-    return 0;
-}
-
-const __FlashStringHelper* weekdays() {
-    return F(SCHEDULER_WEEKDAYS);
-}
-
-constexpr bool restoreLast() {
-    return 1 == SCHEDULER_RESTORE_LAST_SCHEDULE;
-}
-
-} // namespace build
-
-bool supported(Type type) {
-    switch (type) {
-    case Type::None:
-        break;
-
-    case Type::Relay:
-#if RELAY_SUPPORT
-        return true;
-#else
-        return false;
-#endif
-
-    case Type::Channel:
-#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
-        return true;
-#else
-        return false;
-#endif
-
-    case Type::Curtain:
-#if CURTAIN_SUPPORT
-        return true;
-#else
-        return false;
-#endif
-    }
-
+constexpr bool restore() {
     return false;
 }
 
-bool schedulable() {
-    return false
-#if RELAY_SUPPORT
-    || relayCount()
+constexpr int restoreDays() {
+    return - (SCHEDULER_RESTORE_DAYS); 
+}
+
+#if SCHEDULER_SUN_SUPPORT
+constexpr double latitude() {
+    return SCHEDULER_LATITUDE;
+}
+
+constexpr double longitude() {
+    return SCHEDULER_LONGITUDE;
+}
+
+constexpr double altitude() {
+    return SCHEDULER_ALTITUDE;
+}
 #endif
-#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
-    || lightChannels()
-#endif
-#if CURTAIN_SUPPORT
-    || curtainCount()
-#endif
-    ;
-}
 
-namespace debug {
-
-String type(Type type) {
-    return espurna::settings::internal::serialize(type);
-}
-
-String type(const Schedule& schedule) {
-    return type(schedule.type);
-}
-
-void show(const Schedules& schedules) {
-    size_t index { 0 };
-    for (auto& schedule : schedules) {
-        DEBUG_MSG_P(
-            PSTR("[SCH] #%d: %s #%d => %d at %02d:%02d (%s) on %s%s\n"),
-            index++, scheduler::debug::type(schedule).c_str(), schedule.target,
-            schedule.action, schedule.hour, schedule.minute,
-            schedule.utc ? "UTC" : "local time",
-            schedule.weekdays.toString().c_str(),
-            schedule.enabled ? "" : " (disabled)");
-    }
-}
-
-} // namespace debug
+} // namespace build
 
 namespace settings {
-namespace keys {
-namespace {
+namespace internal {
 
-PROGMEM_STRING(Enabled, "schEnabled");
-PROGMEM_STRING(Target, "schTarget");
-PROGMEM_STRING(Type, "schType");
-PROGMEM_STRING(Action, "schAction");
-PROGMEM_STRING(Restore, "schRestore");
-PROGMEM_STRING(UseUTC, "schUTC");
-PROGMEM_STRING(Weekdays, "schWDs");
-PROGMEM_STRING(Hour, "schHour");
-PROGMEM_STRING(Minute, "schMinute");
+using espurna::settings::options::Enumeration;
+
+STRING_VIEW_INLINE(Unknown, "unknown");
+STRING_VIEW_INLINE(Disabled, "disabled");
+STRING_VIEW_INLINE(Calendar, "calendar");
+
+static constexpr std::array<Enumeration<Type>, 3> Types PROGMEM {
+    {{Type::Unknown, Unknown},
+     {Type::Disabled, Disabled},
+     {Type::Calendar, Calendar}}
+};
+
+namespace v1 {
+
+STRING_VIEW_INLINE(None, "none");
+STRING_VIEW_INLINE(Relay, "relay");
+STRING_VIEW_INLINE(Channel, "channel");
+STRING_VIEW_INLINE(Curtain, "curtain");
+
+static constexpr std::array<Enumeration<scheduler::v1::Type>, 4> Types PROGMEM {
+    {{scheduler::v1::Type::None, None},
+     {scheduler::v1::Type::Relay, Relay},
+     {scheduler::v1::Type::Channel, Channel},
+     {scheduler::v1::Type::Curtain, Curtain}}
+};
+
+} // namespace v1
+} // namespace internal
+} // namespace settings
 
 } // namespace
-} // namespace keys
+} // namespace scheduler
 
-bool enabled(size_t index) {
-    return getSetting({keys::Enabled, index}, false);
+namespace settings {
+namespace internal {
+
+template <>
+scheduler::Type convert(const String& value) {
+    return convert(scheduler::settings::internal::Types, value, scheduler::Type::Unknown);
 }
 
-size_t target(size_t index) {
-    return getSetting({keys::Target, index}, build::defaultTarget());
+String serialize(scheduler::Type type) {
+    return serialize(scheduler::settings::internal::Types, type);
+}
+
+template <>
+scheduler::v1::Type convert(const String& value) {
+    return convert(scheduler::settings::internal::v1::Types, value, scheduler::v1::Type::None);
+}
+
+String serialize(scheduler::v1::Type type) {
+    return serialize(scheduler::settings::internal::v1::Types, type);
+}
+
+} // namespace internal 
+} // namespace settings
+} // namespace espurna
+
+namespace espurna {
+namespace scheduler {
+namespace {
+
+struct Schedule {
+    DateMatch date;
+    WeekdayMatch weekdays;
+    TimeMatch time;
+
+    bool ok { false };
+};
+
+} // namespace
+} // namespace scheduler
+} // namespace espurna
+
+namespace espurna {
+namespace scheduler {
+namespace {
+
+bool tryParseId(StringView value, size_t& out) {
+    return ::tryParseId(value, build::max(), out);
+}
+
+namespace settings {
+
+STRING_VIEW_INLINE(Prefix, "sch");
+
+namespace keys {
+
+#if SCHEDULER_SUN_SUPPORT
+STRING_VIEW_INLINE(Latitude, "schLat");
+STRING_VIEW_INLINE(Longitude, "schLong");
+STRING_VIEW_INLINE(Altitude, "schAlt");
+#endif
+
+STRING_VIEW_INLINE(Days, "schRstrDays");
+
+STRING_VIEW_INLINE(Type, "schType");
+STRING_VIEW_INLINE(Restore, "schRestore");
+STRING_VIEW_INLINE(Time, "schTime");
+STRING_VIEW_INLINE(Action, "schAction");
+
+} // namespace keys
+
+#if SCHEDULER_SUN_SUPPORT
+double latitude() {
+    return getSetting(keys::Latitude, build::latitude());
+}
+
+double longitude() {
+    return getSetting(keys::Longitude, build::longitude());
+}
+
+double altitude() {
+    return getSetting(keys::Altitude, build::altitude());
+}
+#endif
+
+int restoreDays() {
+    return getSetting(keys::Days, build::restoreDays());
 }
 
 Type type(size_t index) {
-    return getSetting({keys::Type, index}, build::defaultType());
-}
-
-int action(size_t index) {
-    return getSetting({keys::Action, index}, build::action());
+    return getSetting({keys::Type, index}, build::type());
 }
 
 bool restore(size_t index) {
-    return getSetting({keys::Restore, index}, build::restoreLast());
+    return getSetting({keys::Restore, index}, build::restore());
 }
 
-Weekdays weekdays(size_t index) {
-    return Weekdays(getSetting({keys::Weekdays, index}, build::weekdays()));
+String time(size_t index) {
+    return getSetting({keys::Time, index});
 }
 
-bool utc(size_t index) {
-    return getSetting({keys::UseUTC, index}, build::utc());
-}
-
-int hour(size_t index) {
-    return getSetting({keys::Hour, index}, build::hour());
-}
-
-int minute(size_t index) {
-    return getSetting({keys::Minute, index}, build::minute());
+String action(size_t index) {
+    return getSetting({keys::Action, index});
 }
 
 namespace internal {
@@ -318,60 +262,84 @@ String NAME (size_t id) {\
     return espurna::settings::internal::serialize(FUNC(id));\
 }
 
-ID_VALUE(enabled, settings::enabled)
-ID_VALUE(target, settings::target)
 ID_VALUE(type, settings::type)
-ID_VALUE(action, settings::action)
 ID_VALUE(restore, settings::restore)
-ID_VALUE(utc, settings::utc)
-
-String weekdays(size_t index) {
-    return settings::weekdays(index).toString();
-}
-
-ID_VALUE(hour, settings::hour)
-ID_VALUE(minute, settings::minute)
 
 #undef ID_VALUE
 
 } // namespace internal
 
 static constexpr espurna::settings::query::IndexedSetting IndexedSettings[] PROGMEM {
-    {keys::Enabled, internal::enabled},
-    {keys::Target, internal::target},
     {keys::Type, internal::type},
-    {keys::Action, internal::action},
     {keys::Restore, internal::restore},
-    {keys::UseUTC, internal::utc},
-    {keys::Weekdays, internal::weekdays},
-    {keys::Hour, internal::hour},
-    {keys::Minute, internal::minute}
+    {keys::Action, settings::action},
+    {keys::Time, settings::time},
 };
 
-Schedule schedule(size_t index, Type type) {
-    return {
-        .enabled = enabled(index),
-        .target = target(index),
-        .type = type,
-        .action = action(index),
-        .restore = restore(index),
-        .utc = utc(index),
-        .weekdays = weekdays(index),
-        .hour = hour(index),
-        .minute = minute(index)
-    };
-}
+struct Parsed {
+    bool date { false };
+    bool weekdays { false };
+    bool time { false };
+};
 
 Schedule schedule(size_t index) {
-    return schedule(index, type(index));
+    Schedule out;
+
+    bool parsed_date { false };
+    bool parsed_weekdays { false };
+    bool parsed_time { false };
+
+    const auto time = settings::time(index);
+    auto split = SplitStringView(time);
+
+    while (split.next()) {
+        auto elem = split.current();
+
+        // most expected order, starting with date
+        if (!parsed_date && ((parsed_date = parse_date(out.date, elem)))) {
+            continue;
+        }
+
+        // then weekdays
+        if (!parsed_weekdays && ((parsed_weekdays = parse_weekdays(out.weekdays, elem)))) {
+            continue;
+        }
+
+        // then time
+        if (!parsed_time && ((parsed_time = parse_time(out.time, elem)))) {
+            continue;
+        }
+
+        // and keyword is always at the end. forcibly stop the parsing, regardless of the state
+        if (parse_time_keyword(out.time, elem)) {
+            if (want_utc(out.time)) {
+                break;
+            }
+
+#if SCHEDULER_SUN_SUPPORT
+            // do not want both time and sun{rise,set}
+            if (want_sunrise_sunset(out.time)) {
+                parsed_time = !parsed_time;
+            }
+#endif
+
+            break;
+        }
+    }
+
+    out.ok = parsed_date
+        || parsed_weekdays
+        || parsed_time;
+
+    return out;
 }
 
 size_t count() {
     size_t out { 0 };
 
     for (size_t index = 0; index < build::max(); ++index) {
-        auto type = settings::type(index);
-        if (!supported(type)) {
+        const auto type = settings::type(index);
+        if (type == Type::Unknown) {
             break;
         }
 
@@ -384,53 +352,356 @@ size_t count() {
 void gc(size_t total) {
     for (size_t index = total; index < build::max(); ++index) {
         for (auto setting : IndexedSettings) {
-            delSetting({setting.prefix().c_str(), index});
+            delSetting({setting.prefix(), index});
         }
     }
 }
 
-Schedules schedules() {
-    Schedules out;
-    out.reserve(build::max());
+} // namespace settings
 
-    for (size_t index = 0; index < build::max(); ++index) {
-        auto type = settings::type(index);
-        if (!supported(type)) {
-            break;
-        }
+namespace v1 {
 
-        out.emplace_back(settings::schedule(index, type));
+using scheduler::v1::Type;
+
+namespace settings {
+namespace keys {
+
+STRING_VIEW_INLINE(Enabled, "schEnabled");
+
+STRING_VIEW_INLINE(Switch, "schSwitch");
+STRING_VIEW_INLINE(Target, "schTarget");
+
+STRING_VIEW_INLINE(Hour, "schHour");
+STRING_VIEW_INLINE(Minute, "schMinute");
+STRING_VIEW_INLINE(Weekdays, "schWDs");
+
+static constexpr std::array<StringView, 5> List {
+    Enabled,
+    Target,
+    Hour,
+    Minute,
+    Weekdays,
+};
+
+} // namespace keys
+
+STRING_VIEW_INLINE(DefaultWeekdays, "1,2,3,4,5,6,7");
+
+bool enabled(size_t index) {
+    return getSetting({keys::Enabled, index}, false);
+}
+
+Type type(size_t index) {
+    return getSetting({espurna::scheduler::settings::keys::Type, index}, Type::None);
+}
+
+int target(size_t index) {
+    return getSetting({keys::Target, index}, 0);
+}
+
+int action(size_t index) {
+    using namespace espurna::scheduler::settings::keys;
+    return getSetting({Action, index}, 0);
+}
+
+int hour(size_t index) {
+    return getSetting({keys::Hour, index}, 0);
+}
+
+int minute(size_t index) {
+    return getSetting({keys::Minute, index}, 0);
+}
+
+String weekdays(size_t index) {
+    return getSetting({keys::Weekdays, index}, DefaultWeekdays);
+}
+
+} // namespace settings
+
+String convert_time(const String& weekdays, int hour, int minute) {
+    String out;
+
+    // implicit mon..sun already by default
+    if (weekdays != settings::DefaultWeekdays) {
+        out += weekdays;
+        out += ' ';
     }
+
+    if (hour < 10) {
+        out += '0';
+    }
+
+    out += String(hour, 10);
+    out += ':';
+
+    if (minute < 10) {
+        out += '0';
+    }
+
+    out += String(minute, 10);
 
     return out;
 }
 
-void migrate(int version) {
-    if (version < 6) {
-        moveSettings(PSTR("schSwitch"), keys::Target);
+String convert_action(Type type, int target, int action) {
+    String out;
+
+    StringView prefix;
+
+    switch (type) {
+    case Type::None:
+        break;
+
+    case Type::Relay:
+    {
+        STRING_VIEW_INLINE(Relay, "relay");
+        prefix = Relay;
+        break;
+    }
+
+    case Type::Channel:
+    {
+        STRING_VIEW_INLINE(Channel, "channel");
+        prefix = Channel;
+        break;
+    }
+
+    case Type::Curtain:
+    {
+        STRING_VIEW_INLINE(Curtain, "curtain");
+        prefix = Curtain;
+        break;
+    }
+
+    }
+
+    if (prefix.length()) {
+        out += prefix.toString()
+            + ' ';
+        out += String(target, 10) 
+            + ' '
+            + String(action, 10);
+    }
+
+        return out;
+    }
+
+String convert_type(bool enabled, Type type) {
+    auto out = scheduler::Type::Unknown;
+
+    switch (type) {
+    case Type::None:
+        break;
+
+    case Type::Relay:
+    case Type::Channel:
+    case Type::Curtain:
+        out = scheduler::Type::Calendar;
+        break;
+    }
+
+    if (!enabled && (out != scheduler::Type::Unknown)) {
+        out = scheduler::Type::Disabled;
+    }
+
+    return ::espurna::settings::internal::serialize(out);
+}
+
+void migrate() {
+    for (size_t index = 0; index < build::max(); ++index) {
+        const auto type = settings::type(index);
+
+        setSetting({scheduler::settings::keys::Type, index},
+            convert_type(settings::enabled(index), type));
+
+        setSetting({scheduler::settings::keys::Time, index},
+            convert_time(settings::weekdays(index),
+                settings::hour(index),
+                settings::minute(index)));
+
+        setSetting({scheduler::settings::keys::Action, index},
+            convert_action(type,
+                settings::target(index),
+                settings::action(index)));
+
+        for (auto& key : settings::keys::List) {
+            delSetting({key, index});
+        }
     }
 }
 
-namespace query {
+} // namespace v1
 
-bool checkSamePrefix(StringView key) {
-    PROGMEM_STRING(Prefix, "sch");
-    return espurna::settings::query::samePrefix(key, Prefix);
+namespace settings {
+
+void migrate(int version) {
+    if (version < 6) {
+        moveSettings(
+            v1::settings::keys::Switch.toString(),
+            v1::settings::keys::Target.toString());
+    }
+
+    if (version < 15) {
+        v1::migrate();
+    }
 }
 
-String findIndexedValueFrom(StringView key) {
-    return espurna::settings::query::IndexedSetting::findValueFrom(count(), IndexedSettings, key);
-}
+} // namespace settings
+
+#if SCHEDULER_SUN_SUPPORT
+namespace sun {
 
 void setup() {
-    settingsRegisterQueryHandler({
-        .check = checkSamePrefix,
-        .get = findIndexedValueFrom
-    });
+    location.latitude = settings::latitude();
+    location.longitude = settings::longitude();
+    location.altitude = settings::altitude();
 }
 
-} // namespace query
-} // namespace settings
+void update_match(Match& match, time_t timestamp) {
+    tm tmp{};
+    gmtime_r(&timestamp, &tmp);
+
+    match.timestamp = timestamp;
+
+    match.m.hour.reset();
+    match.m.hour[tmp.tm_hour] = true;
+
+    match.m.minute.reset();
+    match.m.minute[tmp.tm_min] = true;
+
+    match.m.flags = FlagUtc;
+}
+
+// keep existing sunrise and sunset timestamp for at least a minute
+bool needs_update(time_t timestamp) {
+    return ((match_rising.timestamp < (timestamp + 60))
+         || (match_setting.timestamp < (timestamp + 60)));
+}
+
+template <typename T>
+void delta_compare(tm& out, time_t, T);
+
+template <>
+void delta_compare(tm& out, time_t timestamp, std::greater<time_t>) {
+    datetime::delta_utc(
+        out, datetime::Seconds{ timestamp },
+        datetime::Days{ 1 });
+}
+
+template <>
+void delta_compare(tm& out, time_t timestamp, std::less<time_t>) {
+    datetime::delta_utc(
+        out, datetime::Seconds{ timestamp },
+        datetime::Days{ -1 });
+}
+
+template <typename T>
+void update(time_t timestamp, const tm& today, T compare) {
+    auto result = sun::sunrise_sunset(location, today);
+    if ((result.sunrise < 0) || (result.sunset < 0)) {
+        DEBUG_MSG_P(PSTR("[SCH] Sunrise and sunset cannot be calculated\n"));
+        return;
+    }
+
+    if (compare(timestamp, result.sunrise) || compare(timestamp, result.sunset)) {
+        tm tmp;
+        std::memcpy(&tmp, &today, sizeof(tmp));
+        delta_compare(tmp, timestamp, compare);
+
+        const auto other = sun::sunrise_sunset(location, tmp);
+        if ((other.sunrise < 0) || (other.sunset < 0)) {
+            DEBUG_MSG_P(PSTR("[SCH] Sunrise and sunset cannot be calculated\n"));
+            return;
+        }
+
+        if (compare(timestamp, result.sunrise)) {
+            result.sunrise = other.sunrise;
+        }
+
+        if (compare(timestamp, result.sunset)) {
+            result.sunset = other.sunset;
+        }
+    }
+
+    update_match(match_rising, result.sunrise);
+    update_match(match_setting, result.sunset);
+}
+
+// restoration needs timestamps in the past, ensure sun matchers are before current timestamp
+void before_restore(const datetime::Context& ctx) {
+    update(ctx.timestamp, ctx.utc, std::less<time_t>{});
+
+    if (match_rising.timestamp > 0) {
+        DEBUG_MSG_P(PSTR("[SCH] Previous sunrise at %s\n"),
+            datetime::format_local(match_rising.timestamp).c_str());
+    }
+
+    if (match_setting.timestamp > 0) {
+        DEBUG_MSG_P(PSTR("[SCH] Previous sunset at %s\n"),
+            datetime::format_local(match_setting.timestamp).c_str());
+    }
+}
+
+void after_restore() {
+    match_rising = Match{};
+    match_setting = Match{};
+}
+
+// while check needs timestamps in the future
+void before_check(const datetime::Context& ctx) {
+    if (!needs_update(ctx.timestamp)) {
+        return;
+    }
+
+    update(ctx.timestamp, ctx.utc, std::greater<time_t>{});
+
+    if (match_rising.timestamp > 0) {
+        DEBUG_MSG_P(PSTR("[SCH] Sunrise at %s\n"),
+            datetime::format_local(match_rising.timestamp).c_str());
+    }
+
+    if (match_setting.timestamp > 0) {
+        DEBUG_MSG_P(PSTR("[SCH] Sunset at %s\n"),
+            datetime::format_local(match_setting.timestamp).c_str());
+    }
+}
+
+} // namespace sun
+#endif
+
+// -----------------------------------------------------------------------------
+
+#if TERMINAL_SUPPORT
+namespace terminal {
+
+PROGMEM_STRING(Dump, "SCHEDULE");
+
+static void dump(::terminal::CommandContext&& ctx) {
+    if (ctx.argv.size() != 2) {
+        terminalError(ctx, STRING_VIEW("SCHEDULE <ID>").toString());
+        return;
+    }
+
+    size_t id;
+    if (!tryParseId(ctx.argv[1], id)) {
+        terminalError(ctx, F("Invalid ID"));
+        return;
+    }
+
+    settingsDump(ctx, settings::IndexedSettings, id);
+    terminalOK(ctx);
+}
+
+static constexpr ::terminal::Command Commands[] PROGMEM {
+    {Dump, dump},
+};
+
+void setup() {
+    espurna::terminal::add(Commands);
+}
+
+} // namespace terminal
+#endif
 
 // -----------------------------------------------------------------------------
 
@@ -438,35 +709,36 @@ void setup() {
 namespace api {
 namespace keys {
 
-PROGMEM_STRING(Enabled, "enabled");
-PROGMEM_STRING(Target, "target");
-PROGMEM_STRING(Type, "type");
-PROGMEM_STRING(Action, "action");
-PROGMEM_STRING(Restore, "restore");
-PROGMEM_STRING(UseUTC, "utc");
-PROGMEM_STRING(Weekdays, "weekdays");
-PROGMEM_STRING(Hour, "hour");
-PROGMEM_STRING(Minute, "minute");
+STRING_VIEW_INLINE(Type, "type");
+STRING_VIEW_INLINE(Restore, "restore");
+STRING_VIEW_INLINE(Time, "time");
+STRING_VIEW_INLINE(Action, "action");
 
 } // namespace keys
 
+using espurna::settings::internal::serialize;
+using espurna::settings::internal::convert;
+
+struct Schedule {
+    size_t id;
+    Type type;
+    int restore;
+    String time;
+    String action;
+};
+
 void print(JsonObject& root, const Schedule& schedule) {
-    root[FPSTR(keys::Enabled)] = schedule.enabled;
-    root[FPSTR(keys::Target)] = schedule.target;
-    root[FPSTR(keys::Type)] = espurna::settings::internal::serialize(schedule.type);
-    root[FPSTR(keys::Action)] = schedule.action;
-    root[FPSTR(keys::Restore)] = schedule.restore;
-    root[FPSTR(keys::UseUTC)] = schedule.utc;
-    root[FPSTR(keys::Weekdays)] = schedule.weekdays.toString();
-    root[FPSTR(keys::Hour)] = schedule.hour;
-    root[FPSTR(keys::Minute)] = schedule.minute;
+    root[keys::Type] = serialize(schedule.type);
+    root[keys::Restore] = (1 == schedule.restore);
+    root[keys::Action] = schedule.action;
+    root[keys::Time] = schedule.time;
 }
 
 template <typename T>
-bool setFromJsonIf(JsonObject& root, const char* key, size_t id, const char* jsonKey) {
-    const auto* jsonKeyFpstr = FPSTR(jsonKey);
-    if (root.containsKey(jsonKeyFpstr) && root.is<T>(jsonKeyFpstr)) {
-        setSetting({key, id}, espurna::settings::internal::serialize(root[jsonKeyFpstr].as<T>()));
+bool set_typed(T& out, JsonObject& root, StringView key) {
+    auto value = root[key];
+    if (value.success()) {
+        out = value.as<T>();
         return true;
     }
 
@@ -474,30 +746,77 @@ bool setFromJsonIf(JsonObject& root, const char* key, size_t id, const char* jso
 }
 
 template <>
-bool setFromJsonIf<String>(JsonObject& root, const char* key, size_t id, const char* jsonKey) {
-    const auto* jsonKeyFpstr = FPSTR(jsonKey);
-    if (root.containsKey(jsonKeyFpstr) && root.is<String>(jsonKeyFpstr)) {
-        setSetting({key, id}, root[jsonKeyFpstr].as<String>());
+bool set_typed<Type>(Type& out, JsonObject& root, StringView key) {
+    auto value = root[key];
+    if (!value.success()) {
+        return false;
+    }
+
+    auto type = convert<Type>(value.as<String>());
+    if (type != Type::Unknown) {
+        out = type;
         return true;
     }
 
     return false;
 }
 
+template
+bool set_typed<String>(String&, JsonObject&, StringView);
+
+template
+bool set_typed<bool>(bool&, JsonObject&, StringView);
+
+void update_from(const Schedule& schedule) {
+    setSetting({keys::Type, schedule.id}, serialize(schedule.type));
+    setSetting({keys::Time, schedule.id}, schedule.time);
+    setSetting({keys::Action, schedule.id}, schedule.action);
+
+    if (schedule.restore != -1) {
+        setSetting({keys::Restore, schedule.id}, serialize(1 == schedule.restore));
+    }
+}
+
 bool set(JsonObject& root, const size_t id) {
-    if (setFromJsonIf<int>(root, settings::keys::Type, id, keys::Type)) {
-        setFromJsonIf<bool>(root, settings::keys::Enabled, id, keys::Enabled);
-        setFromJsonIf<int>(root, settings::keys::Target, id, keys::Target);
-        setFromJsonIf<int>(root, settings::keys::Action, id, keys::Action);
-        setFromJsonIf<bool>(root, settings::keys::Restore, id, keys::Restore);
-        setFromJsonIf<bool>(root, settings::keys::UseUTC, id, keys::UseUTC);
-        setFromJsonIf<String>(root, settings::keys::Weekdays, id, keys::Weekdays);
-        setFromJsonIf<int>(root, settings::keys::Hour, id, keys::Hour);
-        setFromJsonIf<int>(root, settings::keys::Minute, id, keys::Minute);
-        return true;
+    Schedule out;
+    out.restore = -1;
+
+    // always need type, time and action
+    if (!set_typed(out.type, root, keys::Type)) {
+        return false;
     }
 
-    return false;
+    if (!set_typed(out.time, root, keys::Time)) {
+        return false;
+    }
+
+    if (!set_typed(out.action, root, keys::Action)) {
+        return false;
+    }
+
+    // optional restore flag
+    bool restore;
+    if (set_typed(restore, root, keys::Restore)) {
+        out.restore = restore ? 1 : 0;
+    }
+
+    update_from(out);
+
+    return true;
+}
+
+Schedule make_schedule(size_t id) {
+    Schedule out;
+
+    out.type = settings::type(id);
+    if (out.type != Type::Unknown) {
+        out.id = id;
+        out.restore = settings::restore(id) ? 1 : 0;
+        out.time = settings::time(id);
+        out.action = settings::action(id);
+    }
+
+    return out;
 }
 
 namespace schedules {
@@ -505,10 +824,14 @@ namespace schedules {
 bool get(ApiRequest&, JsonObject& root) {
     JsonArray& out = root.createNestedArray("schedules");
 
-    auto schedules = settings::schedules();
-    for (auto& schedule : schedules) {
+    for (size_t id = 0; id < build::max(); ++id) {
+        const auto sch = make_schedule(id);
+        if (sch.type == Type::Unknown) {
+            break;
+        }
+
         auto& root = out.createNestedObject();
-        print(root, schedule);
+        print(root, sch);
     }
 
     return true;
@@ -531,16 +854,17 @@ bool set(ApiRequest&, JsonObject& root) {
 
 namespace schedule {
 
-bool tryParseId(StringView value, size_t& out) {
-    return ::tryParseId(value, build::max(), out);
-}
-
 bool get(ApiRequest& req, JsonObject& root) {
     const auto param = req.wildcard(0);
 
     size_t id;
     if (tryParseId(param, id)) {
-        print(root, settings::schedule(id));
+        const auto sch = make_schedule(id);
+        if (sch.type == Type::Unknown) {
+            return false;
+        }
+
+        print(root, sch);
         return true;
     }
 
@@ -574,23 +898,19 @@ void setup() {
 namespace web {
 
 bool onKey(StringView key, const JsonVariant&) {
-    return espurna::settings::query::samePrefix(key, STRING_VIEW("sch"));
+    return key.startsWith(settings::Prefix);
 }
 
 void onVisible(JsonObject& root) {
-    if (schedulable()) {
-        wsPayloadModule(root, PSTR("sch"));
-    }
+    wsPayloadModule(root, settings::Prefix);
 }
 
 void onConnected(JsonObject& root){
-    if (schedulable()) {
-        espurna::web::ws::EnumerableConfig config{ root, STRING_VIEW("schConfig") };
-        config(STRING_VIEW("schedules"), settings::count(), settings::IndexedSettings);
+    espurna::web::ws::EnumerableConfig config{ root, STRING_VIEW("schConfig") };
+    config(STRING_VIEW("schedules"), settings::count(), settings::IndexedSettings);
 
-        auto& schedules = config.root();
-        schedules["max"] = build::max();
-    }
+    auto& schedules = config.root();
+    schedules["max"] = build::max();
 }
 
 void setup() {
@@ -603,213 +923,417 @@ void setup() {
 } // namespace web
 #endif
 
-// TODO: consider providing action as a string, which could be parsed by the
-// respective module API (e.g. for lights, there could be + / - offsets)
+// When terminal is disabled, still allow minimum set of actions that we available in v1
 
-void action(scheduler::Type type, size_t target, int action) {
-    switch (type) {
-    case scheduler::Type::None:
+#if TERMINAL_SUPPORT == 0
+namespace terminal_stub {
+
+#if RELAY_SUPPORT
+namespace relay {
+
+void action(SplitStringView split) {
+    if (!split.next()) {
+        return;
+    }
+
+    size_t id;
+    if (!::tryParseId(split.current(), relayCount(), id)) {
+        return;
+    }
+
+    if (!split.next()) {
+        return;
+    }
+
+    const auto status = relayParsePayload(split.current());
+    switch (status) {
+    case PayloadStatus::Unknown:
         break;
 
-    case scheduler::Type::Relay:
-        if (action == 2) {
-            relayToggle(target);
-        } else {
-            relayStatus(target, action);
-        }
+    case PayloadStatus::Off:
+    case PayloadStatus::On:
+        relayStatus(id, (status == PayloadStatus::On));
         break;
 
-    case scheduler::Type::Channel:
+    case PayloadStatus::Toggle:
+        relayToggle(id);
+        break;
+    }
+}
+
+} // namespace relay
+#endif
+
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
-        lightChannel(target, action);
-        lightUpdate();
-#endif
-        break;
+namespace light {
 
-    case scheduler::Type::Curtain:
+void action(SplitStringView split) {
+    if (!split.next()) {
+        return;
+    }
+
+    size_t id;
+    if (!tryParseId(split.current(), lightChannels(), id)) {
+        return;
+    }
+
+    if (!split.next()) {
+        return;
+    }
+
+    const auto convert = ::espurna::settings::internal::convert<long>;
+    lightChannel(id, convert(split.current().toString()));
+    lightUpdate();
+}
+
+} // namespace light
+#endif
+
 #if CURTAIN_SUPPORT
-        curtainSetPosition(target, action);
+namespace curtain {
+
+void action(SplitStringView split) {
+    if (!split.next()) {
+        return;
+    }
+
+    size_t id;
+    if (!tryParseId(split.current(), curtainCount(), id)) {
+        return;
+    }
+
+    if (!split.next()) {
+        return;
+    }
+
+    const auto convert = ::espurna::settings::internal::convert<int>;
+    curtainUpdate(id, convert(split.current().toString()));
+}
+
+} // namespace curtain
 #endif
-        break;
+
+void parse_action(String action) {
+    auto split = SplitStringView{ action };
+    if (!split.next()) {
+        return;
+    }
+
+    auto current = split.current();
+
+#if RELAY_SUPPORT
+    if (current == STRING_VIEW("relay")) {
+        relay::action(split);
+        return;
+    }
+#endif
+#if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
+    if (current == STRING_VIEW("channel")) {
+        light::action(split);
+        return;
+    }
+#endif
+#if CURTAIN_SUPPORT
+    if (current == STRING_VIEW("curtain")) {
+        curtain::action(split);
+        return;
+    }
+#endif
+
+    DEBUG_MSG_P(PSTR("[SCH] Unknown action: %s\n"), action.c_str());
+}
+
+} // namespace terminal_stub
+
+using terminal_stub::parse_action;
+
+#else
+
+void parse_action(String action) {
+    if (!action.endsWith("\r\n") && !action.endsWith("\n")) {
+        action.concat('\n');
+    }
+
+    static EphemeralPrint output;
+    PrintString error(64);
+
+    if (!espurna::terminal::api_find_and_call(action, output, error)) {
+        DEBUG_MSG_P(PSTR("[SCH] %s\n"), error.c_str());
     }
 }
 
-void action(const Schedule& schedule) {
-    action(schedule.type, schedule.target, schedule.action);
+#endif
+
+std::bitset<24> mask_past_hours(const std::bitset<24>& lhs, int rhs) {
+    return lhs.to_ulong() & bits::fill_u32(0, rhs);
 }
 
-// libc underlying implementation allows us to shift month's day (even making it negative)
-// although, it is preferable to return the 'correct' struct with all of the fields updated
-// XXX: newlib does not support `timegm`, this only makes sense for local time
-// but, technically, this *could* do tzset and restore the original TZ before returning
+std::bitset<60> mask_past_minutes(const std::bitset<60>& lhs, int rhs) {
+    return lhs.to_ullong() & bits::fill_u64(0, rhs);
+}
 
-tm localtimeDaysAgo(tm day, int days) {
-    if (days) {
-        day.tm_mday -= days;
-        day.tm_hour = 0;
-        day.tm_min = 0;
-        day.tm_sec = 0;
+TimeMatch mask_past(const TimeMatch& lhs, const tm& rhs) {
+    TimeMatch out;
+    out.hour = mask_past_hours(lhs.hour, rhs.tm_hour);
+    out.minute = mask_past_minutes(lhs.minute, rhs.tm_hour);
+    out.flags = lhs.flags;
 
-        auto ts = mktime(&day);
-        tm out{};
-        localtime_r(&ts, &out);
-        day = out;
+    return out;
+}
+
+duration::Minutes to_minutes(int hour, int minute) {
+    return duration::Hours{ hour } + duration::Minutes{ minute };
+}
+
+duration::Minutes to_minutes(const tm& t) {
+    return to_minutes(t.tm_hour, t.tm_min);
+}
+
+bool closest_delta(datetime::Minutes& out, const TimeMatch& lhs, const tm& rhs) {
+    auto past = mask_past(lhs, rhs);
+    if (lhs.hour[rhs.tm_hour]) {
+        auto minute = bits::first_set_u64(past.minute.to_ullong());
+        if (minute == 0) {
+            return false;
+        }
+
+        out = datetime::Minutes{ rhs.tm_min - minute };
+        return true;
     }
 
-    return day;
+    auto hour = bits::first_set_u32(past.hour.to_ulong());
+    if (hour == 0) {
+        return false;
+    }
+
+    auto minute = bits::first_set_u64(lhs.minute.to_ullong());
+    if (minute == 0) {
+        return false;
+    }
+
+    --hour;
+    --minute;
+
+    out -= to_minutes(rhs) - to_minutes(hour, minute);
+
+    return true;
 }
 
-int minutesLeft(const Schedule& schedule, int hour, int minute) {
-    return (schedule.hour - hour) * 60 + schedule.minute - minute;
+bool closest_delta_end_of_day(datetime::Minutes& out, const TimeMatch& lhs, const tm& rhs) {
+    tm tmp;
+    std::memcpy(&tmp, &rhs, sizeof(tm));
+
+    tmp.tm_hour = 23;
+    tmp.tm_min = 59;
+    tmp.tm_sec = 59;
+
+    const auto result = closest_delta(out, lhs, tmp);
+    if (result) {
+        out -= datetime::Minutes{ 1 };
+        return true;
+    }
+
+    return false;
 }
 
-int minutesLeft(const Schedule& schedule, const tm& now) {
-    return minutesLeft(schedule, now.tm_hour, now.tm_min);
+const tm& select_time(const datetime::Context& ctx, const Schedule& schedule) {
+    return want_utc(schedule.time)
+        ? ctx.utc
+        : ctx.local;
 }
 
-// For 'restore'able schedules, do the most recent action, Normal check will take care of the current setting
-// Note that this only works for local-time schedules, b/c there is no timegm to compliment mktime to offset the `tm` by a specific number of days
+Schedule load_schedule(size_t index) {
+    auto schedule = settings::schedule(index);
 
-struct RestoredAction {
-    size_t target;
-    Type type;
-    int action;
-    int hour;
-    int minute;
-    int daysAgo;
+#if SCHEDULER_SUN_SUPPORT
+    if (schedule.ok) {
+        if (want_sunrise(schedule.time)) {
+            schedule.time = sun::match_rising.m;
+        } else if (want_sunset(schedule.time)) {
+            schedule.time = sun::match_setting.m;
+        }
+    }
+#endif
+
+    return schedule;
+}
+
+struct Restore {
+    size_t index;
+    datetime::Minutes offset;
+    String action;
 };
 
-using RestoredActions = std::forward_list<RestoredAction>;
-
-RestoredAction prepareAction(const Schedule& schedule, int daysAgo) {
-    return {schedule.target, schedule.type, schedule.action,
-        schedule.hour, schedule.minute, daysAgo};
+void update_restore(std::vector<Restore>& out, size_t index, datetime::Minutes offset) {
+    out.push_back(
+        Restore{
+            .index = index,
+            .offset = offset,
+            .action = settings::action(index),
+        });
 }
 
-void restore(time_t timestamp, const Schedules& schedules) {
-    RestoredActions restored;
+std::vector<Restore> prepare_restore(const datetime::Context& today, int extra_days) {
+    std::vector<Restore> out;
 
-    tm today;
-    localtime_r(&timestamp, &today);
+    for (size_t index = 0; index < build::max(); ++index) {
+        switch (settings::type(index)) {
+        case Type::Unknown:
+            goto return_out;
 
-    for (auto& schedule : schedules) {
-        if (schedule.enabled && schedule.restore && !schedule.utc) {
-            for (int offset = 0; offset < build::restoreOffsetMax(); ++offset) {
-                auto offsetDay = localtimeDaysAgo(today, offset);
+        case Type::Disabled:
+            continue;
 
-                // If it is going to happen later this day or right now, simply skip and allow check() to handle it
-                // Otherwise, make sure `restored` only contains actions that happened today (or N days ago), and
-                // filter by the most recent ones of the same type (i.e. max hour and minute, but min daysAgo)
+        case Type::Calendar:
+            break;
+        }
 
-                if (schedule.weekdays.match(offsetDay)) {
-                    if ((offset == 0) && (minutesLeft(schedule, offsetDay) >= 0)) {
-                        continue;
-                    }
+        if (!settings::restore(index)) {
+            continue;
+        }
 
-                    auto pending = prepareAction(schedule, offset);
-                    auto found = std::find_if(std::begin(restored), std::end(restored),
-                            [&](const RestoredAction& lhs) {
-                                return (lhs.type == pending.type) && (lhs.target == pending.target);
-                            });
+        const auto schedule = load_schedule(index);
+        if (!schedule.ok) {
+            break;
+        }
 
-                    if (found != std::end(restored)) {
-                        if (((*found).daysAgo >= pending.daysAgo)
-                         && ((*found).hour <= pending.hour)
-                         && ((*found).minute <= pending.minute)) {
-                            *found = pending;
-                        }
-                    } else {
-                        restored.push_front(pending);
-                    }
-                    break;
+        // In case today was a match, store earliest possible execution time as well as the action itself
+        const auto& today_time = select_time(today, schedule);
+
+        if (match(schedule.date, today_time) && match(schedule.weekdays, today_time)) {
+            datetime::Minutes offset{};
+            if (closest_delta(offset, schedule.time, today_time)) {
+                update_restore(out, index, offset);
+                continue;
+            }
+        }
+
+        // Otherwise, check additional number of days
+        datetime::Minutes offset{};
+
+        for (int day = 0; day < extra_days; ++day) {
+            const auto extra = datetime::delta(today, datetime::Days{ -1 - day });
+
+            const auto& time = select_time(extra, schedule);
+            if (match(schedule.date, time) && match(schedule.weekdays, time)) {
+                if (closest_delta_end_of_day(offset, schedule.time, time)) {
+                    offset -= to_minutes(today_time);
+                    update_restore(out, index, offset);
                 }
             }
+
+            offset -= datetime::Days{ 1 };
         }
     }
 
-    for (auto& v : restored) {
-      DEBUG_MSG_P(PSTR("[SCH] Restoring %s #%u => %u (scheduled at %02d:%02d "
-                       "%d day(s) ago)\n"),
-                  scheduler::debug::type(v.type).c_str(), v.target, v.action,
-                  v.hour, v.minute, v.daysAgo);
-      action(v.type, v.target, v.action);
+return_out:
+    return out;
+}
+
+void restore(const datetime::Context& ctx) {
+    // pending schedules, in .offset ascending order so oldest ones are executed first
+    auto restored = prepare_restore(ctx, settings::restoreDays());
+    std::sort(
+        restored.begin(),
+        restored.end(),
+        [](const Restore& lhs, const Restore& rhs) {
+            return lhs.offset < rhs.offset;
+        });
+
+    for (auto& restore : restored) {
+        DEBUG_MSG_P(PSTR("[SCH] Restoring #%zu => %s (%sm)\n"),
+            restore.index, restore.action.c_str(),
+            String(restore.offset.count(), 10).c_str());
+        parse_action(restore.action);
     }
 }
 
-void check(time_t timestamp, const Schedules& schedules) {
-    tm utc;
-    gmtime_r(&timestamp, &utc);
+void check(const datetime::Context& ctx) {
+    for (size_t index = 0; index < build::max(); ++index) {
+        switch (settings::type(index)) {
+        case Type::Unknown:
+            return;
 
-    tm local;
-    localtime_r(&timestamp, &local);
+        case Type::Disabled:
+            continue;
 
-    for (auto& schedule : schedules) {
-        if (!schedule.enabled) {
+        case Type::Calendar:
+            break;
+        }
+
+        auto schedule = load_schedule(index);
+        if (!schedule.ok) {
             continue;
         }
 
-        auto& today = schedule.utc
-            ? utc
-            : local;
+        const auto& time = select_time(ctx, schedule);
 
-        if (!schedule.weekdays.match(today)) {
+        if (!match(schedule.date, time)) {
             continue;
         }
 
-        // 'Next scheduled' only happens at exactly the -15min
-        // e.g. at 0:00 updating the scheduler to trigger at 0:14 will not show the notification
-
-        auto left = minutesLeft(schedule, today);
-        if (left == 0) {
-          DEBUG_MSG_P(PSTR("[SCH] Action at %02d:%02d (%s #%u => %u)\n"),
-                      schedule.hour, schedule.minute,
-                      scheduler::debug::type(schedule).c_str(), schedule.target,
-                      schedule.action);
-          action(schedule);
-#if DEBUG_SUPPORT
-        } else if (left > 0) {
-            if ((left % 15 == 0) || (left < 15)) {
-                DEBUG_MSG_P(PSTR("[SCH] Next scheduled action at %02d:%02d\n"),
-                        schedule.hour, schedule.minute);
-            }
-#endif
+        if (!match(schedule.weekdays, time)) {
+            continue;
         }
+
+        if (!match(schedule.time, time)) {
+            continue;
+        }
+
+        DEBUG_MSG_P(PSTR("[SCH] Action #%zu triggered\n"), index);
+        parse_action(settings::action(index));
     }
 }
 
-void ntp_tick(NtpTick tick) {
-    static bool initial { true };
+void tick(NtpTick tick) {
     if (tick != NtpTick::EveryMinute) {
         return;
     }
 
-    auto timestamp = now();
-    auto schedules = settings::schedules();
+    auto ctx = datetime::make_context(now());
+
+    auto count = settings::count();
     if (initial) {
-        initial = false;
-        settings::gc(schedules.size());
-#if DEBUG_SUPPORT
-        debug::show(schedules);
+        DEBUG_MSG_P(PSTR("[SCH] Registered %zu schedule(s)\n"), count);
+
+        settings::gc(count);
+
+#if SCHEDULER_SUN_SUPPORT
+        sun::before_restore(ctx);
 #endif
-        restore(timestamp, schedules);
+
+        restore(ctx);
+
+#if SCHEDULER_SUN_SUPPORT
+        sun::after_restore();
+#endif
+
+        initial = false;
     }
 
-    check(timestamp, schedules);
+#if SCHEDULER_SUN_SUPPORT
+    sun::before_check(ctx);
+#endif
+    check(ctx);
 }
 
 void setup() {
     migrateVersion(scheduler::settings::migrate);
-    settings::query::setup();
 
+#if SCHEDULER_SUN_SUPPORT
+    sun::setup();
+#endif
+#if TERMINAL_SUPPORT
+    terminal::setup();
+#endif
 #if WEB_SUPPORT
     web::setup();
 #endif
-
 #if API_SUPPORT
     api::setup();
 #endif
 
-    ntpOnTick(ntp_tick);
+    ntpOnTick(tick);
 }
 
 } // namespace

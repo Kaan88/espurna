@@ -105,14 +105,6 @@ String serialize(espurna::heartbeat::Mode mode) {
     return serialize(system::settings::options::HeartbeatModeOptions, mode);
 }
 
-String serialize(espurna::duration::Seconds value) {
-    return serialize(value.count());
-}
-
-String serialize(espurna::duration::Milliseconds value) {
-    return serialize(value.count());
-}
-
 String serialize(espurna::duration::ClockCycles value) {
     return serialize(value.count());
 }
@@ -598,18 +590,14 @@ static constexpr std::array<espurna::settings::query::Setting, 5> Settings PROGM
      {sleep::settings::keys::Interrupt, query::sleepInterrupt},
 }};
 
-bool checkExact(StringView key) {
-    return espurna::settings::query::Setting::findFrom(Settings, key) != Settings.end();
-}
-
-String findValueFrom(StringView key) {
-    return espurna::settings::query::Setting::findValueFrom(Settings, key);
+espurna::settings::query::Result findFrom(StringView key) {
+    return espurna::settings::query::findFrom(Settings, key);
 }
 
 void setup() {
     settingsRegisterQueryHandler({
-        .check = checkExact,
-        .get = findValueFrom,
+        .check = nullptr,
+        .get = findFrom,
     });
 }
 
@@ -733,6 +721,26 @@ void SystemTimer::schedule_once(Duration duration, Callback callback) {
 }
 
 } // namespace timer
+
+bool ReadyFlag::wait(duration::Milliseconds interval) {
+    if (_ready) {
+        _ready = false;
+        _timer.schedule_once(
+            interval,
+            [&]() {
+                _ready = true;
+            });
+
+        return true;
+    }
+
+    return false;
+}
+
+void ReadyFlag::stop() {
+    _timer.stop();
+    _ready = true;
+}
 
 namespace {
 

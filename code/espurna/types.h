@@ -30,7 +30,6 @@ using Milliseconds = std::chrono::duration<uint32_t, std::milli>;
 using Seconds = std::chrono::duration<uint32_t, std::ratio<1> >;
 using Minutes = std::chrono::duration<uint32_t, std::ratio<60> >;
 using Hours = std::chrono::duration<uint32_t, std::ratio<Minutes::period::num * 60> >;
-using Days = std::chrono::duration<uint32_t, std::ratio<Hours::period::num * 24> >;
 
 } // namespace duration
 
@@ -408,5 +407,113 @@ inline String operator+(StringView lhs, const String& rhs) {
 
 #define STRING_VIEW_SETTING(X)\
     ((__builtin_strlen(X) > 0) ? STRING_VIEW(X) : StringView())
+
+template <typename T>
+struct Span {
+    Span() = delete;
+
+    constexpr explicit Span(std::nullptr_t) :
+        _data(nullptr),
+        _size(0)
+    {}
+
+    constexpr Span(T* data, size_t size) :
+        _data(data),
+        _size(size)
+    {}
+
+    constexpr Span(T* begin, T* end) :
+        _data(begin),
+        _size(end - begin)
+    {}
+
+    constexpr T* data() const {
+        return _data;
+    }
+
+    constexpr size_t size() const {
+        return _size;
+    }
+
+    constexpr T* begin() const {
+        return _data;
+    }
+
+    constexpr T* end() const {
+        return _data + _size;
+    }
+
+    constexpr T& operator[](size_t index) const {
+        return _data[index];
+    }
+
+    constexpr T& front() const {
+        return _data[0];
+    }
+
+    constexpr T& back() const {
+        return _data[_size - 1];
+    }
+
+private:
+    T* _data;
+    size_t _size;
+};
+
+template <size_t Size>
+inline Span<uint8_t> make_span(uint8_t (&data)[Size]) {
+    return Span<uint8_t>(&data[0], Size);
+}
+
+template <size_t Size>
+inline Span<const uint8_t> make_span(const uint8_t (&data)[Size]) {
+    return Span<const uint8_t>(&data[0], Size);
+}
+
+template <size_t Size>
+inline Span<uint8_t> make_span(std::array<uint8_t, Size>& data) {
+    return Span<uint8_t>(data.data(), data.size());
+}
+
+template <size_t Size>
+inline Span<const uint8_t> make_span(const std::array<uint8_t, Size>& data) {
+    return Span<const uint8_t>(data.data(), data.size());
+}
+
+template <typename T>
+inline Span<T> make_span(std::vector<T>& data) {
+    return Span<T>(data.data(), data.size());
+}
+
+template <typename T>
+inline Span<T> make_span(const std::vector<T>& data) {
+    return Span<T>(const_cast<T*>(data.data()), data.size());
+}
+
+struct SplitStringView {
+    explicit SplitStringView(StringView view) :
+        _source(view)
+    {}
+
+    SplitStringView(StringView view, char delim) :
+        _source(view),
+        _delim(delim)
+    {}
+
+    StringView current() const {
+        return _current;
+    }
+
+    bool next();
+
+private:
+    StringView _source;
+
+    StringView _view { _source };
+    char _delim { ' ' };
+
+    StringView _current;
+};
+
 
 } // namespace espurna
