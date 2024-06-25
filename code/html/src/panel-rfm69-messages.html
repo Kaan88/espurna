@@ -1,0 +1,39 @@
+<form id="form-rfm69-messages" class="pure-form">
+    <div class="panel" id="panel-rfm69-messages">
+        <div class="header">
+            <h1>MESSAGES</h1>
+            <h2>
+                Messages being received. Previous messages are not displayed.
+                You have to keep the page open in order to keep receiving them.
+                You can filter/unfilter by clicking on the values.
+                Left click on a value to show only rows that match that value, middle click to show all rows but those matching that value.
+                Filtered colums have red headers.
+            </h2>
+        </div>
+
+        <div class="page">
+            <table id="rfm69-messages" class="pure-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Timestamp</th>
+                        <th scope="col">PacketID</th>
+                        <th scope="col">SenderID</th>
+                        <th scope="col">TargetID</th>
+                        <th scope="col">Key</th>
+                        <th scope="col">Value</th>
+                        <th scope="col">RSSI</th>
+                        <th scope="col">Duplicates</th>
+                        <th scope="col">Missing</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+            <div class="pure-g">
+                <button type="button" class="pure-button button-clear-filters">Clear filters</button>
+                <button type="button" class="pure-button button-clear-messages">Clear messages</button>
+                <button type="button" class="pure-button button-clear-counts">Clear counts</button>
+            </div>
+        </div>
+    </div>
+</form>

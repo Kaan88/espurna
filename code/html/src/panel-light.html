@@ -1,0 +1,116 @@
+<form id="form-light" class="pure-form pure-form-aligned form-settings">
+   <div class="panel" id="panel-light">
+
+       <div class="header">
+           <h1>LIGHTS</h1>
+           <h2>Lights configuration</h2>
+       </div>
+
+       <div class="page">
+
+           <fieldset>
+
+               <div class="pure-control-group">
+                   <label>Save values</label>
+                   <input class="checkbox-toggle" type="checkbox" name="ltSave">
+                   <span class="pure-form-message">
+                       Save channel &amp; brightness values in settings
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Save delay</label>
+                   <input type="number" name="ltSaveDelay" min="5000" max="60000">
+                   <span class="pure-form-message-inline">
+                       (ms)
+                   </span>
+                   <span class="pure-form-message">
+                       When <code>Save values</code> is enabled, wait for the specified time before the values are actually saved.
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Use color</label>
+                   <input class="checkbox-toggle" type="checkbox" name="useColor" data-action="reload">
+                   <span class="pure-form-message">
+                       Enable color picker.
+                       <br>This option hides <strong>R</strong> (red), <strong>G</strong> (green) and <strong>B</strong> (blue) channel sliders.
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Use RGB picker</label>
+                   <input class="checkbox-toggle" type="checkbox" name="useRGB" data-action="reload">
+                   <span class="pure-form-message">
+                       Use RGB color picker. When disabled (default), use HSV (hue-saturation-value).
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Use white channel(s)</label>
+                   <input class="checkbox-toggle" type="checkbox" name="useWhite" data-action="reload">
+                   <span class="pure-form-message">
+                       When device is configured as RGB + WW (warm white) or RGB + WW CC (cold white), use RGB to balance the &quot;warm white&quot; channel output, leaving &quot;Cold channel&quot; for manual adjustments.
+                       <br>This option hides <strong>RGB</strong> and <strong>WW</strong> sliders!
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Use color temperature</label>
+                   <input class="checkbox-toggle" type="checkbox" name="useCCT" data-action="reload">
+                   <span class="pure-form-message">
+                       Balance between &quot;cold&quot; and &quot;warm&quot; color temperature when channel configuration has WW (warm white) and CW (cold white) channels available. When RGB is available but <code>Use white channel(s)</code> is disabled, replace RGB values with an approximation based on the current &quot;Mireds&quot; value. Otherwise, RGB channels will be disabled.
+                       <br>This option hides either <strong>WW</strong> and <strong>CW</strong> channel sliders, or <strong>RGB</strong> color picker.
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Use gamma correction</label>
+                   <input class="checkbox-toggle" type="checkbox" name="useGamma">
+                   <span class="pure-form-message">
+                       Instead of RAW channel value, use a gamma-corrected one. Will only apply to RGB channels and the result may vary between devices.
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Channel transitions</label>
+                   <input class="checkbox-toggle" type="checkbox" name="useTransitions">
+                   <span class="pure-form-message">
+                       If enabled, channel changes will be smoothed.
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Transition time</label>
+                   <input type="number" name="ltTime" min="10" max="5000" data-action="reload">
+                   <span class="pure-form-message-inline">
+                       (ms)
+                   </span>
+                   <span class="pure-form-message">
+                       Time to transition from one color to another
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>Transition step</label>
+                   <input type="number" name="ltStep" min="10" max="5000" data-action="reload">
+                   <span class="pure-form-message-inline">
+                       (ms)
+                   </span>
+                   <span class="pure-form-message">
+                       Time to transition from one step to the next. Must be smaller than the transition time.
+                   </span>
+               </div>
+
+               <div class="pure-control-group">
+                   <label>MQTT group topic</label>
+                   <input type="text" name="mqttGroupColor" data-action="reconnect">
+                   <span class="pure-form-message">
+                       Sync channel values between multiple devices. Notice that every device that is subscribed to the topic <strong>should</strong> be configured to use the same brightness.
+                   </span>
+               </div>
+
+           </fieldset>
+       </div>
+   </div>
+</form>

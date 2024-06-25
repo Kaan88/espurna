@@ -1,0 +1,55 @@
+<form id="form-idb" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-idb">
+
+        <div class="header">
+            <h1>INFLUXDB</h1>
+            <h2>
+                Configure the connection to your InfluxDB server. Every time device status changes, values will be sent to the database server.
+            </h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+
+                <legend>Configuration</legend>
+
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="idbEnabled">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Address</label>
+                    <input name="idbHost" type="text">
+                    <span class="pure-form-message">
+                        IP or hostname of the influxdb server
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Port</label>
+                    <input name="idbPort" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Database</label>
+                    <input name="idbDatabase" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Username</label>
+                    <input name="idbUsername" type="text" autocomplete="off">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Password</label>
+                    <input name="idbPassword" type="password" autocomplete="new-password" spellcheck="false">
+                    <span class="no-select password-reveal"></span>
+                </div>
+
+            </fieldset>
+        </div>
+
+    </div>
+</form>

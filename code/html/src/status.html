@@ -1,0 +1,94 @@
+<div class="pure-g state">
+    <div class="pure-u-1-2 pure-u-lg-1-4">
+        <label>Network</label>
+        <span data-key="ssid"></span>
+
+        <label>BSSID</label>
+        <span data-key="bssid"></span>
+
+        <label>Channel</label>
+        <span data-key="channel"></span>
+
+        <label>RSSI</label>
+        <span data-key="rssi" post="dBm"></span>
+
+        <label>IP</label>
+        <span data-key="staip"></span>
+
+        <label>SoftAP IP</label>
+        <span data-key="apip"></span>
+    </div>
+
+    <div class="pure-u-1-2 pure-u-lg-1-4">
+        <label>Firmware name</label>
+        <span data-key="app_name"></span>
+
+        <label>Firmware version</label>
+        <span data-key="app_version"></span>
+
+        <label>Firmware build date</label>
+        <span data-key="app_build"></span>
+
+        <label>Firmware size</label>
+        <span data-key="sketch_size" post=" bytes"></span>
+
+        <label>Free space</label>
+        <span data-key="free_size" post=" bytes"></span>
+
+        <label>Uptime</label>
+        <span data-key="uptime"></span>
+
+        <label>Last update</label>
+        <span data-key="app:ago" post=" seconds ago">?</span>
+    </div>
+
+    <div class="pure-u-1-2 pure-u-lg-1-4">
+        <label>Manufacturer</label>
+        <span data-key="manufacturer"></span>
+
+        <label>Device</label>
+        <span data-key="device"></span>
+
+        <label>Chip ID</label>
+        <span data-key="chipid"></span>
+
+        <label>SDK version</label>
+        <span data-key="sdk"></span>
+
+        <label>Core version</label>
+        <span data-key="core"></span>
+    </div>
+
+    <div class="pure-u-1-2 pure-u-lg-1-4">
+        <label>Free heap</label>
+        <span data-key="heap" post=" bytes"></span>
+
+        <label>Load average</label>
+        <span data-key="loadaverage" post="%"></span>
+
+        <label>VCC</label>
+        <span data-key="vcc" post="mV">? </span>
+
+        <div class="pure-control-group module module-mqtt">
+            <label>MQTT Status</label>
+            <span data-key="mqttStatus"
+                data-value-true="CONNECTED"
+                data-value-false="DISCONNECTED">
+                UNKNOWN
+            </span>
+        </div>
+
+        <div class="pure-control-group module module-ntp">
+            <label>NTP Status</label>
+            <span data-key="ntpStatus"
+                data-value-true="SYNC'D"
+                data-value-false="NOT SYNC'D">
+                UNKNOWN
+            </span>
+
+            <label>Current datetime</label>
+            <span data-key="app:now"></span>
+        </div>
+
+    </div>
+</div>

@@ -18,26 +18,7 @@ enum class NtpTick {
 };
 
 using NtpTickCallback = void(*)(NtpTick);
-
-struct NtpCalendarWeekday {
-    int local_wday;
-    int local_hour;
-    int local_minute;
-    int utc_wday;
-    int utc_hour;
-    int utc_minute;
-};
-
-struct NtpInfo {
-    String sync;
-    time_t now;
-    String utc;
-    String local;
-    String tz;
-};
-
 void ntpOnTick(NtpTickCallback);
-NtpInfo ntpInfo();
 
 String ntpDateTime();
 bool ntpSynced();

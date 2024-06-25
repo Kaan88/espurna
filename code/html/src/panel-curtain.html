@@ -1,0 +1,45 @@
+<form id="form-curtain" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-curtain">
+
+        <div class="header">
+            <h1>CURTAIN</h1>
+            <h2>Curtain configuration</h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+                <legend>General</legend>
+
+                <div class="pure-control-group">
+                    <label>Curtain type</label>
+                    <select class="pure-input-2-3" name="curtainType">
+                        <option value="0">Roller</option>
+                        <option value="1">Closing right</option>
+                        <option value="2">Closing left</option>
+                        <option value="3">Two sides</option>
+                    </select>
+                    <span class="pure-form-message">
+                        Define your curtain type. It adapts the graphical view in status menu.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Curtain bootup position</label>
+                    <select class="pure-input-2-3" name="curtainBoot" >
+                        <option value="0">Do nothing</option>
+                        <option value="1">Closed</option>
+                        <option value="2">Opened</option>
+                        <option value="3">Last set position</option>
+                    </select>
+                    <span class="pure-form-message">
+                        Define the initial position of the curtain after a reboot or power loss.
+                    </span>
+                </div>
+
+                <div id="curtainConfig" class="settings-group"></div>
+            </fieldset>
+
+        </div>
+    </div>
+</form>

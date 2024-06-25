@@ -454,6 +454,10 @@
 #define RELAY_MQTT_DISCONNECT_STATUS    RELAY_MQTT_DISCONNECT_NONE
 #endif
 
+#ifndef RELAY_MQTT_DISCONNECT_DELAY
+#define RELAY_MQTT_DISCONNECT_DELAY     duration::Seconds(30)
+#endif
+
 //------------------------------------------------------------------------------
 // BUTTON
 //------------------------------------------------------------------------------
@@ -1387,6 +1391,11 @@
 
 #ifndef SCHEDULER_MAX_SCHEDULES
 #define SCHEDULER_MAX_SCHEDULES        10           // Maximum number of configured schedules (both enabled or disabled)
+#endif
+
+#ifndef SCHEDULER_RESTORE
+#define SCHEDULER_RESTORE              0            // Restore the last schedule state on the device boot
+                                                    // (disabled by default)
 #endif
 
 #ifndef SCHEDULER_RESTORE_DAYS

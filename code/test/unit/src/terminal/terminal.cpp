@@ -205,7 +205,7 @@ void test_command_args() {
     PrintString out(64);
     const char empty[] = "test.command.arg1_empty \"\"\r\n";
     const auto result = find_and_call(empty, out);
-    printf("%s\n", out.c_str());
+    TEST_ASSERT_EQUAL(0, out.length());
     TEST_ASSERT(result);
     TEST_ASSERT(!waiting);
 

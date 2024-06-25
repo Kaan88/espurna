@@ -230,18 +230,22 @@ std::vector<String> sorted_keys() {
 namespace terminal {
 namespace {
 
+void dump_impl(const ::terminal::CommandContext& ctx, const Key& key, const String& value) {
+    ctx.output.printf_P(
+        PSTR("> %s => %s%s\n"),
+        key.c_str(), value.c_str(),
+        hasSetting(key) ? " (*)" : "");
+}
+
 void dump(const ::terminal::CommandContext& ctx, const query::Setting* begin, const query::Setting* end) {
     for (auto it = begin; it != end; ++it) {
-        ctx.output.printf_P(PSTR("> %s => %s\n"),
-            (*it).key().c_str(), (*it).value().c_str());
+        dump_impl(ctx, (*it).key(), (*it).value());
     }
 }
 
 void dump(const ::terminal::CommandContext& ctx, const query::IndexedSetting* begin, const query::IndexedSetting* end, size_t index) {
     for (auto it = begin; it != end; ++it) {
-        ctx.output.printf_P(PSTR("> %s%u => %s\n"),
-            (*it).prefix().c_str(), index,
-            (*it).value(index).c_str());
+        dump_impl(ctx, {(*it).prefix(), index}, (*it).value(index));
     }
 }
 

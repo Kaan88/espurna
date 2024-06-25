@@ -1,0 +1,102 @@
+<form id="form-admin" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-admin">
+
+        <div class="header">
+            <h1>ADMINISTRATION</h1>
+            <h2>Device administration and security settings</h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+                <legend>Settings</legend>
+
+                <div class="pure-control-group">
+                    <button type="button" class="pure-button button-settings-backup pure-input-1">Backup user settings as .json</button>
+                    <button type="button" class="pure-button button-settings-restore pure-input-1">Restore settings from .json backup</button>
+                    <button type="button" class="pure-button button-settings-factory pure-input-1">Perform a factory reset</button>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Access</legend>
+
+                <div class="pure-control-group">
+                    <label>Admin password</label>
+                    <input name="adminPass0" placeholder="New password" data-settings-real-name="adminPass" minlength="8" maxlength="63" type="password" data-action="reboot" autocomplete="new-password" spellcheck="false">
+                    <span class="no-select password-reveal"></span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Repeat password</label>
+                    <input name="adminPass1" placeholder="Repeat password" data-settings-real-name="adminPass" minlength="8" maxlength="63" type="password" data-action="reboot" autocomplete="new-password" spellcheck="false">
+                    <span class="no-select password-reveal"></span>
+                </div>
+
+                <div class="pure-control-group">
+                    <span class="pure-form-message">
+                        The administrator password is used to access this web interface (user 'admin'), but also to connect to the device when in AP mode or to flash a new firmware over-the-air (OTA).<br>
+                        It must be <strong>8..63 characters</strong> (numbers and letters and any of these special characters: _,.;:~!?@#$%^&amp;*&lt;&gt;\|(){}[]) and have at least <strong>one lowercase</strong> and <strong>one uppercase</strong> or <strong>one number</strong>.</span>
+                </div>
+
+            </fieldset>
+
+            <fieldset>
+                <legend>Web server</legend>
+
+                <div class="pure-control-group">
+                    <label>HTTP port</label>
+                    <input name="webPort" type="text" data-action="reboot">
+                    <span class="pure-form-message">
+                        This is the port for the web interface and API requests.
+                        If different than 80 (standard HTTP port) you will have to add it explicitly to your requests: http://myip:myport/
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>WebSocket Authentication</label>
+                    <input class="checkbox-toggle" type="checkbox" name="wsAuth">
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-telnet">
+                <legend>TELNET</legend>
+
+                <div class="pure-control-group">
+                    <label>Enable in STA mode</label>
+                    <input class="checkbox-toggle" type="checkbox" name="telnetSTA">
+                    <span class="pure-form-message">
+                        Turn ON to be able to telnet to your device while connected to your home router.<br>TELNET is always enabled in AP mode.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Authentication</label>
+                    <input class="checkbox-toggle" type="checkbox" name="telnetAuth">
+                    <span class="pure-form-message">
+                        Ask for the device password when starting telnet session
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-ota">
+                <legend>OTA</legend>
+
+                <div class="pure-control-group">
+                    <label>Upgrade</label>
+                    <input name="filename" type="text" readonly>
+                    <span class="pure-form-message">The device has <span data-key="free_size">?</span> bytes available for OTA updates. If your image is larger than this consider doing a <a href="https://github.com/xoseperez/espurna/wiki/TwoStepUpdates"><strong>two-step update</strong></a>.</span>
+                </div>
+
+                <div class="pure-controls">
+                    <div class="pure-u-1 pure-u-lg-1"><progress id="upgrade-progress" value="0" max="100"></progress></div>
+
+                    <button type="button" class="pure-button button-upgrade-browse">Browse</button>
+                    <button type="button" class="pure-button button-upgrade">Upgrade</button>
+                    <input name="upgrade" type="file">
+                </div>
+            </fieldset>
+
+        </div>
+    </div>
+</form>

@@ -383,6 +383,32 @@ inline String operator+(StringView lhs, const String& rhs) {
     return out;
 }
 
+#if defined(ARDUINO_ESP8266_RELEASE_2_7_4)
+inline String operator+(const String& lhs, const String& rhs) {
+    String out;
+    out.reserve(lhs.length() + rhs.length());
+
+    out += lhs;
+    out += rhs;
+
+    return out;
+}
+
+inline String operator+(String&& lhs, const String& rhs) {
+    String out(std::move(lhs));
+    out += rhs;
+    return out;
+}
+
+inline String operator+(const String& lhs, const __FlashStringHelper* rhs) {
+    return lhs + String(rhs);
+}
+
+inline String operator+(String&& lhs, const __FlashStringHelper* rhs) {
+    return std::move(lhs) + String(rhs);
+}
+#endif
+
 #ifndef PROGMEM_STRING_ATTR
 #define PROGMEM_STRING_ATTR __attribute__((section( "\".irom0.pstr." __FILE__ "." __STRINGIZE(__LINE__) "."  __STRINGIZE(__COUNTER__) "\", \"aSM\", @progbits, 1 #")))
 #endif

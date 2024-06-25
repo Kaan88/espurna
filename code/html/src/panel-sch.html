@@ -1,0 +1,63 @@
+<form id="form-sch" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-sch">
+        <div class="header">
+            <h1>SCHEDULE</h1>
+            <h2>Executes actions based on the current time.</h2>
+        </div>
+
+        <p>At least one time string element must be specified</p>
+        <ul>
+            <li><samp>YEAR-MONTH-DAY</samp> or <samp>MONTH-DAY</samp></li>
+            <li><samp>Weekday</samp> in English (abbreviated of full), or number in range <samp>1&ndash;7</samp> (1 meaning Monday and 7 - Sunday)</li>
+            <li><samp>HOUR:MINUTE</samp></li>
+            <li><samp>KEYWORD</samp></li>
+        </ul>
+
+        <p><samp>HOUR:MINUTE</samp> always uses local time, unless <samp>UTC</samp> keyword is used.</p>
+
+        <p>When <samp>HOUR:MINUTE</samp> is omitted, <samp>00:00</samp> is used instead.</p>
+
+        <p class="module module-sun"><samp>Sunrise</samp> or <samp>Sunset</samp> keywords can be used in place of <samp>HOUR:MINUTE</samp>.</p>
+
+        <a href="https://github.com/xoseperez/espurna/wiki/Scheduler">See full documentation</a>
+
+        <div class="page">
+            <fieldset>
+                <legend>General settings</legend>
+
+                <div class="pure-control-group">
+                    <label>Restore days</label>
+                    <input name="schRstrDays" type="number">
+                    <span class="pure-form-message">
+                        Number of days to look back when restoring schedule. Set to zero to only check current day.
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-sun">
+                <legend>Location</legend>
+
+                <div class="pure-control-group">
+                    <label>Latitude</label>
+                    <input name="schLat" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Longitude</label>
+                    <input name="schLong" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Altitude</label>
+                    <input name="schAlt" type="text">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>List of schedules</legend>
+                <div id="schedules" class="settings-group" data-settings-target="schType" data-settings-schema="schType schRestore schTime schAction"></div>
+                <button type="button" class="pure-button button-add-settings-group pure-input-1" data-settings-group="schedules">Add</button>
+            </fieldset>
+        </div>
+    </div>
+</form>

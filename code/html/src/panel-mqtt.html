@@ -1,0 +1,135 @@
+<form id="form-mqtt" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-mqtt">
+
+        <div class="header">
+            <h1>MQTT</h1>
+            <h2>Configure <strong>message broker</strong> that will be used to send and receive messages over the network.</h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+                <legend>Broker</legend>
+
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="mqttEnabled">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Address</label>
+                    <input name="mqttServer" type="text" placeholder="IP or hostname">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Port</label>
+                    <input name="mqttPort" type="text" value="1883">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>User</label>
+                    <input name="mqttUser" type="text" autocomplete="off">
+                    <div class="pure-form-message-inline">
+                        Leave blank when broker allows anonymous connections. You can also use the following placeholders: {hostname}, {mac}
+                    </div>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Password</label>
+                    <input name="mqttPassword" type="password" autocomplete="new-password" spellcheck="false">
+                    <span class="no-select password-reveal"></span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Client ID</label>
+                    <input name="mqttClientID" type="text">
+                    <span class="pure-form-message-inline">
+                        When left blank, the firmware will generate a Client ID based on the MAC address of the chip. The following placeholders are also supported: {hostname}, {mac}
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Keep Alive</label>
+                    <input type="number" name="mqttKeep" min="10" max="3600">
+                    <span class="pure-form-message-inline">
+                        (seconds)
+                    </span>
+                </div>
+
+                <div class="pure-control-group module module-mqttssl">
+                    <label>Use secure connection (SSL)</label>
+                    <input class="checkbox-toggle" type="checkbox" name="mqttUseSSL">
+                </div>
+
+                <div class="pure-control-group module module-mqttssl">
+                    <label>SSL Fingerprint</label>
+                    <input name="mqttFP" type="text" maxlength="59">
+                    <span class="pure-form-message-inline">
+                        This is the fingerprint for the SSL certificate of the server.<br>
+                        You can get it using <a href="https://www.grc.com/fingerprints.htm">https://www.grc.com/fingerprints.htm</a> (if it is publically available)<br>
+                        or, using <a href="https://www.openssl.org/">openssl</a>. For example, on a Linux / macOS machine:<br>
+                        <code>$ echo -n | openssl s_client -connect &lt;host&gt;:&lt;port&gt; 2&gt;&and;1 | openssl x509 -noout -fingerprint -sha1 | cut -d\= -f2</code>
+                    </span>
+                </div>
+
+            </fieldset>
+
+            <fieldset>
+                <legend>Device settings</legend>
+
+                <div class="pure-control-group">
+                    <label>Root Topic</label>
+                    <input name="mqttTopic" type="text">
+                    <span class="pure-form-message-inline">
+                        This is the root topic for this device. The following placeholders can be used: {hostname} and {mac} to dynamically set the value to the device hostname and MAC address respectively. Subscribe to <samp>&lt;root&gt;/#</samp> to see all published topics.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Default QoS</label>
+                    <select class="pure-input-2-3" name="mqttQoS">
+                        <option value="0">0: At most once</option>
+                        <option value="1">1: At least once</option>
+                        <option value="2">2: Exactly once</option>
+                    </select>
+                    <span class="pure-form-message">
+                        Level of assurance for delivery of the outgoing messages. Notice that messages are not (currently) cached on the device, QoS levels &gt;0 only guarantee delivery <strong>after</strong> the broker receives the message.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Default retain flag</label>
+                    <input class="checkbox-toggle" type="checkbox" name="mqttRetain">
+                    <span class="pure-form-message">
+                        Store the last published message (including the device <strong>status</strong>) on the server, so it can be delivered to any future subscribers that match the message topic.
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>JSON</legend>
+
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="mqttUseJson">
+                    <span class="pure-form-message">
+                        Causes all single <strong>&lt;topic&gt;</strong> messages published by the device, except the device status, to be sent in a JSON payload. For example:<br>
+                        <code>{"relay/0": 1, "hostname": "ESPURNA-123456", "timestamp": "..."}</code><br>
+                        All messages will be queued and sent with a delay (100ms by default). Notice that all nested <strong>&lt;topic&gt;: &lt;message&gt;</strong> are published as-is, only the heartbeat payload will include all of topics at once.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Topic name</label>
+                    <input type="text" name="mqttJson">
+                    <span class="pure-form-message">
+                        JSON message will be sent to <strong>&lt;root&gt;/&lt;name&gt;</strong> topic (<strong>data</strong> by default).
+                    </span>
+                </div>
+
+
+            </fieldset>
+        </div>
+
+    </div>
+</form>

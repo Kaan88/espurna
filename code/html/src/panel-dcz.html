@@ -1,0 +1,54 @@
+<form id="form-domoticz" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-domoticz">
+
+        <div class="header">
+            <h1>DOMOTICZ</h1>
+            <h2>
+                Configure the connection to your Domoticz server.
+            </h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+                <legend>General</legend>
+
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="dczEnabled">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Domoticz IN Topic</label>
+                    <input class="pure-input-2-3" name="dczTopicIn" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Domoticz OUT Topic</label>
+                    <input class="pure-input-2-3" name="dczTopicOut" type="text" data-action="reconnect">
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-light">
+                <legend>Lights (IN messages only)</legend>
+                <div class="pure-control-group">
+                    <label>Light switch</label>
+                    <input name="dczLightIdx" type="number" min="0">
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-relay module-sns">
+                <legend>Sensors &amp; actuators</legend>
+
+                <span class="pure-form-message">
+                    Set IDX to 0 to disable notifications from that component.
+                </span>
+
+                <div id="dcz-relays" class="settings-group module module-relay" data-settings-target="dczRelayIdx" ></div>
+
+                <div id="dcz-magnitudes" class="settings-group module module-sns" data-settings-target="dczMagnitude" ></div>
+            </fieldset>
+        </div>
+
+    </div>
+</form>

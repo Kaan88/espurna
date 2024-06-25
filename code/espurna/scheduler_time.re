@@ -107,7 +107,7 @@ loop:
         goto consume_last;
       }
 
-      * { 
+      * {
         out = false;
         goto return_out;
       }
@@ -156,7 +156,7 @@ take_range:
     last = -1;
 
     goto loop;
- 
+
 consume_last:
     // validate w/ range
     if ((last != -1) && !range.valid(last)) {
@@ -288,7 +288,7 @@ loop:
         goto consume_last;
       }
 
-      * { 
+      * {
         out = false;
         goto return_out;
       }
@@ -316,7 +316,7 @@ take_range:
     }
 
     goto return_out;
- 
+
 consume_last:
     // fill output with {range_last}..{last}
     // similar to generic range parser, support inverse fill
@@ -687,6 +687,75 @@ using parse::parse_date;
 using parse::parse_weekdays;
 using parse::parse_time;
 using parse::parse_time_keyword;
+
+Schedule parse_schedule(StringView view) {
+    Schedule out;
+
+    // DATE " " WDS " " TIME " " KW
+    const auto spaces = std::count(view.begin(), view.end(), ' ');
+    if (spaces > 3) {
+        return out;
+    }
+
+    auto split = SplitStringView(view);
+
+    bool parsed_date { false };
+    bool parsed_weekdays { false };
+    bool parsed_time { false };
+    bool parsed_keyword { false };
+
+    int parsed { 0 };
+
+    while (split.next()) {
+        auto elem = split.current();
+
+        // most expected order, starting with date
+        if (!parsed_date && ((parsed_date = parse_date(out.date, elem)))) {
+            ++parsed;
+            continue;
+        }
+
+        // then weekdays
+        if (!parsed_weekdays && ((parsed_weekdays = parse_weekdays(out.weekdays, elem)))) {
+            ++parsed;
+            continue;
+        }
+
+        // then time
+        if (!parsed_time && ((parsed_time = parse_time(out.time, elem)))) {
+            ++parsed;
+            continue;
+        }
+
+        // and keyword is always at the end. forcibly stop the parsing, regardless of the state
+        if ((parsed_keyword = parse_time_keyword(out.time, elem))) {
+            ++parsed;
+            break;
+        }
+    }
+
+    // expect one of each element, plus optional keyword
+    if (parsed != (1 + spaces)) {
+        return out;
+    }
+
+    // do not want both time and sun{rise,set}
+    if (want_sunrise_sunset(out.time) && parsed_time) {
+        return out;
+    }
+
+    out.ok = parsed_date
+        || parsed_weekdays
+        || parsed_time
+        || parsed_keyword;
+
+    if (out.ok && !parsed_time && !want_sunrise_sunset(out.time)) {
+        out.time.hour = 0b1;
+        out.time.minute = 0b1;
+    }
+
+    return out;
+}
 
 } // namespace
 } // namespace scheduler

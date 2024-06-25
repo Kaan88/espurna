@@ -50,9 +50,6 @@ extern "C" void netif_set_addr(netif* netif, ip4_addr_t*, ip4_addr_t*, ip4_addr_
 
 namespace espurna {
 namespace wifi {
-
-using Mac = std::array<uint8_t, 6>;
-
 namespace {
 
 namespace build {
@@ -757,22 +754,6 @@ private:
     IPAddress _netmask;
     IPAddress _gateway;
     IPAddress _dns;
-};
-
-struct StaNetwork {
-    Mac bssid;
-    String ssid;
-    String passphrase;
-    int8_t rssi;
-    uint8_t channel;
-};
-
-struct SoftApNetwork {
-    Mac bssid;
-    String ssid;
-    String passphrase;
-    uint8_t channel;
-    AUTH_MODE authmode;
 };
 
 struct Network {
@@ -3069,6 +3050,14 @@ bool wifiConnected() {
     return espurna::wifi::sta::connected();
 }
 
+espurna::wifi::StaNetwork wifiStaInfo() {
+    if (espurna::wifi::opmode() & espurna::wifi::OpmodeSta) {
+        return espurna::wifi::sta::current();
+    }
+
+    return {};
+}
+
 IPAddress wifiStaIp() {
     if (espurna::wifi::opmode() & espurna::wifi::OpmodeSta) {
         return espurna::wifi::sta::ip();
@@ -3136,6 +3125,14 @@ size_t wifiApStations() {
     }
 
     return 0;
+}
+
+espurna::wifi::SoftApNetwork wifiApInfo() {
+    if (espurna::wifi::opmode() & espurna::wifi::OpmodeAp) {
+        return espurna::wifi::ap::current();
+    }
+
+    return {};
 }
 
 IPAddress wifiApIp() {

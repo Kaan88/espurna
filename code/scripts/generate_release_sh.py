@@ -25,7 +25,7 @@ Build = collections.namedtuple("Build", "env extends build_flags build_src_flags
 
 
 def expand_variables(cfg, value):
-    RE_VARS = re.compile("\$\{.*?\}")
+    RE_VARS = re.compile(r"\$\{.*?\}")
 
     for var in RE_VARS.findall(value):
         section, option = var.replace("${", "").replace("}", "").split(".", 1)
@@ -35,7 +35,7 @@ def expand_variables(cfg, value):
 
 
 def get_builds(cfg):
-    RE_NEWLINE = re.compile("\r\n|\n")
+    RE_NEWLINE = re.compile(r"\r\n|\n")
     BASE_BUILD_FLAGS = set(
         shlex.split(expand_variables(cfg, cfg.get("env", "build_flags")))
     )
@@ -91,10 +91,10 @@ def generate_lines(builds, ignore):
 
         flags = []
         if build.build_flags:
-            flags.append('PLATFORMIO_BUILD_FLAGS="{}"'.format(build.build_flags))
+            flags.append(f'PLATFORMIO_BUILD_FLAGS="{build.build_flags}"')
         if build.build_src_flags:
-            flags.append('ESPURNA_FLAGS="{}"'.format(build.build_src_flags))
-        flags.append('ESPURNA_BUILD_NAME="{env}"'.format(env=build.env))
+            flags.append(f'ESPURNA_FLAGS="{build.build_src_flags}"')
+        flags.append(f'ESPURNA_BUILD_NAME="{build.env}"')
 
         cmd = ["env"]
         cmd.extend(flags)
@@ -135,11 +135,9 @@ def parse_args():
         "--ignore", help="Do not build envs that contain the string(s)", action="append"
     )
 
-    builder_thread = parser.add_argument_group(
-        title="Builder thread control for CI parallel builds"
-    )
-    builder_thread.add_argument("--builder-thread", type=int, required=True)
-    builder_thread.add_argument("--builder-total-threads", type=int, required=True)
+    builder_nth = parser.add_argument_group(title="Synchronize parallel builds in CI")
+    builder_nth.add_argument("--builder-id", type=int, required=True)
+    builder_nth.add_argument("--builder-total", type=int, required=True)
 
     full_version = parser.add_argument_group(
         title="Fully replace the version string for the build system"
@@ -163,12 +161,12 @@ if __name__ == "__main__":
     with open("platformio.ini", "r") as f:
         Config.read_file(f)
 
-    builder_total_threads = args.builder_total_threads
-    builder_thread = args.builder_thread
-    if builder_thread >= builder_total_threads:
-        raise ValueError("* Builder thread index out of range *")
+    builder_total = args.builder_total
+    builder_id = args.builder_id
+    if builder_id >= builder_total:
+        raise ValueError(f"* {builder_id=} >= {builder_total=} *")
 
-    builds = every(get_builds(Config), builder_thread, builder_total_threads)
+    builds = every(get_builds(Config), builder_id, builder_total)
 
     print("#!/bin/bash")
     print("set -e -x")
@@ -184,13 +182,9 @@ if __name__ == "__main__":
 
     for var, value in variables:
         if value or not value is None:
-            print('export {}="{}"'.format(var, value))
+            print(f'export {var}="{value}"')
 
     print('trap "ls -R ${ESPURNA_BUILD_DESTINATION}" EXIT')
-    print(
-        'echo "Selected thread #{} out of {}"'.format(
-            builder_thread + 1, builder_total_threads
-        )
-    )
+    print(f'echo "Selected build ID {builder_id + 1}/{builder_total}"')
     for line in generate_lines(builds, args.ignore or ()):
         print(line)

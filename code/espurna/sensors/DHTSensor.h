@@ -7,7 +7,6 @@
 
 #pragma once
 
-
 #include "../gpio.h"
 #include "../utils.h"
 #include "BaseSensor.h"
@@ -162,36 +161,7 @@ class DHTSensor : public BaseSensor {
         // Protected
         // ---------------------------------------------------------------------
 
-        void _read() {
-
-            if (TimeSource::now() - _last_ok < MinInterval) {
-                if ((_temperature == DummyValue) && (_humidity == DummyValue)) {
-                    _error = SENSOR_ERROR_WARM_UP;
-                } else {
-                    _error = SENSOR_ERROR_OK;
-                }
-                return;
-            }
-
-            unsigned long low = 0;
-            unsigned long high = 0;
-
-            Data dhtData{};
-
-            unsigned char byteInx = 0;
-            unsigned char bitInx = 7;
-
-            pinMode(_gpio, OUTPUT);
-
-            // Send start signal to DHT sensor
-            if (++_errors > MaxErrors) {
-                _errors = 0;
-                digitalWrite(_gpio, HIGH);
-                espurna::time::blockingDelay(
-                    espurna::duration::Milliseconds(250));
-            }
-
-            noInterrupts();
+        void _read_critical(Data& dhtData) {
             digitalWrite(_gpio, LOW);
 
             if ((_type == DHT_CHIP_DHT11) || (_type == DHT_CHIP_DHT12)) {
@@ -210,6 +180,12 @@ class DHTSensor : public BaseSensor {
             pinMode(_gpio, INPUT_PULLUP);
             espurna::time::critical::delay(
                 espurna::duration::critical::Microseconds(10));
+
+            unsigned long low = 0;
+            unsigned long high = 0;
+
+            unsigned char byteInx = 0;
+            unsigned char bitInx = 7;
 
             // No errors, read the 40 data bits
             for( int k = 0; k < 41; k++ ) {
@@ -245,10 +221,38 @@ class DHTSensor : public BaseSensor {
                 } else {
                     --bitInx;
                 }
+            }
+        }
 
+        void _read() {
+            if (TimeSource::now() - _last_ok < MinInterval) {
+                if ((_temperature == DummyValue) && (_humidity == DummyValue)) {
+                    _error = SENSOR_ERROR_WARM_UP;
+                } else {
+                    _error = SENSOR_ERROR_OK;
+                }
+                return;
             }
 
+            pinMode(_gpio, OUTPUT);
+
+            // Send start signal to DHT sensor
+            if (++_errors > MaxErrors) {
+                _errors = 0;
+                digitalWrite(_gpio, HIGH);
+                espurna::time::blockingDelay(
+                    espurna::duration::Milliseconds(250));
+            }
+
+            Data dhtData{};
+
+            noInterrupts();
+            _read_critical(dhtData);
             interrupts();
+
+            if (_error != SENSOR_ERROR_OK) {
+                return;
+            }
 
             // Verify checksum
             if (dhtData[4] != ((dhtData[0] + dhtData[1] + dhtData[2] + dhtData[3]) & 0xFF)) {
@@ -288,7 +292,6 @@ class DHTSensor : public BaseSensor {
 
             _errors = 0;
             _error = SENSOR_ERROR_OK;
-
         }
 
         unsigned long _signal(unsigned long maximum, bool state) {

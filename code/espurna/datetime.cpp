@@ -12,6 +12,10 @@ namespace espurna {
 namespace datetime {
 namespace {
 
+constexpr Seconds start_of_day_delta(Seconds seconds, Days delta) {
+    return seconds - (seconds - std::chrono::duration_cast<Days>(seconds)) + delta;
+}
+
 time_t delta_local_impl(tm& out, Days days) {
     out.tm_mday += days.count();
     out.tm_hour = 0;
@@ -24,12 +28,42 @@ time_t delta_local_impl(tm& out, Days days) {
 }
 
 time_t delta_utc_impl(tm& out, Seconds seconds, Days days) {
-    const auto timestamp = start_of_day_offset(seconds, days);
+    const auto timestamp = start_of_day_delta(seconds, days);
 
     time_t tmp { timestamp.count() };
     gmtime_r(&tmp, &out);
 
     return tmp;
+}
+
+// In case of newlib, there is no `tm::tm_gmtoff` and this offset has to be calculated manually.
+// Although there is sort-of standard POSIX `_timezone` global, it only tracks non-DST time.
+Seconds tz_offset(const Context& ctx) {
+    return to_seconds(ctx.local) - to_seconds(ctx.utc);
+}
+
+String tz_offset_string(Seconds offset) {
+    String out;
+
+    auto hours = std::chrono::duration_cast<Hours>(offset);
+    offset -= hours;
+
+    out = (offset >= offset.zero()) ? '+' : '-';
+    if (hours < Hours{9}) {
+        out += '0';
+    }
+
+    out += String(hours.count(), 10);
+    out += ':';
+
+    auto minutes = std::chrono::duration_cast<Minutes>(offset);
+    if (minutes < Minutes{9}) {
+        out += '0';
+    }
+
+    out += String(minutes.count(), 10);
+
+    return out;
 }
 
 } // namespace
@@ -106,6 +140,26 @@ Date from_days(Days days) noexcept {
         .day = static_cast<uint8_t>(__d1)};
 }
 
+// Seconds since 1970/01/01.
+// Generalize convertion func to be used instead of mktime, where only the return value matters
+Seconds to_seconds(const Date& date, const HhMmSs& hh_mm_ss) noexcept {
+    auto out = std::chrono::duration_cast<Seconds>(to_days(date));
+
+    out += Hours(hh_mm_ss.hours);
+    out += Minutes(hh_mm_ss.minutes);
+    out += Seconds(hh_mm_ss.seconds);
+
+    return out;
+}
+
+Seconds to_seconds(const tm& t) noexcept {
+    return to_seconds(make_date(t), make_hh_mm_ss(t));
+}
+
+Context make_context(Seconds seconds) {
+    return make_context(seconds.count());
+}
+
 Context make_context(time_t timestamp) {
     Context out;
     out.timestamp = timestamp;
@@ -139,26 +193,57 @@ Context delta(const datetime::Context& ctx, Days days) {
     return out;
 }
 
+// iso8601 time string, without timezone info
 String format(const tm& t) {
     char buffer[32];
     snprintf_P(buffer, sizeof(buffer),
-        PSTR("%04d-%02d-%02d %02d:%02d:%02d"),
-        t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
-        t.tm_hour, t.tm_min, t.tm_sec);
+        PSTR("%04d-%02d-%02dT%02d:%02d:%02d"),
+        std::clamp(t.tm_year + 1900, 1970, 9999),
+        std::clamp(t.tm_mon + 1, 1, 12),
+        std::clamp(t.tm_mday, 1, 31),
+        std::clamp(t.tm_hour, 0, 24),
+        std::clamp(t.tm_min, 0, 60),
+        std::clamp(t.tm_sec, 0, 60));
 
     return String(buffer);
 }
 
+// retrieve local time struct from timestamp and format it
 String format_local(time_t timestamp) {
     tm tmp;
     localtime_r(&timestamp, &tmp);
     return format(tmp);
 }
 
+// retrieve utc time struct from timestamp and format it
 String format_utc(time_t timestamp) {
     tm tmp;
     gmtime_r(&timestamp, &tmp);
-    return format(tmp);
+    return format(tmp) + 'Z';
+}
+
+// time string plus offset from UTC
+// could be the same as format_utc when offset is zero
+String format_local_tz(const Context& ctx) {
+    const auto offset = tz_offset(ctx);
+    if (offset == offset.zero()) {
+        return format(ctx.local) + 'Z';
+    }
+
+    return format(ctx.local) + tz_offset_string(offset);
+}
+
+String format_local_tz(time_t timestamp) {
+    return format_local_tz(make_context(timestamp));
+}
+
+// aka "Zulu time" or "Zulu meridian", shorter version of +00:00
+String format_utc_tz(const tm& t) {
+    return format(t) + 'Z';
+}
+
+String format_utc_tz(const Context& ctx) {
+    return format_utc_tz(ctx.utc);
 }
 
 } // namespace datetime

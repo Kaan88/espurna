@@ -170,6 +170,7 @@ add_library(espurna STATIC
     ${ESPURNA_PATH}/code/espurna/settings_convert.cpp
     ${ESPURNA_PATH}/code/espurna/terminal_commands.cpp
     ${ESPURNA_PATH}/code/espurna/terminal_parsing.cpp
+    ${ESPURNA_PATH}/code/espurna/datetime.cpp
     ${ESPURNA_PATH}/code/espurna/types.cpp
     ${ESPURNA_PATH}/code/espurna/utils.cpp
 )

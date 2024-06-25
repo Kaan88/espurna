@@ -1,0 +1,33 @@
+<form id="form-rfm69-mapping" class="pure-form form-settings">
+    <div class="panel" id="panel-rfm69-mapping">
+
+        <div class="header">
+            <h1>MAPPING</h1>
+            <h2>
+                Configure the map between nodeID/key and MQTT topic. Messages from the given nodeID with the given key will be forwarded to the specified topic.
+                You can also configure a default topic using {nodeid} and {key} as placeholders, if the default topic is empty messages without defined map will be discarded.
+            </h2>
+        </div>
+
+        <div class="page">
+            <fieldset>
+                <legend>Default topic</legend>
+
+                <div class="pure-control-group">
+                    <input name="rfm69Topic" type="text" value="" size="8">
+                    <span class="pure-form-message">
+                        Default MQTT Topic. Available placeholders: {nodeid} and {key}
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Specific topics</legend>
+                <div id="rfm69-mapping" class="settings-group">
+                </div>
+                <button type="button" class="pure-button button-add-settings-group" data-settings-group="rfm69-mapping">Add</button>
+            </fieldset>
+        </div>
+
+    </div>
+</form>

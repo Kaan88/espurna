@@ -1,0 +1,61 @@
+<template id="template-relay-control">
+    <div class="pure-control-group">
+        <label><span data-key="relayName"></span></label>
+        <input class="checkbox-toggle" name="relay" type="checkbox">
+    </div>
+</template>
+
+<template id="template-relay-config">
+    <div class="pure-form pure-form-aligned">
+        <fieldset>
+            <legend><span data-key="relayName"></span> (<span data-key="relayProv"></span>)</legend>
+            <div class="pure-control-group">
+                <label>Boot mode</label>
+                <select class="pure-input-2-3" name="relayBoot">
+                    <option value="off">Always OFF</option>
+                    <option value="on">Always ON</option>
+                    <option value="same">Same as before</option>
+                    <option value="toggle">Toggle before</option>
+                    <option value="locked-off">Locked OFF</option>
+                    <option value="locked-on">Locked ON</option>
+                </select>
+            </div>
+            <div class="pure-control-group">
+                <label>Pulse mode</label>
+                <select class="pure-input-2-3" name="relayPulse">
+                    <option value="none">Don't pulse</option>
+                    <option value="off">Normally OFF</option>
+                    <option value="on">Normally ON</option>
+                </select>
+            </div>
+            <div class="pure-control-group">
+                <label>Pulse time (s)</label>
+                <input class="pure-input-2-3" name="relayTime" type="text">
+            </div>
+            <div class="pure-control-group module module-mqtt">
+                <label>MQTT topic subscription</label>
+                <input class="pure-input-2-3" name="relayTopicSub" type="text" data-action="reconnect">
+            </div>
+            <div class="pure-control-group module module-mqtt">
+                <label>MQTT topic publish</label>
+                <input class="pure-input-2-3" name="relayTopicPub" type="text" data-action="reconnect">
+            </div>
+            <div class="pure-control-group module module-mqtt">
+                <label>MQTT topic mode</label>
+                <select class="pure-input-2-3" name="relayTopicMode">
+                    <option value="normal">Normal</option>
+                    <option value="inverse">Inverse</option>
+                </select>
+            </div>
+            <div class="pure-control-group module module-mqtt">
+                <label>On MQTT disconnect</label>
+                <select class="pure-input-2-3" name="relayMqttDisc">
+                    <option value="unknown">Do nothing</option>
+                    <option value="off">Turn OFF</option>
+                    <option value="on">Turn ON</option>
+                    <option value="toggle">Toggle</option>
+                </select>
+            </div>
+        </fieldset>
+    </div>
+</template>

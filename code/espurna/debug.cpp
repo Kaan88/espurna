@@ -618,8 +618,11 @@ bool status(espurna::heartbeat::Mask mask) {
     }
 
 #if NTP_SUPPORT
-    if ((mask & espurna::heartbeat::Report::Datetime) && ntpSynced()) {
-        debugSend(PSTR("[MAIN] Datetime: %s\n"), ntpDateTime().c_str());
+    if (mask & espurna::heartbeat::Report::Datetime) {
+        const auto datetime = ntpDateTime();
+        if (datetime.length()) {
+            debugSend(PSTR("[MAIN] Datetime: %s\n"), datetime.c_str());
+        }
     }
 #endif
 

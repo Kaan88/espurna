@@ -1,0 +1,165 @@
+<form id="form-sns" class="pure-form form-settings">
+    <div class="panel" id="panel-emon-expected">
+        <div class="header">
+            <h1>Expected values</h1>
+            <h2>Calculate ratios from raw values that can be measured externally. <br>Enter the known values and press <strong>Calculate</strong> to see the resulting ratio values. Press <strong>Apply</strong> to update ratio values on the SENSORS panel. Press <strong>Save</strong> to commit the changes.</h2>
+        </div>
+
+        <fieldset>
+            <legend>Settings</legend>
+            <div class="pure-button-group" role="group">
+                <button type="button" class="pure-button button-emon-expected-calculate">Calculate</button>
+                <button type="button" class="pure-button button-emon-expected-apply">Apply</button>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Magnitudes</legend>
+            <div id="emon-expected" class="pure-form pure-form-aligned settings-group">
+            </div>
+        </fieldset>
+    </div>
+
+    <div class="panel" id="panel-sns">
+
+        <div class="header">
+            <h1>SENSOR CONFIGURATION</h1>
+            <h2>
+                Configure and calibrate your device sensors.
+            </h2>
+        </div>
+
+        <div class="page pure-form">
+
+            <fieldset>
+
+                <legend>General</legend>
+
+                <div class="pure-form-aligned">
+                    <div class="pure-control-group">
+                        <label>Read every</label>
+                        <input name="snsRead" type="number" min="1" list="list:snsRead" class="pure-input-1-4">
+                        <span>second(s)</span>
+                        <datalist id="list:snsRead">
+                            <option value="1"></option>
+                            <option value="6"></option>
+                            <option value="10"></option>
+                            <option value="15"></option>
+                            <option value="30"></option>
+                            <option value="60"></option>
+                            <option value="300"></option>
+                            <option value="600"></option>
+                            <option value="900"></option>
+                            <option value="1800"></option>
+                            <option value="3600"></option>
+                        </datalist>
+                        <span class="pure-form-message">
+                            Time between the attempts to read from the sensor.
+                            Please mind some sensors do not have refresh values very often, check the sensor datasheet to know the minimum read interval.
+                            The default and recommended value is 6 seconds.
+                        </span>
+                    </div>
+
+                    <div class="pure-control-group">
+                        <label>Report aggregated value every</label>
+                        <input name="snsReport" type="number" min="1" step="1" max="60">
+                        <span>reading(s)</span>
+                    </div>
+
+                    <div class="pure-control-group module module-emon">
+                        <label>Save aggregated value every</label>
+                        <input name="snsSave" type="number" min="0" step="1" max="200">
+                        <span> report(s)</span>
+                        <span class="pure-form-message-inline">
+                            At this moment, only applies to total energy readings.
+                            Set to 0 to disable.
+                            <br><strong>Note that this feature uses the internal flash. Repeatedly writing to the flash storage will quickly wear it out.</strong>
+                        </span>
+                    </div>
+
+                    <div class="pure-control-group">
+                        <label>Real time API</label>
+                        <input class="checkbox-toggle" type="checkbox" name="snsRealTime">
+                        <span class="pure-form-message-inline">
+                            Most magnitudes are being preprocessed and filtered to avoid spurious values.
+                            Enable this to get unfiltered values in the API (HTTP, MQTT, Prometheus, etc.)
+                        </span>
+                    </div>
+
+                </div>
+
+            </fieldset>
+
+            <fieldset class="module module-analog">
+                <legend>Analog sensor</legend>
+
+                <div class="pure-control-group module module-mics">
+                    <label>Calibrate</label>
+                    <button type="button" name="analog-calibrate" class="pure-button button-reboot button-simple-action">Reboot</button>
+                    <span class="pure-form-message">
+                        Reset gas sensor calibration. Check the sensor datasheet for calibration conditions.
+                    </span>
+                </div>
+
+            </fieldset>
+
+            <fieldset class="module module-emon">
+                <legend>Ratios</legend>
+                <div id="emon-ratios" class="pure-form-aligned settings-group">
+                </div>
+
+                <div class="pure-controls">
+                    <button type="button" data-panel="emon-expected" class="pure-button pure-input-1-2 button-emon-expected">Calculate ratios from expected values</button>
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-emon">
+                <legend>Energy monitor</legend>
+
+                <div class="pure-control-group">
+                    <button type="button" name="emon-reset-calibration" class="pure-button pure-input-1-2 button-simple-action">Reset <strong>all</strong> internal calibration values</button>
+                </div>
+
+                <div class="pure-control-group">
+                    <button type="button" name="emon-reset-energy" class="pure-button pure-input-1-2 button-simple-action">Set the energy count of all sensors to zero</button>
+                </div>
+
+            </fieldset>
+
+            <fieldset class="maybe-hidden">
+                <legend>Units</legend>
+                <div id="magnitude-units" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset class="maybe-hidden">
+                <legend>Corrections</legend>
+                <div id="magnitude-corrections" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Zero threshold</legend>
+                <span class="pure-form-message">Report only when the value is above this threshold. Set to <code>NaN</code> (default) to disable.</span>
+                <div id="magnitude-zero-thresholds" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Report - minimum delta</legend>
+                <span class="pure-form-message">Report only when the value changed at least this much (absolute difference)</span>
+                <div id="magnitude-min-deltas" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Report - reading maximum delta</legend>
+                <span class="pure-form-message">Try to report on every reading, when the value changes at least this much (absolute difference)</span>
+                <div id="magnitude-max-deltas" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+        </div>
+
+    </div>
+</form>

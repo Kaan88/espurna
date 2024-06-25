@@ -1,0 +1,57 @@
+<form id="form-tspk" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-tspk">
+
+        <div class="header">
+            <h1>THINGSPEAK</h1>
+            <h2>
+                Send your sensors data to Thingspeak.
+            </h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+
+                <legend>General</legend>
+
+                <div class="pure-control-group">
+                    <label>Enable Thingspeak</label>
+                    <input class="checkbox-toggle" type="checkbox" name="tspkEnabled">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Clear cache</label>
+                    <input class="checkbox-toggle" type="checkbox" name="tspkClear">
+                    <span class="pure-form-message">
+                        With every POST to thinkspeak.com only enqueued fields are sent.<br>
+                        If you select to clear the cache after every sending this will result in only those fields that have changed will be posted.
+                        If you want all fields to be sent with every POST do not clear the cache.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Address</label>
+                    <input class="pure-input-2-3" name="tspkAddress" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>API Key</label>
+                    <input class="pure-input-2-3" name="tspkKey" type="text">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Sensors &amp; actuators</legend>
+
+                <span class="pure-form-message">
+                    Enter the field number to send each data to, 0 disable notifications from that component.
+                </span>
+
+                <div id="tspk-relays" class="settings-group module module-relay" data-settings-target="tspkRelay" ></div>
+
+                <div id="tspk-magnitudes" class="settings-group module module-sns" data-settings-target="tspkMagnitude" ></div>
+            </fieldset>
+        </div>
+
+    </div>
+</form>

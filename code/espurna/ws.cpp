@@ -13,12 +13,14 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <queue>
 #include <vector>
 
-#include "system.h"
+#include "datetime.h"
 #include "ntp.h"
+#include "system.h"
 #include "utils.h"
-#include "ws.h"
 #include "web.h"
 #include "wifi.h"
+
+#include "ws.h"
 #include "ws_internal.h"
 
 #include "libs/WebSocketIncomingBuffer.h"
@@ -125,43 +127,35 @@ template <typename T>
 struct BaseTimeFormat {
 };
 
-template <>
-struct BaseTimeFormat<int> {
-    static constexpr size_t Size = sizeof(int);
-    static constexpr char Format[] = "%d";
-};
+void _wsUpdateAp(JsonObject& root) {
+    IPAddress ip{};
 
-constexpr char BaseTimeFormat<int>::Format[];
+    if (wifiConnectable()) {
+        ip = wifiApIp();
+    }
 
-template <>
-struct BaseTimeFormat<long> {
-    static constexpr size_t Size = sizeof(long);
-    static constexpr char Format[] = "%ld";
-};
-
-constexpr char BaseTimeFormat<long>::Format[];
-
-template <>
-struct BaseTimeFormat<long long> {
-    static constexpr size_t Size = sizeof(long long);
-    static constexpr char Format[] = "%lld";
-};
-
-constexpr char BaseTimeFormat<long long>::Format[];
-
-String _wsFormatTime(time_t timestamp) {
-    using SystemTimeFormat = BaseTimeFormat<time_t>;
-
-    char buffer[SystemTimeFormat::Size * 4];
-    snprintf(buffer, sizeof(buffer),
-        SystemTimeFormat::Format, timestamp);
-
-    return String(buffer);
+    root[F("apip")] = ip.toString();
 }
 
-void _wsUpdate(JsonObject& root) {
+void _wsUpdateSta(JsonObject& root) {
+    IPAddress ip{};
+    espurna::wifi::StaNetwork network{};
+
+    if (wifiConnected()) {
+        ip = wifiStaIp();
+        network = wifiStaInfo();
+    }
+
+    root[F("ssid")] = network.ssid;
+    root[F("bssid")] =
+        ::espurna::settings::internal::serialize(network.bssid);
+    root[F("channel")] = network.channel;
+    root[F("staip")] = ip.toString();
+}
+
+void _wsUpdateStats(JsonObject& root) {
     root[F("heap")] = systemFreeHeap();
-    root[F("uptime")] = systemUptime().count();
+    root[F("uptime")] = prettyDuration(systemUptime());
     root[F("rssi")] = WiFi.RSSI();
     root[F("loadaverage")] = systemLoadAverage();
 #if ADC_MODE_VALUE == ADC_VCC
@@ -169,19 +163,27 @@ void _wsUpdate(JsonObject& root) {
 #else
     root[F("vcc")] = F("N/A (TOUT) ");
 #endif
-#if NTP_SUPPORT
-    if (ntpSynced()) {
-        // XXX: arduinojson default config will silently downcast
-        //      double to float and (u)int64_t to (u)int32_t.
-        //      convert to string instead, and assume the int is handled correctly
-        auto info = ntpInfo();
+}
 
-        root[F("now")] = _wsFormatTime(info.now);
-        root[F("nowString")] = info.utc;
-        root[F("nowLocalString")] = info.local.length()
-            ? info.local
-            : info.utc;
+#if NTP_SUPPORT
+void _wsUpdateTime(JsonObject& root) {
+    if (!ntpSynced()) {
+        return;
     }
+
+    using namespace espurna::datetime;
+
+    const auto ctx = make_context(time(nullptr));
+    root[F("now")] = format_local_tz(ctx);
+}
+#endif
+
+void _wsUpdate(JsonObject& root) {
+    _wsUpdateAp(root);
+    _wsUpdateSta(root);
+    _wsUpdateStats(root);
+#if NTP_SUPPORT
+    _wsUpdateTime(root);
 #endif
 }
 
@@ -640,20 +642,14 @@ void _wsOnConnected(JsonObject& root) {
     root[F("device")] =
         String(info.hardware.device);
 
-    root[F("app_name")] =
-        String(info.app.name);
-    root[F("app_version")] =
-        String(info.app.version);
-    root[F("app_build")] = info.app.build_time.c_str();
+    root[F("app_name")] = info.app.name;
+    root[F("app_version")] = info.app.version;
+    root[F("app_build")] = info.app.build_time;
 
     root[F("hostname")] = systemHostname();
     root[F("chipid")] = systemChipId().c_str();
     root[F("desc")] = systemDescription();
 
-    root[F("bssid")] = WiFi.BSSIDstr();
-    root[F("channel")] = WiFi.channel();
-    root[F("network")] = wifiStaSsid();
-    root[F("deviceip")] = wifiStaIp().toString();
     root[F("sketch_size")] = ESP.getSketchSize();
     root[F("free_size")] = ESP.getFreeSketchSpace();
 

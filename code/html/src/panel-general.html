@@ -1,0 +1,117 @@
+<form id="form-general" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-general">
+
+        <div class="header">
+            <h1>GENERAL</h1>
+            <h2>General configuration values</h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+                <legend>Device</legend>
+
+                <div class="pure-control-group">
+                    <label>Hostname</label>
+                    <input name="hostname" class="pure-input-2-3" minlength="1" maxlength="32" type="text" data-action="reboot" pattern="^[A-za-z]([A-Za-z\d\-]{1,30}[A-Za-z\d]|[A-Za-z\d]{0,31})$" spellcheck="false">
+                    <span class="pure-form-message-inline">
+                        This name will identify this device in your network (this name will be used as DHCP hostname, thus the device will be accessible as http://&lt;hostname&gt;). Notice that this value may contain only the <strong>ASCII letters 'a' through 'z'</strong> (in a case-insensitive manner), <strong>digits '0' through '9'</strong>, and <strong>the hyphen ('-')</strong>. The hostname can neither start or end with a hyphen.<br>
+                    For this setting to take effect only on initial connection to the network, make sure to <code>Reconnect</code> if the device is already connected.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Description</label>
+                    <input name="desc" class="pure-input-2-3" maxlength="64" type="text">
+                    <span class="pure-form-message-inline">
+                        Human-friendly name for this device. It will be displayed in the WebUI and reported with the heartbeat.<br>
+                        For example, it can be used to specify the device location or it's purpose.
+                    </span>
+                </div>
+
+                <div class="pure-control-group module module-btn">
+                    <label>Click repeat delay</label>
+                    <input name="btnRepDel" type="number" data-action="reboot" min="0" step="100" max="1000">
+                    <span class="pure-form-message-inline">
+                        Delay in milliseconds to detect a double or triple click (from 0 to 1000ms).<br>
+                        The lower this number the faster the device will respond to button clicks but the harder it will be to get the expected event.
+                        Increase this number if you are having trouble triggering the event.
+                        Set this value to 0 to disable repeat detection, device will respond immediately to a single button click. When using default configuration, consider that this will disable the SoftAP button action.<br>
+                        You will have to <strong>reboot the device</strong> to apply this setting.
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-alexa">
+                <legend>Alexa</legend>
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="alexaEnabled">
+                    <span class="pure-form-message">
+                        Advertise on the network as an Alexa compatible device
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Name</label>
+                    <input name="alexaName" maxlength="31" type="text" data-action="reboot">
+                    <span class="pure-form-message">
+                        Instead of the global hostname setting, use this string to identify the device
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Heartbeat</legend>
+
+                <div class="pure-control-group">
+                    <label>Mode</label>
+                    <select class="pure-input-2-3" name="hbMode" >
+                        <option value="no">Disabled</option>
+                        <option value="once">Once per connection</option>
+                        <option value="repeat">Repeat after defined interval</option>
+                    </select>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Message interval</label>
+                    <input name="hbInterval" type="number" min="1">
+                    <span class="pure-form-message-inline">
+                        How often the heartbeat messages should be sent (number of <strong>seconds</strong>).
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Message types</label>
+                    <select multiple name="hbReport">
+                        <option value="1">Device status</option>
+                        <option value="2">SSID</option>
+                        <option value="21">BSSID</option>
+                        <option value="3">IP</option>
+                        <option value="4">MAC</option>
+                        <option value="5">RSSI</option>
+                        <option value="6">Uptime</option>
+                        <option value="7">Datetime</option>
+                        <option value="8">Free heap</option>
+                        <option value="9">VCC</option>
+                        <option data-module="relay" value="10">Relay(s) status</option>
+                        <option data-module="light" value="11">Light(s) status</option>
+                        <option value="12">Hostname</option>
+                        <option value="13">App name</option>
+                        <option value="14">App version</option>
+                        <option value="15">Board</option>
+                        <option value="16">Loadavg</option>
+                        <option value="17">Heartbeat interval</option>
+                        <option value="18">Device description</option>
+                        <option data-module="thermostat" value="19">Temperature range</option>
+                        <option data-module="thermostat" value="20">Remote temperature</option>
+                    </select>
+                    <span class="pure-form-message-inline">
+                        Select which message types will be sent out with the periodic report.
+                    </span>
+                </div>
+            </fieldset>
+
+        </div>
+    </div>
+</form>

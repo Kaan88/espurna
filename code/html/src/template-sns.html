@@ -1,0 +1,37 @@
+<template id="template-magnitude-info">
+    <div class="pure-control-group">
+        <label></label>
+        <input readonly class="pure-input-1-3" type="text" name="magnitude">
+        <span class="pure-form-message-inline magnitude-info"></span>
+        <span class="pure-form-message-inline magnitude-description"></span>
+    </div>
+</template>
+
+<template id="template-magnitude-units">
+    <div class="pure-control-group">
+        <label></label>
+        <select class="pure-input-2-3"></select>
+    </div>
+</template>
+
+<template id="template-module-magnitude">
+    <div class="pure-control-group">
+        <label>Magnitude</label>
+        <input class="pure-input-2-3" type="number" min="0">
+        <span class="pure-form-message-inline">
+        </span>
+    </div>
+</template>
+
+<template id="template-emon-expected">
+    <div class="pure-control-group">
+        <label></label>
+        <div class="pure-u-1 pure-u-lg-1-4">
+            <input name="expected:" type="text" class="emon-expected-input">
+            <input readonly name="result:" type="text" class="emon-expected-result">
+        </div>
+        <span class="pure-form-message-inline emon-expected-pwrP">In Watts (W). Calibrate your sensor connecting a pure resistive load (like a bulb) and enter here its nominal power or use a multimeter.</span>
+        <span class="pure-form-message-inline emon-expected-volt">In Volts (V). Enter your the nominal AC voltage for your household or facility, or use multimeter to get this value.</span>
+        <span class="pure-form-message-inline emon-expected-curr">In Amperes (A). If you are using a pure resistive load like a bulb, this will be the ratio between the two previous values, i.e. power / voltage. You can also use a current clamp around one of the power wires to get this value.</span>
+    </div>
+</template>

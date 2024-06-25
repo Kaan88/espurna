@@ -25,6 +25,8 @@ using namespace espurna::terminal;
 
 void terminalOK(const espurna::terminal::CommandContext&);
 void terminalError(const espurna::terminal::CommandContext&, const String&);
+void terminalError(const espurna::terminal::CommandContext&, const __FlashStringHelper*);
+void terminalError(const espurna::terminal::CommandContext&, espurna::StringView);
 
 void terminalRegisterCommand(espurna::StringView name, espurna::terminal::CommandFunc func);
 void terminalRegisterCommand(espurna::terminal::Commands);

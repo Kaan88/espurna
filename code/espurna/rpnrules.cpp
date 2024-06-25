@@ -345,7 +345,7 @@ void test(::terminal::CommandContext&& ctx) {
             internal::context.error.position,
             static_cast<int>(internal::context.error.category),
             internal::context.error.code);
-        terminalError(ctx, buffer);
+        terminalError(ctx, StringView(buffer));
         return;
     }
 

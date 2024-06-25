@@ -419,70 +419,94 @@ String activeServer() {
 
 String format_datetime() {
     return synced()
-        ? datetime::format_local(timelib::now())
+        ? datetime::format_local_tz(::time(nullptr))
         : String();
 }
 
-NtpInfo makeInfo() {
-    NtpInfo result;
+struct Info {
+    String server;
+    duration::Seconds update_interval;
+
+    String last_sync;
+};
+
+Info make_info() {
+    Info out;
+
+    out.server = internal::server;
+    out.update_interval = internal::update_interval;
 
     const auto sync = internal::status.timestamp();
-    tm sync_datetime{};
-    gmtime_r(&sync, &sync_datetime);
-    result.sync = datetime::format(sync_datetime);
 
-    const auto now = timelib::now();
-    result.now = now;
+    tm tmp{};
+    gmtime_r(&sync, &tmp);
 
-    tm now_datetime{};
-    gmtime_r(&now, &now_datetime);
-    result.utc = datetime::format(now_datetime);
+    out.last_sync = datetime::format_utc_tz(tmp);
 
-    const char* cfg_tz = getenv("TZ");
-    if ((cfg_tz != nullptr) && (strcmp(cfg_tz, "UTC0") != 0)) {
-        tm local_datetime{};
-        localtime_r(&now, &local_datetime);
-        result.local = datetime::format(local_datetime);
-        result.tz = cfg_tz;
-    }
+    return out;
+}
 
-    return result;
+struct Datetime {
+    String local;
+    String utc;
+};
+
+Datetime make_datetime() {
+    Datetime out;
+
+    const auto ctx = datetime::make_context(::time(nullptr));
+    out.local = datetime::format_local_tz(ctx).c_str();
+    out.utc = datetime::format_utc_tz(ctx);
+
+    return out;
 }
 
 #if TERMINAL_SUPPORT
 namespace terminal {
 
-void report(Print& out) {
-    const auto info = makeInfo();
-    out.printf_P(
-        PSTR("server: %s\n"
-             "update every: %u (s)\n"
-             "last synced: %s\n"
-             "utc time: %s\n"),
-        internal::server.c_str(),
-        internal::update_interval.count(),
-        info.sync.c_str(),
-        info.utc.c_str());
+void report_ntp(Print& out) {
+    const auto report = make_info();
 
-    if (info.tz.length()) {
-        out.printf_P(PSTR("local time: %s (%s)\n"),
-            info.local.c_str(),
-            info.tz.c_str());
-    }
+    out.printf_P(PSTR("server: %s\n"),
+        report.server.c_str());
+    out.printf_P(PSTR("update every: %u(s)\n"),
+        report.update_interval.count());
+    out.printf_P(PSTR("last sync: %s\n"),
+        report.last_sync.c_str());
 }
 
-namespace commands {
+void report_datetime(Print& out) {
+    const auto report = make_datetime();
 
-PROGMEM_STRING(Ntp, "NTP");
+    out.printf_P(PSTR("universal time: %s\n"),
+        report.utc.c_str());
+    out.printf_P(PSTR("local time: %s\n"),
+        report.local.c_str());
+}
 
-void ntp(::terminal::CommandContext&& ctx) {
+template <typename T>
+void wrap_output(::terminal::CommandContext&& ctx, T&& report) {
     if (synced()) {
         report(ctx.output);
         terminalOK(ctx);
         return;
     }
 
-    terminalError(ctx, F("NTP not synced"));
+    terminalError(ctx, STRING_VIEW("NTP not synced"));
+}
+
+namespace commands {
+
+PROGMEM_STRING(Date, "DATE");
+
+void date(::terminal::CommandContext&& ctx) {
+    wrap_output(std::move(ctx), report_datetime);
+}
+
+PROGMEM_STRING(Ntp, "NTP");
+
+void ntp(::terminal::CommandContext&& ctx) {
+    wrap_output(std::move(ctx), report_ntp);
 }
 
 PROGMEM_STRING(Sync, "NTP.SYNC");
@@ -495,7 +519,7 @@ void sync(::terminal::CommandContext&& ctx) {
         return;
     }
 
-    terminalError(ctx, F("NTP waiting for initial sync"));
+    terminalError(ctx, STRING_VIEW("NTP waiting for initial sync"));
 }
 
 PROGMEM_STRING(Set, "NTP.SET");
@@ -553,6 +577,7 @@ void set_time(::terminal::CommandContext&& ctx) {
 }
 
 static constexpr ::terminal::Command List[] PROGMEM {
+    {Date, date},
     {Ntp, ntp},
     {Sync, sync},
     {Set, set_time},
@@ -576,15 +601,12 @@ void report() {
         return;
     }
 
-    const auto info = makeInfo();
-    DEBUG_MSG_P(PSTR("[NTP] Server    %s\n"), ntp::internal::server.c_str());
-    DEBUG_MSG_P(PSTR("[NTP] Last Sync %s (UTC)\n"), info.sync.c_str());
-    DEBUG_MSG_P(PSTR("[NTP] UTC Time  %s\n"), info.utc.c_str());
+    const auto info = make_info();
 
-    if (info.tz.length()) {
-        DEBUG_MSG_P(PSTR("[NTP] Local Time %s (%s)\n"),
-            info.local.c_str(), info.tz.c_str());
-    }
+    DEBUG_MSG_P(PSTR("[NTP] Using server %s\n"),
+        info.server.c_str());
+    DEBUG_MSG_P(PSTR("[NTP] Last sync on (every %usec)\n"),
+        info.last_sync.c_str(), info.update_interval.count());
 }
 
 void schedule_now() {
@@ -622,12 +644,13 @@ void callback() {
         return;
     }
 
-    const auto now = timelib::now();
-    tm local_tm;
-    localtime_r(&now, &local_tm);
+    const auto now = ::time(nullptr);
 
-    int now_hour = local_tm.tm_hour;
-    int now_minute = local_tm.tm_min;
+    tm tmp;
+    localtime_r(&now, &tmp);
+
+    int now_hour = tmp.tm_hour;
+    int now_minute = tmp.tm_min;
 
     static int last_hour { -1 };
     static int last_minute { -1 };
@@ -648,7 +671,7 @@ void callback() {
     }
 
     // try to autocorrect each invocation
-    schedule(OffsetMax - espurna::duration::Seconds(local_tm.tm_sec));
+    schedule(OffsetMax - espurna::duration::Seconds(tmp.tm_sec));
 }
 
 void schedule_now() {
@@ -893,10 +916,6 @@ time_t now() {
 
 void ntpOnTick(NtpTickCallback callback) {
     ::espurna::ntp::tick::add(callback);
-}
-
-NtpInfo ntpInfo() {
-    return ::espurna::ntp::makeInfo();
 }
 
 String ntpDateTime() {

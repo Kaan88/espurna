@@ -1,0 +1,15 @@
+export function styleInject(rules: any): void;
+export function styleVisible(selector: any, value: any): string;
+export function pageReloadIn(ms: any): void;
+export function moreElem(container: any): void;
+export function moreParent(event: any): void;
+export function toggleMenu(event: any): void;
+export function showPanelByName(name: any): void;
+export function showPanel(event: any): void;
+export function askDisconnect(ask: any): any;
+export function askReboot(ask: any): any;
+export function askAndCall(questions: any, callback: any): void;
+export function askAndCallReconnect(): void;
+export function askAndCallReboot(): void;
+export function askAndCallAction(event: any): void;
+export function randomString(length: any, args: any): string;

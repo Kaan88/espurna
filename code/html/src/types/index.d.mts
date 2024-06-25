@@ -1,0 +1,21 @@
+declare var MODULE_OTA: boolean;
+declare var MODULE_HA: boolean;
+declare var MODULE_SNS: boolean;
+declare var MODULE_GARLAND: boolean;
+declare var MODULE_THERMOSTAT: boolean;
+declare var MODULE_LIGHTFOX: boolean;
+declare var MODULE_RELAY: boolean;
+declare var MODULE_RFM69: boolean;
+declare var MODULE_RFB: boolean;
+declare var MODULE_CMD: boolean;
+declare var MODULE_DEBUG: boolean;
+declare var MODULE_API: boolean;
+declare var MODULE_LED: boolean;
+declare var MODULE_LIGHT: boolean;
+declare var MODULE_SCH: boolean;
+declare var MODULE_RPN: boolean;
+declare var MODULE_DCZ: boolean;
+declare var MODULE_TSPK: boolean;
+declare var MODULE_CURTAIN: boolean;
+
+export {};

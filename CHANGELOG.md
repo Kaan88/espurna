@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ???
 
+## [1.16.0-dev] Snapshot build 2024-06-15
+
+### Added
+- Scheduler sunrise and sunset time triggers [#2417](https://github.com/xoseperez/espurna/issues/2417), [#1263](https://github.com/xoseperez/espurna/issues/1263), [#943](https://github.com/xoseperez/espurna/issues/943)
+- Allow to specify date (`YYYY-MM-DD` or `MM-DD`) for scheduler action [#2060](https://github.com/xoseperez/espurna/issues/2060)
+- Allow scheduler action to trigger multiple times a day [#2060](https://github.com/xoseperez/espurna/issues/2060), [#1419](https://github.com/xoseperez/espurna/issues/1419)
+- Scheduler action is a terminal command when terminal support is enabled [e4b6929f](https://github.com/xoseperez/espurna/commit/e4b6929f94b82cf844cb07f4270cea7ddc80a887)
+- Variable retry times for HA discovery [8c68a72c](https://github.com/xoseperez/espurna/commit/8c68a72c8fc502259cc9de6ff5fbf88ce5ec6b51)
+- OneWire debugging [f7e2977c](https://github.com/xoseperez/espurna/commit/f7e2977c45b645573af8023f8eb2c630c4448991)
+- Publish HA discovery message when HA instance connects to the MQTT broker [452cd78c](https://github.com/xoseperez/espurna/commit/452cd78c41edea6beb44840efee04e3b0ac47ca6), ref. [#1637](https://github.com/xoseperez/espurna/issues/1637)
+- Button terminal command action [eb17675c](https://github.com/xoseperez/espurna/commit/eb17675c2a0e2053ad2a9078fb4aedc2e71b3b50)
+- WiFi boot mode [aa2476e4](https://github.com/xoseperez/espurna/commit/aa2476e4a72e2fd0e9d2e7a16857b567305f43d0)
+
+### Fixed
+- Domoticz JSON truncation [#2605](https://github.com/xoseperez/espurna/issues/2605)
+- Manually reject all-zero and all-set payloads from DallasSensor, since both successfully pass CRC check [e92be04e](https://github.com/xoseperez/espurna/commit/e92be04eea4848098a8a11675a1ece527966adee), [#2543](https://github.com/xoseperez/espurna/issues/2543)
+- Do not add failed sensor readings to the total 'report' counter [2d19d8e1](https://github.com/xoseperez/espurna/commit/2d19d8e1e94209e1d1c5c042cba5ba7c7fa4198a)
+- RFBRIDGE not respecting MQTT repeat value [686728a3](https://github.com/xoseperez/espurna/commit/686728a329d9b5e159fc7b5394517c968edb7a22)
+- `-std=gnu++20` and later compatibility [f13df63f](https://github.com/xoseperez/espurna/commit/f13df63f382b3db6c879d890291c5b335b8a1a9a)
+- Latest esp8266-oled-ssd1306 version and more improvements for thermostat module [#2601](https://github.com/xoseperez/espurna/issues/2601), thanks to **[@ElderJoy](https://github.com/ElderJoy)**
+- Latest Garland module w/ various animation fixes [#2600](https://github.com/xoseperez/espurna/issues/2600), thanks to **[@ElderJoy](https://github.com/ElderJoy)**
+- Invalid Domoticz settings key for relays [#2596](https://github.com/xoseperez/espurna/issues/2596)
+- `SENSOR_PUBLISH_ADDRESS` build w/ Core 2.7.4 [#2594](https://github.com/xoseperez/espurna/issues/2594)
+- SoftwareSerial swapped TX & RX in configuration [#2592](https://github.com/xoseperez/espurna/issues/2592)
+- InfluxDB using internal ID instead of public one [#2585](https://github.com/xoseperez/espurna/issues/2585)
+- Restore previously removed real telnet command packet workarounds, allow PuTTY to authenticate [#2563](https://github.com/xoseperez/espurna/issues/2563), [#2606](https://github.com/xoseperez/espurna/issues/2606)
+- Sensor filter fixes and consistent number of output values [#2543](https://github.com/xoseperez/espurna/issues/2543)
+
+### Changed
+- Optional delay for relay action when MQTT disconnects [7ac9fd74](https://github.com/xoseperez/espurna/commit/7ac9fd74891f9fee336f7613b90bcd832301210e)
+- PlatformIO toolchain set to platform version [f75d379d](https://github.com/xoseperez/espurna/commit/f75d379d20c8f8afa826899e29fb9fa7d048a894)
+- API calls take precedence over relay pulse configuration, allow to create a timer even when conflicting settings exist [530b64b1](https://github.com/xoseperez/espurna/commit/530b64b13f0e92fbdc3c13e7e9feff7d3d345847)
+- Start relay 'before' and 'after' timer after pulse timers, not before [530b64b1](https://github.com/xoseperez/espurna/commit/530b64b13f0e92fbdc3c13e7e9feff7d3d345847)
+- Allow to create relay pulse timer for the current state [530b64b1](https://github.com/xoseperez/espurna/commit/530b64b13f0e92fbdc3c13e7e9feff7d3d345847)
+- Highlight WebUI 'Save' when there are pending changes [dd6bedee](https://github.com/xoseperez/espurna/commit/dd6bedeec7a8d3e6655c4c2742054f84494d549c)
+- Sensor readings timer start after initialization, not immediately on boot [a1b9bf51](https://github.com/xoseperez/espurna/commit/a1b9bf5199303bfdc0ccd9bea08a632d5d47af11)
+- WebUI consistent `autocomplete="off"` [3f1cf8cd](https://github.com/xoseperez/espurna/commit/3f1cf8cd0411fff5e7406fd288a0a9f6606911a4)
+- Handle both parasite and non-parasite power modes for DallasSensor [f7e2977c](https://github.com/xoseperez/espurna/commit/f7e2977c45b645573af8023f8eb2c630c4448991), ref. [#2543](https://github.com/xoseperez/espurna/issues/2543)
+- Sensor filters no longer cache values between configuration reloads [872f9b65](https://github.com/xoseperez/espurna/commit/872f9b6534a94eb247d117522addddbb45356dcd), [97921403](https://github.com/xoseperez/espurna/commit/97921403d01e333e2d31ac9cb48381822ff21068), [a33c71b6](https://github.com/xoseperez/espurna/commit/a33c71b62be879fe4d6b5af8949853ea38181dc0)
+
 ## [1.15.0-dev] Snapshot build 2023-03-30
 
 ### Fixed

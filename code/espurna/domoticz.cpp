@@ -337,9 +337,9 @@ void send(Idx idx, int nvalue, const char* svalue) {
 
     StaticJsonBuffer<JSON_OBJECT_SIZE(3)> json;
     JsonObject& root = json.createObject();
-    root[F("idx")] = idx.value();
-    root[F("nvalue")] = nvalue;
-    root[F("svalue")] = svalue;
+    root["idx"] = idx.value();
+    root["nvalue"] = nvalue;
+    root["svalue"] = svalue;
 
     char payload[128] = {0};
     root.printTo(payload);

@@ -56,41 +56,58 @@ constexpr uint8_t FlagUtc = 1;
 constexpr uint8_t FlagSunrise = 1 << 1;
 constexpr uint8_t FlagSunset = 1 << 2;
 
+struct Schedule {
+    DateMatch date;
+    WeekdayMatch weekdays;
+    TimeMatch time;
+
+    bool ok { false };
+};
+
 // by default, relaxed matching. if specific field is not set, assume it is not required
 // parser *will* set appropriate bits, but this allows default struct to always be valid
 
-bool match(const DateMatch& lhs, const tm& rhs) {
-    if ((lhs.year != 0) && ((lhs.year - 1900) != rhs.tm_year)) {
+bool match(const DateMatch& lhs, int year, int month, int day) {
+    if ((lhs.year != 0) && (lhs.year != year)) {
         return false;
     }
 
-    if (lhs.month.any() && (!lhs.month[rhs.tm_mon])) {
+    if (lhs.month.any() && (!lhs.month[month - 1])) {
         return false;
     }
 
     if (lhs.day_index[0]) {
-        return datetime::day_index(datetime::last_day(rhs))
-            == datetime::day_index(rhs.tm_mday);
+        return datetime::day_index(datetime::last_day(year, month))
+            == datetime::day_index(day);
     }
 
     if (lhs.day_index.any()) {
-        return lhs.day_index[datetime::day_index(rhs.tm_mday)];
+        return lhs.day_index[datetime::day_index(day)];
     }
 
-    if (lhs.day[0]) { 
-        const auto day = datetime::last_day(rhs);
+    if (lhs.day[0]) {
+        const auto last_day = datetime::last_day(year, month);
         if (lhs.day.count() > 1) {
-            return lhs.day[1 + day - rhs.tm_mday];
+            return lhs.day[1 + last_day - day];
         }
 
-        return day == rhs.tm_mday;
+        return last_day == day;
     }
 
-    if (lhs.day.any() && (!lhs.day[rhs.tm_mday])) {
+    if (lhs.day.any() && (!lhs.day[day])) {
         return false;
     }
 
     return true;
+
+}
+
+inline bool match(const DateMatch& lhs, const datetime::Date& date) {
+    return match(lhs, date.year, date.month, date.day);
+}
+
+inline bool match(const DateMatch& lhs, const tm& rhs) {
+    return match(lhs, datetime::make_date(rhs));
 }
 
 bool match(const WeekdayMatch& lhs, const tm& rhs) {
@@ -321,6 +338,200 @@ WeekdayMatch fill_match(datetime::Weekday lhs, datetime::Weekday rhs) {
 
     return out;
 }
+
+const tm& select_time(const datetime::Context& ctx, const Schedule& schedule) {
+    return want_utc(schedule.time)
+        ? ctx.utc
+        : ctx.local;
+}
+
+namespace restore {
+
+struct Result {
+    size_t index;
+    datetime::Minutes offset;
+};
+
+struct Pending {
+    size_t index;
+    Schedule schedule;
+};
+
+struct Context {
+    Context() = delete;
+
+    explicit Context(const datetime::Context& ctx) :
+        base(ctx),
+        current(ctx)
+    {
+        init();
+    }
+
+    ~Context() {
+        destroy();
+    }
+
+    bool next_delta(const datetime::Days&);
+    bool next();
+
+    const datetime::Context& base;
+
+    datetime::Context current{};
+    datetime::Days days{};
+
+    std::vector<Pending> pending{};
+    std::vector<Result> results{};
+
+private:
+    void destroy();
+    void init();
+    void init_delta();
+};
+
+bool Context::next_delta(const datetime::Days& days) {
+    if (days.count() == 0) {
+        return false;
+    }
+
+    this->days += days;
+    this->current = datetime::delta(this->current, days);
+    if (this->current.timestamp < 0) {
+        return false;
+    }
+
+    this->init_delta();
+    return true;
+}
+
+bool Context::next() {
+    return next_delta(datetime::Days{ -1 });
+}
+
+std::bitset<24> mask_past_hours(const std::bitset<24>& lhs, int rhs) {
+    return lhs.to_ulong() & bits::fill_u32(0, rhs);
+}
+
+std::bitset<60> mask_past_minutes(const std::bitset<60>& lhs, int rhs) {
+    return lhs.to_ullong() & bits::fill_u64(0, rhs);
+}
+
+TimeMatch mask_past(const TimeMatch& lhs, const tm& rhs) {
+    TimeMatch out;
+    out.hour = mask_past_hours(lhs.hour, rhs.tm_hour);
+    out.minute = mask_past_minutes(lhs.minute, rhs.tm_hour);
+    out.flags = lhs.flags;
+
+    return out;
+}
+
+datetime::Minutes to_minutes(int hour, int minute) {
+    return datetime::Hours{ hour } + datetime::Minutes{ minute };
+}
+
+datetime::Minutes to_minutes(const tm& t) {
+    return to_minutes(t.tm_hour, t.tm_min);
+}
+
+bool closest_delta(datetime::Minutes& out, const TimeMatch& lhs, const tm& rhs) {
+    auto past = mask_past(lhs, rhs);
+    if (lhs.hour[rhs.tm_hour]) {
+        auto minute = bits::first_set_u64(past.minute.to_ullong());
+        if (minute == 0) {
+            return false;
+        }
+
+        out = datetime::Minutes{ rhs.tm_min - minute };
+        return true;
+    }
+
+    auto hour = bits::first_set_u32(past.hour.to_ulong());
+    if (hour == 0) {
+        return false;
+    }
+
+    auto minute = bits::first_set_u64(lhs.minute.to_ullong());
+    if (minute == 0) {
+        return false;
+    }
+
+    --hour;
+    --minute;
+
+    out -= to_minutes(rhs) - to_minutes(hour, minute);
+
+    return true;
+}
+
+bool closest_delta_end_of_day(datetime::Minutes& out, const TimeMatch& lhs, const tm& rhs) {
+    tm tmp;
+    std::memcpy(&tmp, &rhs, sizeof(tm));
+
+    tmp.tm_hour = 23;
+    tmp.tm_min = 59;
+    tmp.tm_sec = 00;
+
+    const auto result = closest_delta(out, lhs, tmp);
+    if (result) {
+        out -= datetime::Minutes{ 1 };
+        return true;
+    }
+
+    return false;
+}
+
+void context_pending(Context& ctx, size_t index, const Schedule& schedule) {
+    ctx.pending.push_back({.index = index, .schedule = schedule});
+}
+
+void context_result(Context& ctx, size_t index, datetime::Minutes offset) {
+    ctx.results.push_back({.index = index, .offset = offset});
+}
+
+bool handle_today(Context& ctx, size_t index, const Schedule& schedule) {
+    const auto& time_point = select_time(ctx.base, schedule);
+
+    if (match(schedule.date, time_point) && match(schedule.weekdays, time_point)) {
+        datetime::Minutes offset{};
+        if (closest_delta(offset, schedule.time, time_point)) {
+            context_result(ctx, index, offset);
+            return true;
+        }
+    }
+
+    context_pending(ctx, index, schedule);
+
+    return false;
+}
+
+bool handle_delta(Context& ctx, const Pending& pending) {
+    if (!pending.schedule.ok) {
+        return false;
+    }
+
+    const auto& time_point = select_time(ctx.current, pending.schedule);
+
+    if (match(pending.schedule.date, time_point) && match(pending.schedule.weekdays, time_point)) {
+        datetime::Minutes offset{ ctx.days - datetime::Days{ -1 }};
+        if (closest_delta_end_of_day(offset, pending.schedule.time, time_point)) {
+            offset -= to_minutes(select_time(ctx.base, pending.schedule));
+            context_result(ctx, pending.index, offset);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool handle_delta(Context& ctx, decltype(Context::pending)::iterator it) {
+    if (handle_delta(ctx, *it)) {
+        ctx.pending.erase(it);
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace restore
 
 } // namespace
 } // namespace scheduler

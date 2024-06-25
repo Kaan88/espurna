@@ -1,0 +1,39 @@
+<form id="form-debug" class="pure-form">
+    <div class="panel" id="panel-debug">
+
+        <div class="header">
+            <h1>DEBUG LOG AND TERMINAL</h1>
+            <h2>
+                Interactive console of the device
+            </h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+
+                <div class="pure-control-group module module-dbg module-cmd">
+                    <span class="pure-form-message">
+                        Write a command and press <kbd>ENTER</kbd> (or click the button) to execute it on the device. The output will be shown in the debug text area below. Type <code>HELP</code> or <code>COMMANDS</code> to see available commands.
+                    </span>
+                </div>
+
+                <div class="pure-controls">
+                    <button type="button" class="pure-button button-dbg-clear pure-input-1">Clear</button>
+                </div>
+
+                <div class="pure-control-group terminal">
+                    <textarea class="pure-input-1" id="cmd-output" name="log" wrap="soft" readonly></textarea>
+                    <input id="cmd-input" class="pure-input-1 module module-cmd" name="cmd" type="text" autocomplete="off" data-action="none">
+                </div>
+
+                <div class="pure-controls module module-cmd">
+                    <button type="submit" class="pure-button button-cmd pure-input-1">Enter</button>
+                </div>
+
+            </fieldset>
+
+        </div>
+
+    </div>
+</form>

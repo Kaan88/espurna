@@ -1,0 +1,88 @@
+<form id="form-wifi" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-wifi">
+
+        <div class="header">
+            <h1>WIFI</h1>
+            <h2>You can configure up to 5 different WiFi networks. The device will try to connect in order of signal strength.</h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+                <legend>Fallback SoftAP</legend>
+
+                <div class="pure-control-group">
+                    <label>SSID</label>
+                    <input name="wifiApSsid" maxlength="32" type="text" data-action="reboot" >
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Passphrase</label>
+                    <input name="wifiApPass" maxlength="32" type="password" spellcheck="false" data-action="reboot" >
+                    <span class="no-select password-reveal"></span>
+                    <span class="pure-form-message">
+                        When specified, ESPurna will use these values in place of the hostname (see <strong>GENERAL</strong> panel) as SSID and device password (see <strong>ADMIN</strong> panel) as passphrase.
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Scanning</legend>
+
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="wifiScan">
+                    <span class="pure-form-message">
+                        ESPurna will scan for visible WiFi SSIDs and try to connect to networks defined below in order of <strong>signal strength</strong>, even if multiple AP share the same SSID.
+                        When disabled, ESPurna will try to connect to the networks in the same order they are listed below.
+                        Disable this option if you are <strong>connecting to a single access point</strong> (or router) or to a <strong>hidden SSID</strong>.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>RSSI threshold</label>
+                    <div><input type="number" name="wifiScanRssi" min="-128" max="0"></div>
+                    <span class="pure-form-message">
+                        When scanning is enabled, also periodically check available networks when the currently connected network RSSI is below this value.
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Available networks</legend>
+
+                <div class="pure-control-group">
+                    <button class="pure-button button-wifi-scan" type="button">
+                        Perform a network scan
+                    </button>
+
+                    <div class="pure-u-0 pure-u-lg-1-4 scan loading">
+                        &#8635;
+                    </div>
+                </div>
+
+                <table class="pure-u-1 pure-u-lg-1 pure-table" id="scanResult">
+                    <thead>
+                        <tr>
+                            <th scope="col">BSSID</th>
+                            <th scope="col">AUTH</th>
+                            <th scope="col">RSSI</th>
+                            <th scope="col">Channel</th>
+                            <th scope="col">SSID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </fieldset>
+
+            <fieldset>
+                <legend>Configured networks</legend>
+                <div id="networks" class="settings-group" data-settings-target="ssid pass" data-settings-schema="ssid pass ip gw mask dns bssid chan" >
+                </div>
+                <button type="button" class="pure-button button-add-settings-group" data-settings-group="networks">Add network</button>
+            </fieldset>
+
+        </div>
+    </div>
+</form>

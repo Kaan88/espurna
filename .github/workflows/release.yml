@@ -37,28 +37,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        thread: [0, 1, 2, 3]
+        id: [0, 1, 2, 3]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: espurna
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Cache Node
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('espurna/code/package-lock.json', 'espurna/code/package.json') }}
 
       - name: Cache PlatformIO
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.platformio
           key: ${{ runner.os }}-platformio-${{ hashFiles('espurna/code/platformio.ini') }}
@@ -74,13 +74,13 @@ jobs:
           pushd espurna/code
           npm ci
           node node_modules/gulp/bin/gulp.js
-          # each "thread" only builds every Nth environment
+          # each 'id' in matrix only builds every Nth environment
           # numbers are hard-coded above (...until there's a better idea for doing this)
           ./scripts/generate_release_sh.py \
               --ignore secure-client \
               --destination ${GITHUB_WORKSPACE}/build \
-              --builder-thread ${{ matrix.thread }} \
-              --builder-total-threads 4 \
+              --builder-id ${{ matrix.id }} \
+              --builder-total 4 \
               --suffix github${{ needs.variables.outputs.date }} \
               > release.sh
           bash release.sh
@@ -92,28 +92,32 @@ jobs:
           time zip \
             --quiet \
             --recurse-paths \
-            ../Build_${{ matrix.thread }}.zip ./
+            ../Build_${{ matrix.id }}.zip ./
           popd
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: Build
-          path: Build_${{ matrix.thread }}.zip
+          name: Build_${{ matrix.id }}
+          path: Build_${{ matrix.id }}.zip
 
   upload:
     needs: [variables, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
+          merge-multiple: true
           path: artifacts/
+          pattern: Build_*
 
       - name: Unpack
-        run: unzip -d build "artifacts/Build/*.zip"
+        run: |
+          ls --recursive artifacts
+          unzip -d build "artifacts/*.zip"
 
       - name: Prepare debug info
         run: |
@@ -142,5 +146,5 @@ jobs:
           bodyFile: "release_template.md"
           artifacts: "Debug.zip,build/*.bin"
           token: ${{ secrets.GITHUB_TOKEN }}
-          prerelease: true
+          prerelease: false
           draft: true

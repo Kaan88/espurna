@@ -42,6 +42,24 @@ extern "C" {
 namespace espurna {
 namespace wifi {
 
+using Mac = std::array<uint8_t, 6>;
+
+struct StaNetwork {
+    Mac bssid;
+    String ssid;
+    String passphrase;
+    int8_t rssi;
+    uint8_t channel;
+};
+
+struct SoftApNetwork {
+    Mac bssid;
+    String ssid;
+    String passphrase;
+    uint8_t channel;
+    AUTH_MODE authmode;
+};
+
 enum class Event {
     Initial,              // aka boot
     Mode,                 // when opmode changes
@@ -73,6 +91,14 @@ enum class ApMode {
 };
 
 } // namespace wifi
+
+namespace settings {
+namespace internal {
+
+String serialize(wifi::Mac);
+
+} // namespace internal
+} // namespace settings
 } // namespace espurna
 
 // Note that 'connected' status is *only* for the WiFi STA.
@@ -84,11 +110,13 @@ enum class ApMode {
 bool wifiConnected();
 
 // When AP is up and running
+espurna::wifi::SoftApNetwork wifiApInfo();
 bool wifiConnectable();
 size_t wifiApStations();
 IPAddress wifiApIp();
 
 // Current STA connection
+espurna::wifi::StaNetwork wifiStaInfo();
 String wifiStaSsid();
 IPAddress wifiStaIp();
 

@@ -3,9 +3,6 @@
 // Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 // -----------------------------------------------------------------------------
 
-#define SENSOR_SUPPORT 1
-#define DIGITAL_SUPPORT 1
-
 #if SENSOR_SUPPORT && DIGITAL_SUPPORT
 
 #pragma once

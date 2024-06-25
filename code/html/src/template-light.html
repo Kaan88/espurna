@@ -1,0 +1,25 @@
+<template id="template-channel-control">
+    <div>
+        <label>Channel #</label>
+        <input type="range" min="0" max="255" class="slider pure-input-2-3">
+        <span class="slider"></span>
+    </div>
+</template>
+
+<template id="template-brightness-control">
+    <div>
+        <label>Brightness</label>
+        <input type="range" min="0" max="255" class="slider pure-input-2-3" id="brightness-value">
+        <span class="slider"></span>
+    </div>
+</template>
+
+<template id="template-mireds-control">
+    <div>
+        <label>Mireds</label>
+        <input type="range" class="slider pure-input-2-3" id="mireds-value" list="mired-range">
+        <span class="slider"></span>
+        <datalist id="mired-range">
+        </datalist>
+    </div>
+</template>

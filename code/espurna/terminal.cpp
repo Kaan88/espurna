@@ -840,6 +840,14 @@ void terminalError(const espurna::terminal::CommandContext& ctx, const String& m
     espurna::terminal::error(ctx, message);
 }
 
+void terminalError(const espurna::terminal::CommandContext& ctx, const __FlashStringHelper* message) {
+    espurna::terminal::error(ctx, String(message));
+}
+
+void terminalError(const espurna::terminal::CommandContext& ctx, espurna::StringView message) {
+    espurna::terminal::error(ctx, message.toString());
+}
+
 void terminalRegisterCommand(espurna::terminal::Commands commands) {
     espurna::terminal::add(commands);
 }

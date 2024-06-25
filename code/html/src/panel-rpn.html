@@ -1,0 +1,52 @@
+<form id="form-rpn" class="pure-form form-settings">
+    <div class="panel" id="panel-rpn">
+
+        <div class="header">
+            <h1>RULES</h1>
+            <h2>
+                Here you can configure advanced rules based on RPN expressions. Check out the <a href="https://github.com/xoseperez/espurna/wiki/RPN-Rules">wiki page about the RPN Rules module</a> to know how to use them.
+            </h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset>
+
+                <legend>Configuration</legend>
+
+                <div class="pure-control-group">
+                    <label>Sticky variables</label>
+                    <input class="checkbox-toggle" type="checkbox" name="rpnSticky">
+                    <span class="pure-form-message">
+                        When set, variables will not be forcibly reset to <code>null</code> after the last rule finishes execution and garbage collected by the RPNlib. Once defined, they will be available each consecutive rules loop unless they are manually removed through <code>unref</code>.
+                        Mind that referencing a non-existing variable through <code>&dollar;</code> will immediately stop the rule execution, to either use the variable value or a <code>null</code> it should be prefixed with a <code>&amp;</code> instead.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label for="rpnDelay">Execution delay</label>
+                    <input name="rpnDelay" type="number" min="100">
+                    <span class="pure-form-message-inline">
+                        (in milliseconds)
+                    </span>
+                </div>
+
+            </fieldset>
+
+            <fieldset>
+                <legend>Rules</legend>
+
+                <div id="rpn-rules" class="settings-group" data-settings-target="rpnRule" ></div>
+                <button type="button" class="pure-button button-add-settings-group" data-settings-group="rpn-rules">Add</button>
+            </fieldset>
+
+            <fieldset>
+                <legend>MQTT</legend>
+
+                <div id="rpn-topics" class="settings-group" data-settings-target="rpnTopic" ></div>
+                <button type="button" class="pure-button button-add-settings-group" data-settings-group="rpn-topics">Add</button>
+            </fieldset>
+        </div>
+
+    </div>
+</form>

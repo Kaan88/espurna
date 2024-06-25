@@ -1,0 +1,59 @@
+<form id="form-rfb" class="pure-form form-settings">
+    <div class="panel" id="panel-rfb">
+
+        <div class="header">
+            <h1>RF BRIDGE</h1>
+        </div>
+
+        <div class="page">
+            <details>
+                <summary>
+                    Configuration
+                </summary>
+                Configure RF code associations for a basic 433 RF recevier, or the device like Sonoff RFBridge 433.<br><br>
+                To learn a new code click <strong>LEARN</strong> (the Sonoff RFBridge will beep) then press a button on the remote, the new code should show up (and the RFBridge will double beep). If the device double beeps but the code does not update it has not been properly learnt. Keep trying.<br><br>
+                Modify or create new codes manually and then click <strong>SAVE</strong> to store them in the device memory. If your controlled device uses the same code to switch ON and OFF, learn the code with the ON button and copy paste it to the OFF input box, then click SAVE on the last one to store the value.<br><br>
+                Delete any code clicking the <strong>FORGET</strong> button.
+                <br><br>You can also specify any RAW code. For reference see <a href="https://github.com/Portisch/RF-Bridge-EFM8BB1/wiki/Commands">possible commands for Sonoff RF Bridge EFM8BB1</a> (original firmware supports codes from <strong>0xA0</strong> to <strong>0xA5</strong>).
+            </details>
+
+            <fieldset>
+                <legend>RF Codes</legend>
+                <div id="rfbNodes" class="settings-group pure-form-aligned" data-settings-schema="rfbON rfbOFF"></div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Transmition</legend>
+
+                <div class="pure-control-group">
+                    <label>Repeats</label>
+                    <input name="rfbRepeat" type="number" min="1">
+                    <span class="pure-form-message">
+                        Number of times to repeat the outgoing transmission
+                    </span>
+                </div>
+            </fieldset>
+
+            <fieldset class="module module-rfbdirect">
+                <legend>Pin configuration</legend>
+
+                <div class="pure-control-group">
+                    <label>RX Pin</label>
+                    <select class="pure-input-1-4 enumerable enumerable-gpio-hardware" name="rfbRX"></select>
+                    <span class="pure-form-message-inline">
+                        Set to <strong>NONE</strong> to disable the receiver.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>TX Pin</label>
+                    <select class="pure-input-1-4 enumerable enumerable-gpio-hardware" name="rfbTX"></select>
+                    <span class="pure-form-message-inline">
+                        Set to <strong>NONE</strong> to disable the transmitter.
+                    </span>
+                </div>
+            </fieldset>
+        </div>
+
+    </div>
+</form>

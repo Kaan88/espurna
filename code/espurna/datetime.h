@@ -14,6 +14,8 @@ Copyright (C) 2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 #include <cstdint>
 #include <ctime>
 
+#include "types.h"
+
 namespace espurna {
 namespace datetime {
 
@@ -22,10 +24,7 @@ using Hours = std::chrono::duration<time_t, std::ratio<3600> >;
 using Minutes = std::chrono::duration<time_t, std::ratio<60> >;
 using Seconds = std::chrono::duration<time_t>;
 
-// helper for context time delta calculations
-constexpr Seconds start_of_day_offset(Seconds seconds, Days offset) {
-    return seconds - (seconds - std::chrono::duration_cast<Days>(seconds)) + offset;
-}
+// TODO import std::chrono::{floor,ceil,trunc}
 
 // only -std=c++20 chrono has appropriate class support. until then, use libc tm for full datetime
 // helper for to_days / from_days, where only the yyyy-mm-dd is needed
@@ -35,6 +34,10 @@ struct Date {
     int day;
 };
 
+// Days since 1970/01/01
+Days to_days(const Date&) noexcept;
+Days to_days(const tm&) noexcept;
+
 constexpr Date make_date(const tm& t) {
     return Date{
         .year = t.tm_year + 1900,
@@ -43,9 +46,24 @@ constexpr Date make_date(const tm& t) {
     };
 }
 
-// Days since 1970/01/01
-Days to_days(const Date&) noexcept;
-Days to_days(const tm&) noexcept;
+struct HhMm {
+    int hours;
+    int minutes;
+};
+
+struct HhMmSs {
+    int hours;
+    int minutes;
+    int seconds;
+};
+
+constexpr HhMmSs make_hh_mm_ss(const tm& t) {
+    return HhMmSs{
+        .hours = t.tm_hour,
+        .minutes = t.tm_min,
+        .seconds = t.tm_sec,
+    };
+}
 
 Date from_days(const Days&) noexcept;
 
@@ -160,6 +178,10 @@ constexpr Weekday next(Weekday day) {
         : Weekday{ uint8_t(day.value() + 1) };
 }
 
+// Seconds since 1970/01/01. Helper function to replace mktime
+Seconds to_seconds(const Date&, const HhMmSs&) noexcept;
+Seconds to_seconds(const tm&) noexcept;
+
 // main use-case is scheduler, and it needs both tm results
 struct Context {
     time_t timestamp;
@@ -168,6 +190,7 @@ struct Context {
 };
 
 // generates local and utc tm context for the given timestamp
+Context make_context(Seconds);
 Context make_context(time_t);
 
 // set target tm to 00:00 and offset N days in the future or past
@@ -189,6 +212,13 @@ String format(const tm&);
 // prepare 'tm' for the format(const tm&)
 String format_local(time_t);
 String format_utc(time_t);
+
+// generic iso8601 format w/ timezone offset
+String format_local_tz(const Context&);
+String format_local_tz(time_t);
+
+String format_utc_tz(const Context&);
+String format_utc_tz(const tm&);
 
 } // namespace datetime
 

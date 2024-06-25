@@ -1,0 +1,83 @@
+<form id="form-ha" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-ha">
+
+        <div class="header">
+            <h1>HOME ASSISTANT</h1>
+            <h2>
+                Automatically add this device to your Home Assistant though the MQTT discovery. <br><a href="https://www.home-assistant.io/docs/mqtt/discovery/">
+            Refer to the official documentation on how to enable it for the HA instance.
+        </a>
+            </h2>
+        </div>
+
+        <div class="page">
+            <fieldset>
+
+                <legend>Discovery</legend>
+
+                <div class="pure-control-group">
+                    <label>Enabled</label>
+                    <input class="checkbox-toggle" type="checkbox" name="haEnabled">
+                    <span class="pure-form-message">
+                        Publish discovery messages after establishing <strong>MQTT connection</strong> and when <strong>birth</strong> message is received.
+                    </span>
+                </div>
+
+            </fieldset>
+
+            <fieldset>
+                <legend>MQTT</legend>
+
+                <div class="pure-control-group">
+                    <label>Prefix</label>
+                    <input name="haPrefix" type="text">
+                    <span class="pure-form-message">
+                        The prefix for the discovery topic e.g.
+                        <code>
+                            <strong>&lt;prefix&gt;</strong>/switch/espurna-123456/config
+                        </code>
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Birth topic</label>
+                    <input name="haBirthTopic" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Birth payload</label>
+                    <input name="haBirthPayload" type="text">
+                    <span class="pure-form-message">
+                        By default, Home Assistant sends 'online' and 'offline' to <code>homeassistant/status</code>. Instead of sending discovery message only when device makes MQTT connection, also publish it every time this <strong>topic</strong> receives the specified <strong>payload</strong>.<br>
+                        <a href="https://www.home-assistant.io/integrations/mqtt/#birth-and-last-will-messages">See MQTT integration documentation for more information.</a>
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Retain</label>
+                    <input class="checkbox-toggle" type="checkbox" name="haRetain">
+                    <span class="pure-form-message">
+                        Whether to set <strong>Retain</strong> flag on outgoing MQTT messages. When enabled, published discovery messages for the current state are be persisted by the broker and would be received by subscribers even when the device is offline.
+                    </span>
+                </div>
+
+            </fieldset>
+
+            <fieldset>
+                <legend>Publish &amp; Clear</legend>
+                <span class="pure-form-message">
+                    Manually trigger discovery messages for the configured
+                    <code>
+                        <strong>&lt;prefix&gt;</strong>
+                    </code>
+                </span>
+                <div class="pure-control-group">
+                    <button type="button" class="pure-button button-ha-enabled pure-input-1">Publish</button>
+                    <button type="button" class="pure-button button-ha-disabled pure-input-1">Clear</button>
+                </div>
+            </fieldset>
+
+        </div>
+
+    </div>
+</form>

@@ -94,7 +94,7 @@ float atan(float x) {
 
     xPower *= xSquared;
     accumulator += -0.00749305860992 * xPower;
-    
+
     return offset + x / accumulator;
 }
 
@@ -146,7 +146,7 @@ double fmod(double x, double y) {
     return fs_fmod(x, y);
 }
 
-#else 
+#else
 
 // Everything from stdlib calc below needs
 
@@ -275,6 +275,10 @@ constexpr time_t julianDayToPosix(double d) {
     return time_t(int64_t((d - UnixJD) * SecondsInDay));
 }
 
+constexpr datetime::Seconds julianDayToDatetimeSeconds(double d) {
+    return datetime::Seconds{ julianDayToPosix(d) };
+}
+
 // Argument of periapsis for the earth on the given Julian day
 constexpr double argument_of_perihelion(double d) {
 	return 102.93005 + 0.3179526 * (d - JD2000) / Y;
@@ -376,8 +380,8 @@ double mean_solar_noon(double longitude, const datetime::Date& date) {
 
 // Result is unset by default, should check if it is >0
 struct SunriseSunset {
-    time_t sunrise { -1 };
-    time_t sunset { -1 };
+    datetime::Seconds sunrise { -1 };
+    datetime::Seconds sunset { -1 };
 };
 
 // Details provided by the user
@@ -410,8 +414,8 @@ SunriseSunset sunrise_sunset(const Location& location, const datetime::Date& dat
 	const auto sunrise = solarTransit - frac;
 	const auto sunset = solarTransit + frac;
 
-    out.sunrise = julianDayToPosix(sunrise);
-    out.sunset = julianDayToPosix(sunset);
+    out.sunrise = julianDayToDatetimeSeconds(sunrise);
+    out.sunset = julianDayToDatetimeSeconds(sunset);
 
     return out;
 }

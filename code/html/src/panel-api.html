@@ -1,0 +1,41 @@
+<form id="form-api" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-api">
+
+        <div class="header">
+            <h1>HTTP API</h1>
+        </div>
+
+        <div class="page">
+            <fieldset>
+                <legend>Settings</legend>
+
+                <div class="pure-control-group">
+                    <label class="checkbox-toggle">Enabled</label>
+                    <input type="checkbox" name="apiEnabled">
+                    <span class="pure-form-message">
+                        Use <strong>/api/list</strong> to see all of available endpoints.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label class="checkbox-toggle">Restful</label>
+                    <input type="checkbox" name="apiRestFul">
+                    <span class="pure-form-message">
+                        If enabled, API requests that contain data (for example, to modify the relay status) <strong>must</strong> be done using PUT.
+                        If disabled you can issue them as GET requests and add request parameters as <code>http://$url/api/path?key=value</code>. <strong>Do not enable unless it is really necessary</strong>
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Key</label>
+                    <input name="apiKey" type="text">
+                    <button type="button" class="pure-button button-apikey">Generate</button>
+                    <span class="pure-form-message">
+                        This is the authentication token you will have to pass with every HTTP request.
+                        All API calls must either contain the <strong>Api-Key</strong> header or the <strong>apikey</strong> request parameter with the value above.
+                    </span>
+                </div>
+            </fieldset>
+        </div>
+    </div>
+</form>

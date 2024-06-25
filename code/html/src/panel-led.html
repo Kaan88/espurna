@@ -1,0 +1,34 @@
+<form id="form-led" class="pure-form form-settings">
+    <div class="panel" id="panel-led">
+
+        <div class="header">
+            <h1>LED</h1>
+            <h2>Notification LED configuration</h2>
+        </div>
+
+        <div class="page">
+
+            <details>
+
+            <summary>Available modes</summary>
+            <ol class="pure-u-1 pure-u-lg-3-4">
+                <li><strong>WiFi status</strong> will blink at 1Hz when attempting to connect. If successfully connected it will briefly blink every 5 seconds if in STA mode, or every second if the device is still in AP mode.</li>
+                <li><strong>Follow switch</strong> will force the LED to follow the status of a given switch (defaults to the 1st switch, use the selector to change it).</li>
+                <li><strong>Inverse switch</strong> is same as the above, but using the inverse status as status of the LED.</li>
+                <li><strong>Find me</strong> will turn the LED ON when all relays are OFF. This is meant to locate the device at night.</li>
+                <li><strong>Find me &amp; WiFi</strong> will also follow the WiFi status, and stay mostly ON when relays are OFF and mostly OFF when any of them are ON.</li>
+                <li><strong>Relay status</strong> will turn the LED ON whenever any switch is ON, and OFF otherwise. This is global status notification.</li>
+                <li><strong>Relay status &amp; WiFi</strong> will follow the WiFi status but will stay mostly OFF when relays are OFF, and mostly ON when any of them are ON.</li>
+                <li><strong>Manually managed</strong> will let you manage the LED status through the API. For example, MQTT will subscribe to the "&lt;base_topic&gt;/led/0/set", sending a payload of 0, 1 or 2 (to toggle it) will change the LED status accordingly.</li>
+                <li><strong>Always ON</strong> and <strong>Always OFF</strong> modes are self-explanatory.</li>
+            </ol>
+
+            </details>
+
+            <fieldset>
+                <div id="leds" class="settings-group" data-settings-target="ledGpio" data-settings-schema="ledGpio ledInv ledMode ledRelay" ></div>
+                <button type="button" class="pure-button button-add-settings-group" data-settings-group="leds">Add LED</button>
+            </fieldset>
+        </div>
+    </div>
+</form>

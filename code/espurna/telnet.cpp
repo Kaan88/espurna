@@ -336,6 +336,57 @@ String address_string(Address address) {
     return IPAddress(address.ip).toString() + ':' + String(address.port, 10);
 }
 
+// clean-up pcb data stream until telnet data ends
+bool process_rfc854(pbuf* pb) {
+    static constexpr uint8_t Iac { 0xff };
+
+    static constexpr uint8_t Will { 0xfb };
+    static constexpr uint8_t Wont { 0xfc };
+    static constexpr uint8_t Do { 0xfd };
+    static constexpr uint8_t Dont { 0xfe };
+
+    static constexpr uint8_t Eof { 0xec };
+
+    auto* ptr = reinterpret_cast<uint8_t*>(pb->payload);
+    uint16_t len { pb->len };
+
+    bool out { true };
+
+    while (out && (len >= 2)) {
+        switch (ptr[0]) {
+        case Iac:
+            switch (ptr[1]) {
+            case Will:
+            case Wont:
+            case Do:
+            case Dont:
+                if (len >= 3) {
+                    ptr += 3;
+                    len -= 3;
+                    continue;
+                }
+
+                break;
+
+            case Eof:
+                len = 0;
+                out = false;
+                ptr = nullptr;
+                break;
+            }
+
+            break;
+        }
+
+        break;
+    }
+
+    pb->len = len;
+    pb->payload = ptr;
+
+    return out;
+}
+
 // tracks the provided TCP `pcb`, cannot instantiate one by itself
 class Client {
 public:
@@ -587,6 +638,11 @@ private:
         // socat, netcat, etc. usually send a single packet per line.
         // Otherwise, try to buffer it and everything else in the chain.
         for (auto it = pb; it != nullptr; it = it->next) {
+            // In case connection happens from an actual telnet client
+            if (!process_rfc854(pb)) {
+                return close();
+            }
+
             auto view = line_view(it);
             if (_line_buffer.size()) {
                 goto next;

@@ -1,0 +1,41 @@
+<template id="template-network-config">
+    <div>
+        <div class="pure-control-group">
+            <label>SSID #<span data-key="template-id"></span></label>
+            <input name="ssid" type="text" value="" data-action="reconnect" required autocomplete="off">
+            <button type="button" class="pure-button button-more-parent">...</button>
+        </div>
+
+        <div class="pure-control-group more">
+            <label>Password</label>
+            <input name="pass" type="password" data-action="reconnect" autocomplete="new-password" spellcheck="false">
+            <span class="no-select password-reveal"></span>
+        </div>
+
+        <div class="pure-control-group more">
+            <label>Static IP</label>
+            <input name="ip" type="text" data-action="reconnect" maxlength="15" autocomplete="off">
+            <span class="pure-form-message-inline">Leave empty to enable DHCP</span>
+        </div>
+
+        <div class="pure-control-group more">
+            <label>Gateway IP</label>
+            <input name="gw" type="text" data-action="reconnect" maxlength="15" autocomplete="off">
+            <span class="pure-form-message-inline">Set when using a static IP</span>
+        </div>
+
+        <div class="pure-control-group more">
+            <label>Network Mask</label>
+            <input name="mask" type="text" data-action="reconnect" maxlength="15" autocomplete="off">
+            <span class="pure-form-message-inline">Usually 255.255.255.0 for /24 networks</span>
+        </div>
+
+        <div class="pure-control-group more">
+            <label>DNS IP</label>
+            <input name="dns" type="text" value="" data-action="reconnect" maxlength="15" autocomplete="off">
+            <span class="pure-form-message-inline">Set the Domain Name Server IP to use when using a static IP</span>
+        </div>
+
+        <button class="pure-button button-del-settings-group more" type="button">Delete network</button>
+    </div>
+</template>

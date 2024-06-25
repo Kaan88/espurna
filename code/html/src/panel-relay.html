@@ -1,0 +1,48 @@
+<form id="form-relay" class="pure-form pure-form-aligned form-settings">
+    <div class="panel" id="panel-relay">
+
+        <div class="header">
+            <h1>RELAYS</h1>
+            <h2>Relay configuration</h2>
+        </div>
+
+        <div class="page">
+
+            <fieldset class="module module-multirelay">
+
+                <legend>Synchronization</legend>
+
+                <div class="pure-control-group">
+                    <label>Mode</label>
+                    <select name="relaySync" class="pure-input-2-3">
+                        <option value="disabled">Disabled</option>
+                        <option value="zero-or-one">Zero or just one relay should be ON</option>
+                        <option value="just-one">Only one relay should be ON</option>
+                        <option value="all">All relays are synchronised</option>
+                        <option value="first">Switch #0 controls everything else</option>
+                    </select>
+                    <span class="pure-form-message">
+                        Defines how the multiple relays should be synchronized.
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Interlock delay</label>
+                    <input name="relayIlkDelay" type="number" min="0">
+                    <span class="pure-form-message">
+                        (ms) Wait for the specified time before applying the relay status, when multiple relays change simultaneously.
+                    </span>
+                </div>
+
+            </fieldset>
+
+            <fieldset>
+                <legend>Individual relay settings</legend>
+
+                <div id="relayConfig" class="settings-group">
+                </div>
+            </fieldset>
+
+        </div>
+    </div>
+</form>

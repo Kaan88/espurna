@@ -332,6 +332,10 @@ constexpr PayloadStatus mqttDisconnectionStatus(size_t index) {
     );
 }
 
+constexpr duration::Seconds mqttDisconnectionDelay() {
+    return RELAY_MQTT_DISCONNECT_DELAY;
+}
+
 #endif
 
 } // namespace
@@ -408,16 +412,18 @@ PROGMEM_STRING(Mode, "relayPulse");
 
 namespace {
 
+using DurationPair = espurna::settings::internal::duration_convert::Pair;
 using ParseResult = espurna::settings::internal::duration_convert::Result;
 
-Duration native_duration(ParseResult result) {
+Duration native_duration(DurationPair pair) {
     using namespace espurna::settings::internal;
+    return duration_convert::to_chrono_duration<Duration>(pair);
+}
 
-    if (result.ok) {
-        return duration_convert::to_chrono_duration<Duration>(result.value);
-    }
-
-    return Duration::min();
+Duration native_duration(ParseResult result) {
+    return result.ok
+        ? native_duration(result.value)
+        : Duration::min();
 }
 
 ParseResult parse_time(StringView view) {
@@ -916,7 +922,8 @@ PROGMEM_STRING(DelayOff, "relayDelayOff");
 PROGMEM_STRING(TopicPub, "relayTopicPub");
 PROGMEM_STRING(TopicSub, "relayTopicSub");
 PROGMEM_STRING(TopicMode, "relayTopicMode");
-PROGMEM_STRING(MqttDisconnection, "relayMqttDisc");
+PROGMEM_STRING(MqttDelay, "relayMqttDelay");
+PROGMEM_STRING(MqttStatus, "relayMqttDisc");
 #endif
 
 PROGMEM_STRING(Dummy, "relayDummy");
@@ -1022,9 +1029,14 @@ RelayMqttTopicMode mqttTopicMode(size_t index) {
     return getSetting({keys::TopicMode, index}, build::mqttTopicMode(index));
 }
 
-PayloadStatus mqttDisconnectionStatus(size_t index) {
-    return getSetting({keys::MqttDisconnection, index}, build::mqttDisconnectionStatus(index));
+duration::Seconds mqttDisconnectionDelay() {
+    return getSetting(keys::MqttDelay, build::mqttDisconnectionDelay());
 }
+
+PayloadStatus mqttDisconnectionStatus(size_t index) {
+    return getSetting({keys::MqttStatus, index}, build::mqttDisconnectionStatus(index));
+}
+
 #endif
 
 } // namespace
@@ -1068,6 +1080,7 @@ String pulseTime(size_t index) {
 }
 
 #if MQTT_SUPPORT
+EXACT_VALUE(mqttDisconnectionDelay, settings::mqttDisconnectionDelay)
 ID_VALUE(mqttDisconnectionStatus, settings::mqttDisconnectionStatus)
 ID_VALUE(mqttTopicMode, settings::mqttTopicMode)
 #endif
@@ -1078,10 +1091,13 @@ ID_VALUE(mqttTopicMode, settings::mqttTopicMode)
 } // namespace internal
 
 static constexpr espurna::settings::query::Setting Settings[] PROGMEM {
-    {keys::Dummy, internal::dummyCount},
     {keys::BootMask, internal::bootMask},
+    {keys::Dummy, internal::dummyCount},
     {keys::Interlock, internal::interlockDelay},
-    {keys::Sync, internal::syncMode}
+#if MQTT_SUPPORT
+    {keys::MqttDelay, internal::mqttDisconnectionDelay},
+#endif
+    {keys::Sync, internal::syncMode},
 };
 
 static constexpr espurna::settings::query::IndexedSetting IndexedSettings[] PROGMEM {
@@ -1100,7 +1116,7 @@ static constexpr espurna::settings::query::IndexedSetting IndexedSettings[] PROG
     {keys::TopicPub, settings::mqttTopicPub},
     {keys::TopicSub, settings::mqttTopicSub},
     {keys::TopicMode, internal::mqttTopicMode},
-    {keys::MqttDisconnection, internal::mqttDisconnectionStatus},
+    {keys::MqttStatus, internal::mqttDisconnectionStatus},
 #endif
 };
 
@@ -1359,6 +1375,10 @@ String _relay_payload_off;
 String _relay_payload_toggle;
 
 #endif // MQTT_SUPPORT || API_SUPPORT
+
+#if MQTT_SUPPORT
+espurna::timer::SystemTimer _relay_mqtt_timer;
+#endif
 
 } // namespace
 
@@ -1707,25 +1727,30 @@ void _relayProcessPulse(const Relay& relay, size_t id, bool status) {
     }
 }
 
-// expects generic time input which is converted to float first
 // duration equal to 0 would cancel existing timer
 // duration greater than 0 would toggle relay and schedule a timer
+[[gnu::unused]]
+void _relayHandlePulseResult(size_t id, espurna::settings::internal::duration_convert::Result result) {
+    using namespace espurna::relay;
+
+    const auto native = pulse::settings::native_duration(result);
+    if (native.count() == 0) {
+        pulse::reset(id);
+    }
+
+    pulse::schedule(native, id, relayStatus(id));
+    relayToggle(id, true, false);
+}
+
+// expects generic time input which is converted to float first
 [[gnu::unused]]
 bool _relayHandlePulsePayload(size_t id, espurna::StringView payload) {
 
     using namespace espurna::relay;
-    const auto duration = pulse::settings::parse_time(payload);
+    const auto result = pulse::settings::parse_time(payload);
 
-    if (duration.ok) {
-        const auto native = pulse::settings::native_duration(duration);
-        if (native.count() == 0) {
-            pulse::reset(id);
-            return true;
-        }
-
-        pulse::schedule(native, id, relayStatus(id));
-        relayToggle(id, true, false);
-
+    if (result.ok) {
+        _relayHandlePulseResult(id, result);
         return true;
     }
 
@@ -2607,6 +2632,12 @@ private:
     RelayMqttTopicMode _mode;
 };
 
+void _relayMqttSubscribeBaseTopics() {
+    mqttSubscribe(MQTT_TOPIC_RELAY "/+");
+    mqttSubscribe(MQTT_TOPIC_PULSE "/+");
+    mqttSubscribe(MQTT_TOPIC_LOCK "/+");
+}
+
 std::forward_list<RelayCustomTopic> _relay_custom_topics;
 
 void _relayMqttSubscribeCustomTopics() {
@@ -2740,11 +2771,42 @@ void _relayMqttHandleCustomTopic(espurna::StringView topic, espurna::StringView 
     }
 }
 
-void _relayMqttHandleDisconnect() {
+void _relayMqttHandleDisconnectImmediate() {
     using namespace espurna::relay::settings;
     for (size_t id = 0; id < _relays.size(); ++id) {
         _relayHandleStatus(id, mqttDisconnectionStatus(id));
     }
+}
+
+void _relayMqttHandleDisconnect() {
+    using namespace espurna::relay::settings;
+    const auto delay = mqttDisconnectionDelay();
+
+    if (!delay.count()) {
+        _relayMqttHandleDisconnectImmediate();
+        return;
+    }
+
+    std::vector<PayloadStatus> relays;
+    relays.reserve(_relays.size());
+
+    for (size_t id = 0; id < _relays.size(); ++id) {
+        relays.push_back(mqttDisconnectionStatus(id));
+    }
+
+    _relay_mqtt_timer.once(
+        delay,
+        [relays]() {
+            for (size_t id = 0; id < relays.size(); ++id) {
+                _relayHandleStatus(id, relays[id]);
+            }
+        });
+}
+
+void _relayMqttHandleConnect() {
+    _relayMqttSubscribeBaseTopics();
+    _relayMqttSubscribeCustomTopics();
+    _relay_mqtt_timer.stop();
 }
 
 struct RelayMqttTopicHandler {
@@ -2772,10 +2834,7 @@ void relayMQTTCallback(unsigned int type, espurna::StringView topic, espurna::St
     }
 
     if (type == MQTT_CONNECT_EVENT) {
-        mqttSubscribe(MQTT_TOPIC_RELAY "/+");
-        mqttSubscribe(MQTT_TOPIC_PULSE "/+");
-        mqttSubscribe(MQTT_TOPIC_LOCK "/+");
-        _relayMqttSubscribeCustomTopics();
+        _relayMqttHandleConnect();
         connected = true;
         return;
     }
@@ -2959,10 +3018,11 @@ static void _relayCommandPulseTimers(::terminal::CommandContext&& ctx) {
         }
 
         ctx.output.printf_P(
-            PSTR("pulse%zu\t{%.*s Duration=%u Status=#%c}\n"),
+            PSTR("pulse%zu\t{%.*s Duration=%u Status=%s}\n"),
+            timer.id(),
             type.length(), type.data(),
-            timer.id(), timer.duration().count(),
-            timer.status() ? 't' : 'f');
+            timer.duration().count(),
+            timer.status() ? PSTR("ON") : PSTR("OFF"));
     }
 
     terminalOK(ctx);
@@ -3108,7 +3168,7 @@ bool _relayProcess(bool mode) {
             _relayScheduleSave(id);
             changed = true;
 
-            DEBUG_MSG_P(PSTR("[RELAY] #%u set to %s\n"), id, target ? "ON" : "OFF");
+            DEBUG_MSG_P(PSTR("[RELAY] #%u set to %s\n"), id, target ? PSTR("ON") : PSTR("OFF"));
         }
     }
 
