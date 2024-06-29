@@ -1,3 +1,13 @@
+/// <reference path="index.build.d.mts" />
+
+/**
+ * @typedef {function(string, any): void} Listener
+ */
+
+/**
+ * @typedef {{[k: string]: Listener}} Listeners
+ */
+
 import { notifyError } from './errors.mjs';
 window.onerror = notifyError;
 
@@ -48,29 +58,59 @@ import { init as initSensor } from './sensor.mjs';
 import { init as initThermostat } from './thermostat.mjs';
 import { init as initThingspeak } from './thingspeak.mjs';
 
+/** @type {number | null} */
 let KeepTime = null;
 
+/** @type {number} */
 let Ago = 0;
-let Now = {
+
+/**
+ * @typedef {{date: Date | null, offset: string}} NowType
+ * @type NowType
+ */
+
+const Now = {
     date: null,
     offset: "",
 };
 
+/**
+ * @param {{[k: string]: string}} cache
+ * @param {string} key
+ * @param {string} value
+ */
+function documentTitleCache(cache, key, value) {
+    cache[key] = value;
+    document.title = `${cache.hostname} - ${cache.app_name} ${cache.app_version}`;
+}
+
+/**
+ * @type {{[k: string]: string}}
+ */
 const __title_cache = {
     "hostname": "?",
     "app_name": "ESPurna",
     "app_version": "0.0.0",
 };
 
+/**
+ * @param {string} key
+ * @param {string} value
+ */
 function documentTitle(key, value) {
-    __title_cache[key] = value;
-    document.title = `${__title_cache.hostname} - ${__title_cache.app_name} ${__title_cache.app_version}`;
+    documentTitleCache(__title_cache, key, value);
 }
 
+/**
+ * @param {string} module
+ */
 function moduleVisible(module) {
     styleInject([`.module-${module} { display: revert; }`]);
 }
 
+/**
+ * @param {string[]} modules
+ */
 function modulesVisible(modules) {
     modules.forEach((module) => {
         moduleVisible(module);
@@ -80,10 +120,13 @@ function modulesVisible(modules) {
 function modulesVisibleAll() {
     document.querySelectorAll("[class*=module-]")
         .forEach((elem) => {
-            elem.style.display = "revert";
+            /** @type {HTMLElement} */(elem).style.display = "revert";
         });
 }
 
+/**
+ * @param {string} value
+ */
 function deviceNow(value) {
     try {
         Now.date = normalizedDate(value);
@@ -93,60 +136,93 @@ function deviceNow(value) {
     }
 }
 
+/**
+ * @param {string} value
+ */
 function onAction(value) {
     if ("reload" === value) {
         pageReloadIn(1000);
     }
 }
 
+/**
+ * @param {string} value
+ */
 function onMessage(value) {
     window.alert(value);
 }
 
+/**
+ * @param {number} value
+ */
 function initWebMode(value) {
     const initial = (1 === value);
 
-    const layout = document.getElementById("layout");
-    layout.style.display = initial ? "none" : "inherit";
+    const layout = document.getElementById("layout")
+    if (layout) {
+        layout.style.display = (initial ? "none" : "inherit");
+    }
 
     const password = document.getElementById("password");
-    password.style.display = initial ? "inherit" : "none";
+    if (password) {
+        password.style.display = initial ? "inherit" : "none";
+    }
 }
 
-function deviceUptime() {
-    Ago = 0;
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function timestampDatetime(value) {
+    return value.slice(0, 19);
 }
 
-function timestampDatetime(timestamp) {
-    return timestamp.slice(0, 19);
-}
-
-function timestampOffset(timestamp) {
-    if (timestamp.endsWith("Z")) {
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function timestampOffset(value) {
+    if (value.endsWith("Z")) {
         return "Z";
     }
 
-    return timestamp.slice(-6);
+    return value.slice(-6);
 }
 
+/**
+ * @param {NowType} now
+ * @returns {string}
+ */
 function displayDatetime(now) {
-    let datetime = timestampDatetime(now.date.toISOString());
-    datetime = datetime.replace("T", " ");
-    datetime = `${datetime} ${now.offset}`;
+    if (now.date) {
+        let datetime = timestampDatetime(now.date.toISOString());
+        datetime = datetime.replace("T", " ");
+        datetime = `${datetime} ${now.offset}`;
+        return datetime;
+    }
 
-    return datetime;
+    return "?";
 }
 
-function normalizedTimestamp(timestamp) {
-    return `${timestampDatetime(timestamp)}Z`;
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizedTimestamp(value) {
+    return `${timestampDatetime(value)}Z`;
 }
 
-function normalizedDate(timestamp) {
-    return new Date(normalizedTimestamp(timestamp));
+/**
+ * @param {string} value
+ * @returns {Date}
+ */
+function normalizedDate(value) {
+    return new Date(normalizedTimestamp(value));
 }
+
 
 function keepTime() {
-    document.querySelector("span[data-key='app:ago']").textContent = Ago;
+    document.querySelector("span[data-key='app:ago']").textContent = Ago.toString();
     ++Ago;
 
     if (null !== Now.date) {
@@ -156,6 +232,9 @@ function keepTime() {
     }
 }
 
+/**
+ * @returns {Listeners}
+ */
 function listeners() {
     return {
         "action": (_, value) => {
@@ -173,13 +252,15 @@ function listeners() {
         "now": (_, value) => {
             deviceNow(value);
         },
-        "uptime": deviceUptime,
         "webMode": (_, value) => {
             initWebMode(value);
         },
     };
 }
 
+/**
+ * @returns {string}
+ */
 function generatePassword() {
     let password = "";
     do {
@@ -189,6 +270,9 @@ function generatePassword() {
     return password;
 }
 
+/**
+ * @param {HTMLFormElement} form
+ */
 function generatePasswordsForForm(form) {
     const value = generatePassword();
     for (let elem of [form.elements.adminPass0, form.elements.adminPass1]) {
@@ -198,13 +282,16 @@ function generatePasswordsForForm(form) {
     }
 }
 
+/**
+ * @param {HTMLFormElement} form
+ */
 function initSetupPassword(form) {
     document.querySelector(".button-setup-password")
         .addEventListener("click", (event) => {
             event.preventDefault();
             const forms = [form];
             if (validateFormsPasswords(forms, true)) {
-                applySettings(getData(forms, true, false));
+                applySettings(getData(forms, true));
             }
         });
     document.querySelector(".button-generate-password")
@@ -214,23 +301,37 @@ function initSetupPassword(form) {
         });
 }
 
+/**
+ * @param {Event} event
+ * @returns {any}
+ */
 function toggleMenu(event) {
     event.preventDefault();
-    event.target.parentElement.classList.toggle("active");
+    /** @type {HTMLElement} */(event.target).parentElement?.classList.toggle("active");
 }
 
+/**
+ * @param {Event} event
+ */
 function toggleVisiblePassword(event) {
-    let elem = event.target.previousElementSibling;
-    if (elem.type === "password") {
-        elem.type = "text";
+    const target = /** @type {HTMLSpanElement} */(event.target);
+    const input = /** @type {HTMLInputElement} */(target.previousElementSibling);
+
+    if (input.type === "password") {
+        input.type = "text";
     } else {
-        elem.type = "password";
+        input.type = "password";
     }
 }
 
+/**
+ * @param {MessageEvent<any>} event
+ */
 function onJsonPayload(event) {
+    Ago = 0;
+
     if (!KeepTime) {
-        KeepTime = setInterval(keepTime, 1000);
+        KeepTime = window.setInterval(keepTime, 1000);
     }
 
     try {
@@ -359,7 +460,7 @@ function init() {
             webMode: 0,
             now: "2024-01-01T00:00:00+01:00",
         });
-        KeepTime = setInterval(keepTime, 1000);
+        KeepTime = window.setInterval(keepTime, 1000);
         modulesVisibleAll();
         return;
     }
