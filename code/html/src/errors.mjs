@@ -1,49 +1,94 @@
-export function showErrorNotification(message) {
-    let container = document.getElementById("error-notification");
-    if (container.childElementCount > 0) {
-        return false;
-    }
+import { loadTemplate, mergeTemplate } from './template.mjs';
 
-    container.style.display = "inherit";
-    container.style.whiteSpace = "pre-wrap";
-
-    let notification = document.createElement("div");
-    notification.classList.add("pure-u-1");
-    notification.classList.add("pure-u-lg-1");
-    notification.textContent = message;
-
-    container.appendChild(notification);
-
-    return false;
+/**
+ * @param {Error} error
+ * @returns {string}
+ */
+export function formatError(error) {
+    return [error.name, error.message, error.stack].join("\n");
 }
 
-export function notifyError(message, source, lineno, colno, error) {
-    if (!source && error) {
-        source = error.fileName;
+/**
+ * @param {string} source
+ * @param {number} lineno
+ * @param {number} colno
+ */
+export function formatSource(source, lineno, colno) {
+    return `${source || "?"}:${lineno ?? "?"}:${colno ?? "?"}:`;
+}
+
+/** @type {number} */
+let __errors = 0;
+
+/**
+ * @param {string} text
+ */
+export function showNotification(text) {
+    const container = document.getElementById("error-notification");
+    if (!container) {
+        return;
     }
 
-    if (!lineno && error) {
-        lineno = error.lineNumber;
+    __errors += 1;
+    text += "\n\nFor more info see the Debug Log and / or Developer Tools console.";
+
+    if (0 === container.childElementCount) {
+        container.classList.add("show-error");
+        mergeTemplate(
+            container, loadTemplate("error-notification"));
     }
 
-    if (!colno && error) {
-        colno = error.columnNumber;
+    container.children[0].textContent = text;
+    if (0 !== container.childElementCount) {
+        container.children[1].textContent =
+            `\n(${__errors} unhandled errors so far)`;
     }
+}
 
-    let text = '';
+/**
+ * @param {string} message
+ * @param {string} source
+ * @param {number} lineno
+ * @param {number} colno
+ * @param {any} error
+ * @return {string}
+ */
+export function formatErrorEvent(message, source, lineno, colno, error) {
+    let text = "";
     if (message) {
         text += message;
     }
 
-    if (source && lineno && colno) {
-        text += ` ${source}:${lineno}:${colno}:`;
+    if (source || lineno || colno) {
+        text += ` ${source || "?"}:${lineno ?? "?"}:${colno ?? "?"}:`;
     }
 
-    if (error) {
-        text += error.stack;
+    if (error instanceof Error) {
+        text += formatError(error);
     }
 
-    text += "\n\nFor more info see the Debug Log and / or Developer Tools console.";
+    return text;
+}
 
-    return showErrorNotification(text);
+/** @param {string} message */
+export function notifyMessage(message) {
+    showNotification(
+        formatErrorEvent(message, "", 0, 0, null));
+}
+
+/** @param {Error} error */
+export function notifyError(error) {
+    showNotification(
+        formatErrorEvent("", "", 0, 0, error));
+}
+
+/** @param {ErrorEvent} event */
+export function notifyErrorEvent(event) {
+    showNotification(
+        formatErrorEvent(
+            event.message,
+            event.filename,
+            event.lineno,
+            event.colno,
+            event.error));
 }

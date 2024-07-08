@@ -219,7 +219,7 @@ label {
 
 .button-reboot,
 .button-reconnect,
-.button-ha-clear,
+.button-ha-enabled,
 .button-rfb-forget,
 .button-lightfox-clear,
 .button-del-settings-group,
@@ -228,7 +228,8 @@ label {
 .button-clear-filters,
 .button-clear-messages,
 .button-clear-counts,
-.button-settings-factory {
+.button-settings-factory,
+.button-setup-password.button-setup-lenient {
     background: rgb(192, 0, 0); /* redish */
 }
 
@@ -237,7 +238,7 @@ label {
 .button-upgrade-browse,
 .button-rfb-learn,
 .button-lightfox-learn,
-.button-ha-publish,
+.button-ha-disabled,
 .button-settings-backup,
 .button-settings-restore,
 .button-garland-set-default,
@@ -328,7 +329,7 @@ input.checkbox-toggle {
     background: var(--toggle-bg);
     transition: var(--toggle-duration, .2s) cubic-bezier(.65, 0, .5, 1);
     user-select: none;
-    outline: none;
+    outline: thin solid color-mix(in srgb, var(--toggle-bg) 25%, rgba(0,0,0,.2));
     cursor: pointer;
 }
 
@@ -491,6 +492,11 @@ input[disabled].checkbox-toggle {
 #uploader,
 #downloader {
     display: none;
+}
+
+#error-notification.show-error {
+    display: inherit;
+    white-space: pre-wrap;
 }
 
 /* -----------------------------------------------------------------------------

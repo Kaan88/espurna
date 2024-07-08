@@ -16,6 +16,7 @@ case "$1" in
     popd
     ;;
 ("webui")
+    npm exec --no -- vitest --environment jsdom --dir html/spec --run
     npm exec --no -- eslint
     npm exec --no -- html-validate html/src/*.html
     # checks whether the webui can be built

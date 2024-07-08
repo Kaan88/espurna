@@ -1,34 +1,62 @@
-import { addFromTemplate } from './template.mjs';
-import { groupSettingsOnAdd, fromSchema, variableListeners } from './settings.mjs';
+import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
+import { groupSettingsOnAddElem, variableListeners } from './settings.mjs';
 import { sendAction } from './connection.mjs';
 
-let State = {
-    filters: {}
-};
+/**
+ * @typedef {Map<number, string>} FiltersMap
+ */
 
-function addMapping(cfg) {
-    addFromTemplate(document.getElementById("rfm69-mapping"), "rfm69-node", cfg);
+/** @type {FiltersMap} */
+const Filters = new Map();
+
+/** @param {function(HTMLTableElement): void} callback */
+function withTable(callback) {
+    callback(/** @type {!HTMLTableElement} */
+        (document.getElementById("rfm69-messages")));
 }
 
-function messages() {
-    let [body] = document.getElementById("rfm69-messages").tBodies;
-    return body;
+/** @param {function(HTMLTableSectionElement): void} callback */
+function withMessages(callback) {
+    withTable((elem) => {
+        callback(elem.tBodies[0]);
+    });
 }
 
-function rows() {
-    return messages().rows;
-}
-
+/** @param {[number, number, number, string, string, number, number, number]} message */
 function addMessage(message) {
-    let timestamp = (new Date()).toLocaleTimeString("en-US", {hour12: false});
+    withTable((elem) => {
+        const timestamp = (new Date())
+            .toLocaleTimeString("en-US", {hour12: false});
 
-    let container = messages();
-    let row = container.insertRow();
-    for (let value of [timestamp, ...message]) {
-        let cell = row.insertCell();
-        cell.appendChild(document.createTextNode(value));
-        filterRow(State.filters, row);
-    }
+        const row = elem.tBodies[0].insertRow();
+        for (let value of [timestamp, ...message]) {
+            const cell = row.insertCell();
+            cell.appendChild(
+                document.createTextNode(value.toString()));
+            filterRow(Filters, row);
+        }
+    });
+}
+
+/** @param {function(HTMLElement): void} callback */
+function withMapping(callback) {
+    callback(/** @type {!HTMLElement} */
+        (document.getElementById("rfm69-mapping")));
+}
+
+/** @param {HTMLElement} elem */
+function addMappingNode(elem) {
+    addFromTemplate(elem, "rfm69-node", {});
+}
+
+/** @param {any} value */
+function onMapping(value) {
+    withMapping((elem) => {
+        addFromTemplateWithSchema(
+            elem, "rfm69-node",
+            value.mapping, value.schema,
+            value.max ?? 0);
+    });
 }
 
 function clearCounters() {
@@ -37,59 +65,84 @@ function clearCounters() {
 }
 
 function clearMessages() {
-    let container = messages();
-    while (container.rows.length) {
-        container.deleteRow(0);
-    }
+    withMessages((elem) => {
+        while (elem.rows.length) {
+            elem.deleteRow(0);
+        }
+    });
+
     return false;
 }
 
+/**
+ * @param {FiltersMap} filters
+ * @param {HTMLTableRowElement} row
+ */
 function filterRow(filters, row) {
     row.style.display = "table-row";
-    for (const [cell, filter] of Object.entries(filters)) {
+    for (const [cell, filter] of filters) {
         if (row.cells[cell].textContent !== filter) {
             row.style.display = "none";
         }
     }
 }
 
+/**
+ * @param {FiltersMap} filters
+ * @param {HTMLTableRowElement[]} rows
+ */
 function filterRows(filters, rows) {
     for (let row of rows) {
         filterRow(filters, row);
     }
 }
 
+/** @param {Event} event */
 function filterEvent(event) {
-    if (event.target.classList.contains("filtered")) {
-        delete State.filters[event.target.cellIndex];
-    } else {
-        State.filters[event.target.cellIndex] = event.target.textContent;
+    if (!(event.target instanceof HTMLTableCellElement)) {
+        return;
     }
-    event.target.classList.toggle("filtered");
 
-    filterRows(State.filters, rows());
+    if (!event.target.textContent) {
+        return;
+    }
+
+    const index = event.target.cellIndex;
+    if (event.target.classList.contains("filtered")) {
+        Filters.delete(index);
+    } else {
+        Filters.set(index, event.target.textContent);
+    }
+
+    event.target.classList.toggle("filtered");
+    withMessages((elem) => {
+        filterRows(Filters, Array.from(elem.rows));
+    });
 }
 
 function clearFilters() {
-    let container = messages();
-    for (let elem of container.querySelectorAll("filtered")) {
-        elem.classList.remove("filtered");
-    }
+    withMessages((elem) => {
+        for (let filtered of elem.querySelectorAll("filtered")) {
+            filtered.classList.remove("filtered");
+        }
 
-    State.filters = {};
-    filterRows(State.filters, container.rows);
+        Filters.clear();
+        filterRows(Filters, Array.from(elem.rows));
+    });
 }
 
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
 function listeners() {
     return {
         "rfm69": (_, value) => {
             if (value.message !== undefined) {
                 addMessage(value.message);
             }
+
             if (value.mapping !== undefined) {
-                value.mapping.forEach((mapping) => {
-                    addMapping(fromSchema(mapping, value.schema));
-                });
+                onMapping(value);
             }
         },
     };
@@ -99,16 +152,18 @@ export function init() {
     variableListeners(listeners());
 
     document.querySelector(".button-clear-counts")
-        .addEventListener("click", clearCounters);
+        ?.addEventListener("click", clearCounters);
     document.querySelector(".button-clear-messages")
-        .addEventListener("click", clearMessages);
+        ?.addEventListener("click", clearMessages);
 
     document.querySelector(".button-clear-filters")
-        .addEventListener("click", clearFilters);
+        ?.addEventListener("click", clearFilters);
     document.querySelector("#rfm69-messages tbody")
-        .addEventListener("click", filterEvent);
+        ?.addEventListener("click", filterEvent);
 
-    groupSettingsOnAdd("rfm69-mapping", () => {
-        addMapping();
+    withMapping((elem) => {
+        groupSettingsOnAddElem(elem, () => {
+            addMappingNode(elem);
+        });
     });
 }

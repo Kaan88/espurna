@@ -1,6 +1,7 @@
 import { createNodeList } from './relay.mjs';
 import { variableListeners } from './settings.mjs';
 
+/** @returns {import('./settings.mjs').KeyValueListeners} */
 function listeners() {
     return {
         "tspkRelays": (_, value) => {

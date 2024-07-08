@@ -3315,33 +3315,35 @@ void errors(JsonObject& root) {
 }
 
 void units(JsonObject& root) {
-    espurna::web::ws::EnumerablePayload payload{root, STRING_VIEW("units")};
-    payload(STRING_VIEW("values"), magnitude::internal::magnitudes.size(),
-        {{STRING_VIEW("supported"), [](JsonArray& out, size_t index) {
-            JsonArray& units = out.createNestedArray();
-            const auto range = units::range(magnitude::get(index).type);
-            for (auto it = range.begin(); it != range.end(); ++it) {
-                JsonArray& unit = units.createNestedArray();
-                unit.add(static_cast<int>(*it)); // raw id
-                unit.add(units::name(*it));  // as string
-            }
-        }}
-    });
+    JsonArray& units = root.createNestedArray(STRING_VIEW("units"));
+
+    for (size_t index = 0; index < magnitude::internal::magnitudes.size(); ++index) {
+        JsonArray& supported = units.createNestedArray();
+
+        const auto range = units::range(magnitude::get(index).type);
+        for (auto it = range.begin(); it != range.end(); ++it) {
+            JsonArray& unit = supported.createNestedArray();
+            unit.add(static_cast<int>(*it)); // raw id
+            unit.add(units::name(*it));  // as string
+        }
+    }
 }
 
 void initial(JsonObject& root) {
-    if (!magnitude::count()) {
+    if (!sensor::ready()) {
         return;
     }
 
-    JsonObject& container = root.createNestedObject(F("magnitudes-init"));
-    types(container);
-    errors(container);
-    units(container);
+    JsonObject& init =
+        root.createNestedObject(F("magnitudes-init"));
+
+    types(init);
+    errors(init);
+    units(init);
 }
 
 void list(JsonObject& root) {
-    if (!magnitude::count()) {
+    if (!sensor::ready()) {
         return;
     }
 
@@ -3363,7 +3365,7 @@ void list(JsonObject& root) {
 }
 
 void settings(JsonObject& root) {
-    if (!magnitude::count()) {
+    if (!sensor::ready()) {
         return;
     }
 
@@ -3395,7 +3397,7 @@ void settings(JsonObject& root) {
             if (!std::isnan(threshold)) {
                 out.add(threshold);
             } else {
-                out.add(NullSymbol);
+                out.add("NaN");
             }
         }},
         {settings::suffix::MinDelta, [](JsonArray& out, size_t index) {
@@ -4250,10 +4252,6 @@ void configure_base() {
     energy::every(sensor::settings::saveEvery());
 }
 
-bool ready() {
-    return State::Reading == internal::state;
-}
-
 void configure() {
     configure_base();
     configure_magnitudes();
@@ -4301,6 +4299,10 @@ void setup() {
 } // namespace
 
 PreInit::~PreInit() = default;
+
+bool ready() {
+    return State::Reading == internal::state;
+}
 
 void add_preinit(PreInitPtr ptr) {
     internal::pre_init.push_front(std::move(ptr));

@@ -1,27 +1,42 @@
-import { askAndCall, askSaveSettings } from './question.mjs';
+import { askAndCall } from './question.mjs';
+import { askSaveSettings } from './settings.mjs';
 import { sendAction } from './connection.mjs';
 
-function checkTempRange(event) {
-    const min = document.getElementById("tempRangeMinInput");
-    const max = document.getElementById("tempRangeMaxInput");
-
-    if (event.target.id === max.id) {
+/**
+ * @param {HTMLInputElement} min
+ * @param {HTMLInputElement} max
+ */
+function checkTempMax(min, max) {
+    return function() {
         const maxValue = parseInt(max.value, 10) - 1;
         if (parseInt(min.value, 10) > maxValue) {
-            min.value = maxValue;
-        }
-    } else {
-        const minValue = parseInt(min.value, 10) + 1;
-        if (parseInt(max.value, 10) < minValue) {
-            max.value = minValue;
+            min.value = maxValue.toString();
         }
     }
+}
+
+/**
+ * @param {HTMLInputElement} min
+ * @param {HTMLInputElement} max
+ */
+function checkTempMin(min, max) {
+    return function() {
+        const minValue = parseInt(min.value, 10) + 1;
+        if (parseInt(max.value, 10) < minValue) {
+            max.value = minValue.toString();
+        }
+    }
+}
+
+/** @type {import("./question.mjs").QuestionWrapper} */
+function askResetCounters(ask) {
+    return ask("Are you sure you want to reset burning counters?");
 }
 
 function onResetCounters() {
     const questions = [
         askSaveSettings,
-        (ask) => ask("Are you sure you want to reset burning counters?")
+        askResetCounters,
     ];
 
     askAndCall(questions, () => {
@@ -31,9 +46,16 @@ function onResetCounters() {
 
 export function init() {
     document.querySelector(".button-thermostat-reset-counters")
-        .addEventListener("click", onResetCounters);
-    document.getElementById("tempRangeMaxInput")
-        .addEventListener("change", checkTempRange);
-    document.getElementById("tempRangeMinInput")
-        .addEventListener("change", checkTempRange);
+        ?.addEventListener("click", onResetCounters);
+
+    const [min, max] =
+        ["Min", "Max"]
+        .map((x) => `tempRange${x}Input`)
+        .map((x) => document.getElementById(x))
+        .filter((x) => x instanceof HTMLInputElement);
+
+    if (min && max) {
+        min.addEventListener("change", checkTempMin(min, max));
+        max.addEventListener("change", checkTempMax(min, max));
+    }
 }

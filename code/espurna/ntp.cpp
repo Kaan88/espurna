@@ -605,7 +605,7 @@ void report() {
 
     DEBUG_MSG_P(PSTR("[NTP] Using server %s\n"),
         info.server.c_str());
-    DEBUG_MSG_P(PSTR("[NTP] Last sync on (every %usec)\n"),
+    DEBUG_MSG_P(PSTR("[NTP] Last sync on %s (every %usec)\n"),
         info.last_sync.c_str(), info.update_interval.count());
 }
 

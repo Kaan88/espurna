@@ -1,14 +1,19 @@
-import { notifyError } from './errors.mjs';
-import { upgradeUrl } from './connection.mjs';
+import { notifyMessage } from './errors.mjs';
+import { connectionUrls } from './connection.mjs';
 import { variableListeners } from './settings.mjs';
 
-let FreeSize = 0;
+let __free_size = 0;
 
-/** 
- * @returns {HTMLInputElement} 
- */
-function buttonUpgrade() {
-    return document.querySelector(".button-upgrade");
+/** @param {function(HTMLInputElement): void} callback */
+function withUpgrade(callback) {
+    callback(/** @type {!HTMLInputElement} */
+        (document.querySelector("input[name=upgrade]")));
+}
+
+/** @param {function(HTMLProgressElement): void} callback */
+function withProgress(callback) {
+    callback(/** @type {!HTMLProgressElement} */
+        (document.querySelector("progress#upgrade-progress")));
 }
 
 /** 
@@ -56,49 +61,67 @@ function checkFlashMode(buffer) {
     return 0x03 === flashMode(buffer);
 }
 
+/**
+ * @param {Event} event
+ */
 function notifyValueError(event) {
-    notifyError(`ERROR while attempting OTA upgrade - XHR ${event.type}`, null, 0, 0, null);
+    notifyMessage(`ERROR while attempting OTA upgrade - XHR ${event.type}`);
 }
 
 /** 
- * @param {PointerEvent} event
+ * @param {Event} event
  */
 function onButtonClick(event) {
     event.preventDefault();
 
-    const elem = document.querySelector("input[name='upgrade']");
-    const file = elem.files[0];
+    const urls = connectionUrls();
+    if (!urls) {
+        alert("Not connected");
+        return;
+    }
 
-    const data = new FormData();
-    data.append("upgrade", file, file.name);
+    withUpgrade((upgrade) => {
+        const files = upgrade.files;
+        if (!files) {
+            alert("No file selected");
+            return;
+        }
 
-    const xhr = new XMLHttpRequest();
+        const data = new FormData();
+        data.append("upgrade", files[0], files[0].name);
 
-    xhr.addEventListener("error", notifyValueError, false);
-    xhr.addEventListener("abort", notifyValueError, false);
+        const xhr = new XMLHttpRequest();
 
-    const progress = document.getElementById("upgrade-progress");
-    xhr.addEventListener("load",
-        () => {
-            progress.style.display = "none";
-            if ("OK" === xhr.responseText) {
-                alert("Firmware image uploaded, board rebooting. This page will be refreshed in 5 seconds");
-            } else {
-                alert(`ERROR while attempting OTA upgrade - ${xhr.status.toString()} ${xhr.statusText}, ${xhr.responseText}`);
-            }
-        }, false);
+        xhr.addEventListener("error", notifyValueError, false);
+        xhr.addEventListener("abort", notifyValueError, false);
 
-    xhr.upload.addEventListener("progress",
-        (event) => {
-            progress.style.display = "inherit";
-            if (event.lengthComputable) {
-                progress.value = event.loaded;
-                progress.max = event.total;
-            }
-        }, false);
+        xhr.addEventListener("load",
+            () => {
+                if ("OK" === xhr.responseText) {
+                    alert("Firmware image uploaded, board rebooting. This page will be refreshed in 5 seconds");
+                } else {
+                    alert(`ERROR while attempting OTA upgrade - ${xhr.status.toString()} ${xhr.statusText}, ${xhr.responseText}`);
+                }
+            }, false);
 
-    xhr.open("POST", upgradeUrl().href);
-    xhr.send(data);
+        withProgress((progress) => {
+            xhr.addEventListener("load",
+                () => {
+                    progress.style.display = "none";
+                });
+            xhr.upload.addEventListener("progress",
+                (event) => {
+                    progress.style.display = "inherit";
+                    if (event.lengthComputable) {
+                        progress.value = event.loaded;
+                        progress.max = event.total;
+                    }
+                }, false);
+        });
+
+        xhr.open("POST", urls.upgrade.href);
+        xhr.send(data);
+    });
 }
 
 /** 
@@ -110,17 +133,36 @@ function roundedSize(size) {
 }
 
 /** 
- * @param {InputEvent} event
+ * @param {Event} event
  */
 async function onFileChanged(event) {
     event.preventDefault();
 
+    const button = document.querySelector(".button-upgrade");
+    if (!(button instanceof HTMLButtonElement)) {
+        return;
+    }
+
+    button.disabled = true;
+
+    if (!(event.target instanceof HTMLInputElement)) {
+        return;
+    }
+
+    if (!event.target.files || !event.target.files.length) {
+        return;
+    }
+
     const file = event.target.files[0];
-    document.querySelector("input[name='filename']").value = file.name;
+
+    const filename = document.querySelector("input[name=filename]");
+    if (filename instanceof HTMLInputElement) {
+        filename.value = file.name;
+    }
 
     const need = roundedSize(file.size);
-    if ((FreeSize !== 0) && (need > FreeSize)) {
-        alert(`OTA .bin cannot be uploaded. Need at least ${need}bytes of free space, ${FreeSize}bytes available.`);
+    if ((__free_size !== 0) && (need > __free_size)) {
+        alert(`OTA .bin cannot be uploaded. Need at least ${need}bytes of free space, ${__free_size}bytes available.`);
         return;
     }
 
@@ -138,14 +180,16 @@ async function onFileChanged(event) {
         }
     }
 
-    const button = buttonUpgrade();
     button.disabled = false;
 }
 
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
 function listeners() {
     return {
         "free_size": (_, value) => {
-            FreeSize = parseInt(value, 10);
+            __free_size = parseInt(value, 10);
         },
     };
 }
@@ -153,15 +197,23 @@ function listeners() {
 export function init() {
     variableListeners(listeners());
 
-    const upgrade = document.querySelector("input[name='upgrade']");
-    document.querySelector(".button-upgrade-browse")
-        .addEventListener("click", () => {
-            upgrade.click();
-        });
+    const [upgrade] = document.querySelectorAll("input[name=upgrade]");
+    if (!(upgrade instanceof HTMLInputElement)) {
+        return;
+    }
+
+    const [browse] = document.querySelectorAll(".button-upgrade-browse")
+    browse.addEventListener("click", () => {
+        upgrade.click();
+    });
 
     upgrade.addEventListener("change", onFileChanged);
 
-    const button = buttonUpgrade();
+    const button = document.querySelector(".button-upgrade");
+    if (!(button instanceof HTMLButtonElement)) {
+        return;
+    }
+
     button.addEventListener("click", onButtonClick);
     button.disabled = true;
 }

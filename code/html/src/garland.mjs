@@ -1,39 +1,38 @@
 import { sendAction } from './connection.mjs';
-import { variableListeners } from './settings.mjs';
 
-function listeners() {
-    return {
-        "garlandBrightness": (_, value) => {
-            const brightnessSlider = document.getElementById("garlandBrightness");
-            brightnessSlider.value = value;
-        },
-        "garlandSpeed": (_, value) => {
-            const speedSlider = document.getElementById("garlandSpeed");
-            speedSlider.value = value;
-        },
-    };
+/**
+ * @param {string} selector
+ * @param {function(HTMLInputElement): void} callback
+ */
+function withInputChange(selector, callback) {
+    const elem = document.querySelector(selector);
+    if (!(elem instanceof HTMLInputElement)) {
+        return;
+    }
+
+    elem.addEventListener("change", () => {
+        callback(elem);
+    });
 }
 
 export function init() {
-    variableListeners(listeners());
-
-    document.querySelector(".checkbox-garland-enable")
-        .addEventListener("change", (event) => {
-            sendAction("garland_switch", {status: event.target.checked ? 1 : 0});
+    withInputChange(".checkbox-garland-enable",
+        (elem) => {
+            sendAction("garland_switch", {status: elem.checked ? 1 : 0});
         });
 
-    document.querySelector(".slider-garland-brightness")
-        .addEventListener("change", (event) => {
-            sendAction("garland_set_brightness", {brightness: event.target.value});
+    withInputChange(".slider-garland-brightness",
+        (elem) => {
+            sendAction("garland_set_brightness", {brightness: elem.value});
         });
 
-    document.querySelector(".slider-garland-speed")
-        .addEventListener("change", (event) => {
-            sendAction("garland_set_speed", {speed: event.target.value});
+    withInputChange(".slider-garland-speed",
+        (elem) => {
+            sendAction("garland_set_speed", {speed: elem.value});
         });
 
     document.querySelector(".button-garland-set-default")
-        .addEventListener("click", () => {
+        ?.addEventListener("click", () => {
             sendAction("garland_set_default", {});
         });
 }

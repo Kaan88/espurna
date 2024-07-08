@@ -636,16 +636,16 @@ function serveWebUI(name, modules) {
         // external libs should be searched in node_modules/
         for (let value of Object.values(IMPORT_MAP)) {
             if (value === url.pathname) {
-                responseJsFile(response, path.join(NODE_DIR, name));
+                responseJsFile(response, path.join(NODE_DIR, value));
                 return;
             }
         }
 
         // everything else is attempted as html/src/${module}.mjs
         if (url.pathname.endsWith('.mjs')) {
-            const name = url.pathname.split('/').at(-1);
-            if (name !== undefined) {
-                responseJsFile(response, path.join(SRC_DIR, name));
+            const tail = url.pathname.split('/').at(-1);
+            if (tail !== undefined) {
+                responseJsFile(response, path.join(SRC_DIR, tail));
                 return;
             }
         }

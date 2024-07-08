@@ -1,8 +1,14 @@
-import { notifyError } from './errors.mjs';
+import { notifyError, notifyMessage } from './errors.mjs';
 import { pageReloadIn } from './core.mjs';
 
+/** @typedef {{auth: URL, config: URL, upgrade: URL, ws: URL}} ConnectionUrls */
+
+/**
+ * @param {URL} root
+ * @returns {URL}
+ */
 function makeWebSocketUrl(root) {
-    let out = new URL("ws", root);
+    const out = new URL("ws", root);
     out.protocol =
         (root.protocol === "https:")
             ? "wss:"
@@ -11,121 +17,219 @@ function makeWebSocketUrl(root) {
     return out;
 }
 
+/**
+ * @param {string} path
+ * @param {URL} root
+ * @returns {URL}
+ */
 function makeUrl(path, root) {
     let out = new URL(path, root);
     out.protocol = root.protocol;
     return out;
 }
 
-class UrlsBase {
-    constructor() {
-        this.auth = null;
-        this.config = null;
-        this.upgrade = null;
-        this.ws = null;
-    }
-
-    update(root) {
-        this.auth = makeUrl("auth", root);
-        this.config = makeUrl("config", root);
-        this.upgrade = makeUrl("upgrade", root);
-        this.ws = makeWebSocketUrl(root);
-    }
-};
-
-const Urls = new UrlsBase();
-
+/**
+ * @param {URL} root
+ * @returns ConnectionUrls
+ */
+function makeConnectionUrls(root) {
+    return {
+        auth: makeUrl("auth", root),
+        config: makeUrl("config", root),
+        upgrade: makeUrl("upgrade", root),
+        ws: makeWebSocketUrl(root),
+    };
+}
 class ConnectionBase {
     constructor() {
-        this.socket = null;
-        this.ping_pong = null;
+        /** @type {WebSocket | null} */
+        this._socket = null;
+
+        /** @type {number | null} */
+        this._ping_pong = null;
+
+        /** @type {ConnectionUrls | null} */
+        this._urls = null;
+    }
+
+    /** @returns {boolean} */
+    connected() {
+        return this._ping_pong !== null;
+    }
+
+    /** @returns {ConnectionUrls | null} */
+    urls() {
+        return this._urls !== null
+            ? Object.assign({}, this._urls)
+            : null;
     }
 };
 
-ConnectionBase.prototype.open = function(href, onmessage) {
-    this.socket = new WebSocket(href);
-    this.socket.onopen = () => {
-        this.ping_pong = setInterval(
+/**
+ * @callback OnMessage
+ * @param {MessageEvent} event
+ * @param {ConnectionBase} connection
+ * @returns {any}
+ */
+
+/**
+ * @callback OnOpen
+ * @param {Event} event
+ * @param {ConnectionBase} connection
+ * @returns {any}
+ */
+
+/**
+ * @callback OnClose
+ * @param {CloseEvent} event
+ * @param {ConnectionBase} connection
+ * @returns {any}
+ */
+
+/**
+ * @typedef {{onmessage?: OnMessage | null, onopen?: OnOpen | null, onclose?: OnClose | null}} ConnectionOptions
+ */
+
+/**
+ * @param {ConnectionUrls} urls
+ * @param {ConnectionOptions} options
+ */
+ConnectionBase.prototype.open = function(urls, {onopen = null, onclose = null, onmessage = null} = {}) {
+    this._socket = new WebSocket(urls.ws.href);
+    this._socket.onopen = (event) => {
+        this._ping_pong = setInterval(
             () => { sendAction("ping"); }, 5000);
+        if (onopen) {
+            onopen(event, this);
+        }
     };
-    this.socket.onclose = () => {
-        clearInterval(this.ping_pong);
+    this._socket.onclose = (event) => {
+        if (this._ping_pong) {
+            clearInterval(this._ping_pong);
+            this._ping_pong = null;
+        }
+        if (onclose) {
+            return onclose(event, this);
+        }
     };
-    this.socket.onmessage = onmessage;
+
+    if (onmessage) {
+        this._socket.onmessage = (event) => {
+            return onmessage(event, this);
+        };
+    }
 }
 
+/**
+ * @param {string} payload
+ * @throws {Error}
+ */
 ConnectionBase.prototype.send = function(payload) {
-    this.socket.send(payload);
+    if (!this._socket) {
+        throw new Error("WebSocket disconnected!");
+    }
+
+    this._socket.send(payload);
 }
 
 const Connection = new ConnectionBase();
 
-function onConnected(href, onmessage) {
-    Connection.open(href, onmessage);
+/**
+ * @returns {boolean}
+ */
+export function isConnected() {
+    return Connection.connected();
 }
 
+/**
+ * @returns {ConnectionUrls | null}
+ */
+export function connectionUrls() {
+    return Connection.urls();
+}
+
+/**
+ * @param {ConnectionUrls} urls
+ * @param {ConnectionOptions} options
+ */
+function onAuthorized(urls, options) {
+    Connection.open(urls, options);
+}
+
+/**
+ * @param {Error} error
+ */
 function onFetchError(error) {
-    notifyError(null, null, error.lineNumber, error.columnNumber, error);
+    notifyError(error);
     pageReloadIn(5000);
 }
 
+/**
+ * @param {Response} response
+ */
 function onError(response) {
-    notifyError(`${response.url} responded with status code ${response.status}, reloading the page`, null, 0, 0, null);
+    notifyMessage(`${response.url} responded with status code ${response.status}, reloading the page`);
     pageReloadIn(5000);
 }
 
-async function connectToURL(root, onmessage) {
-    Urls.update(root);
+/**
+ * @param {URL} root
+ * @param {ConnectionOptions} options
+ */
+async function connectToURL(root, options) {
+    const urls = makeConnectionUrls(root);
 
+    /** @type {RequestInit} */
     const opts = {
         'method': 'GET',
-        'cors': true,
         'credentials': 'same-origin',
+        'mode': 'cors',
     };
 
     try {
-        const response = await fetch(Urls.auth.href, opts);
+        const response = await fetch(urls.auth.href, opts);
         // Set up socket connection handlers
         if (response.status === 200) {
-            onConnected(Urls.ws.href, onmessage);
+            onAuthorized(urls, options);
         // Nothing to do, reload page and retry on errors
         } else {
             onError(response);
         }
     } catch (e) {
-        onFetchError(e);
+        onFetchError(/** @type {Error} */(e));
     }
 }
 
+/** @param {Event} event */
 async function onConnectEvent(event) {
-    await connectToURL(event.detail.url, event.detail.onmessage);
+    const detail = /** @type {CustomEvent<{url: URL, options: ConnectionOptions}>} */
+        (event).detail;
+    await connectToURL(
+        detail.url, detail.options);
 }
 
+/** @param {Event} event */
 function onSendEvent(event) {
-    Connection.send(event.detail.data);
+    Connection.send(/** @type {CustomEvent<{data: string}>} */
+        (event).detail.data);
 }
 
-export function configUrl() {
-    return Urls.config;
-}
-
-export function upgradeUrl() {
-    return Urls.upgrade;
-}
-
+/** @param {string} data */
 export function send(data) {
-    if (data === undefined) {
-        data = {};
-    }
     window.dispatchEvent(
         new CustomEvent("app-send", {detail: {data}}));
 }
 
-export function sendAction(action, data) {
+/**
+ * @param {string} action
+ * @param {any?} data
+ */
+export function sendAction(action, data = {}) {
     send(JSON.stringify({action, data}));
 }
 
-export function connect(onmessage) {
+/** @param {ConnectionOptions} options */
+export function connect(options) {
     // Optionally, support host=... param that could redirect to somewhere else
     // Note of the Cross-Origin rules that apply, and require device to handle them
     const search = new URLSearchParams(window.location.search);
@@ -137,7 +241,7 @@ export function connect(onmessage) {
 
     const url = (host) ? new URL(host) : window.location;
     window.dispatchEvent(
-        new CustomEvent("app-connect", {detail: {url, onmessage}}));
+        new CustomEvent("app-connect", {detail: {url, options}}));
 }
 
 export function init() {

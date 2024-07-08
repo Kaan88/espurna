@@ -1,3 +1,6 @@
+/**
+ * @param {string[]} rules
+ */
 export function styleInject(rules) {
     if (!rules.length) {
         return;
@@ -7,34 +10,59 @@ export function styleInject(rules) {
     style.setAttribute("type", "text/css");
     document.head.appendChild(style);
 
-    let pos = style.sheet.cssRules.length;
+    const sheet = style.sheet;
+    if (!sheet) {
+        return;
+    }
+
+    let pos = sheet.cssRules.length;
     for (let rule of rules) {
         style.sheet.insertRule(rule, pos++);
     }
 }
 
+/**
+ * @param {string} selector
+ * @param {boolean} value
+ */
 export function styleVisible(selector, value) {
     return `${selector} { content-visibility: ${value ? "visible": "hidden"}; }`
 }
 
-export function pageReloadIn(ms) {
-    setTimeout(() => {
-        window.location.reload();
-    }, parseInt(ms, 10));
+/**
+ * @param {number} timeout
+ */
+export function pageReloadIn(timeout) {
+    setTimeout(() => window.location.reload(), timeout);
 }
 
+/**
+ * @param {HTMLElement} container
+ */
 export function moreElem(container) {
-    for (let elem of container.querySelectorAll(".more")) {
-        elem.style.display = (elem.style.display === "")
-            ? "inherit" : "";
+    container.querySelectorAll(".more")
+        .forEach((elem) => {
+            if (!(elem instanceof HTMLElement)) {
+                return;
+            }
+
+            elem.style.display = (elem.style.display === "")
+                ? "inherit" : "";
+        });
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+export function lastMoreElem(elem) {
+    if (elem.lastChild instanceof HTMLElement) {
+        moreElem(elem.lastChild)
     }
 }
 
-export function toggleMenu(event) {
-    event.preventDefault();
-    event.target.parentElement.classList.toggle("active");
-}
-
+/**
+ * @param {string} name
+ */
 export function showPanelByName(name) {
     // only a single panel is shown on the 'layout'
     const target = document.getElementById(`panel-${name}`);
@@ -42,13 +70,20 @@ export function showPanelByName(name) {
         return;
     }
 
-    for (const panel of document.querySelectorAll(".panel")) {
+    for (const panel of document.getElementsByClassName("panel")) {
+        if (!(panel instanceof HTMLElement)) {
+            continue;
+        }
+
         panel.style.display = "none";
     }
+
     target.style.display = "revert";
 
     const layout = document.getElementById("layout");
-    layout.classList.remove("active");
+    if (layout) {
+        layout.classList.remove("active");
+    }
 
     // TODO: sometimes, switching view causes us to scroll past
     // the header (e.g. emon ratios panel on small screen)
@@ -59,32 +94,43 @@ export function showPanelByName(name) {
     }
 }
 
-export function showPanel(event) {
+/**
+ * @param {Event} event
+ */
+export function onPanelTargetClick(event) {
     event.preventDefault();
-    showPanelByName(event.target.dataset["panel"]);
-}
 
-export function randomString(length, args) {
-    if (typeof args === "undefined") {
-        args = {
-            lowercase: true,
-            uppercase: true,
-            numbers: true,
-            special: true
-        }
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+        return;
     }
 
+    const name = target.dataset["panel"];
+    if (name) {
+        showPanelByName(name);
+    }
+}
+
+/**
+ * @typedef {{hex?: boolean, lowercase?: boolean, numbers?: boolean, special?: boolean, uppercase?: boolean}} RandomStringOptions
+ *
+ * @param {number} length
+ * @param {RandomStringOptions} options
+ */
+export function randomString(length, {hex = false, lowercase = true, numbers = true, special = false, uppercase = true} = {}) {
     let mask = "";
-    if (args.lowercase) { mask += "abcdefghijklmnopqrstuvwxyz"; }
-    if (args.uppercase) { mask += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; }
-    if (args.numbers || args.hex) { mask += "0123456789"; }
-    if (args.hex) { mask += "ABCDEF"; }
-    if (args.special) { mask += "~`!@#$%^&*()_+-={}[]:\";'<>?,./|\\"; }
+    if (lowercase || hex) { mask += "abcdef"; }
+    if (lowercase) { mask += "ghijklmnopqrstuvwxyz"; }
+    if (uppercase || hex) { mask += "ABCDEF"; }
+    if (uppercase) { mask += "GHIJKLMNOPQRSTUVWXYZ"; }
+    if (numbers || hex) { mask += "0123456789"; }
+    if (special) { mask += "~`!@#$%^&*()_+-={}[]:\";'<>?,./|\\"; }
 
-    let source = new Uint32Array(length);
-    let result = new Array(length);
+    const source = new Uint32Array(length);
+    const result = new Array(length);
 
-    window.crypto.getRandomValues(source)
+    window.crypto
+        .getRandomValues(source)
         .forEach((value, i) => {
             result[i] = mask[value % mask.length];
         });

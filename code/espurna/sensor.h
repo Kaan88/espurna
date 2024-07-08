@@ -259,6 +259,8 @@ struct PreInit {
     virtual String description() const = 0;
 };
 
+bool ready();
+
 using PreInitPtr = std::unique_ptr<PreInit>;
 void add_preinit(PreInitPtr);
 

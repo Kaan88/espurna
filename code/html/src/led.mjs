@@ -1,37 +1,53 @@
 import {
     addSimpleEnumerables,
-    fromSchema,
-    groupSettingsOnAdd,
+    groupSettingsOnAddElem,
     variableListeners,
 } from './settings.mjs';
 
-import { addFromTemplate } from './template.mjs';
+import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
 
-function addNode(cfg) {
-    addFromTemplate(document.getElementById("leds"), "led-config", cfg);
+/** @param {function(HTMLElement): void} callback */
+function withLeds(callback) {
+    callback(/** @type {!HTMLElement} */
+        (document.getElementById("leds")));
 }
 
+/**
+ * @param {HTMLElement} elem
+ */
+function addLed(elem) {
+    addFromTemplate(elem, "led-config", {});
+}
+
+/**
+ * @param {any} value
+ */
+function onConfig(value) {
+    withLeds((elem) => {
+        addFromTemplateWithSchema(
+            elem, "led-config",
+            value.leds, value.schema,
+            value.max ?? 0);
+    });
+    addSimpleEnumerables("led", "LED", value.leds.length);
+}
+
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
 function listeners() {
     return {
         "ledConfig": (_, value) => {
-            let container = document.getElementById("leds");
-            if (container.childElementCount > 0) {
-                return;
-            }
-
-            value.leds.forEach((entries) => {
-                addNode(fromSchema(entries, value.schema));
-            });
-
-            addSimpleEnumerables("led", "LED", value.leds.length);
+            onConfig(value);
         },
     };
 };
 
 export function init() {
-    variableListeners(listeners());
-
-    groupSettingsOnAdd("leds", () => {
-        addNode();
+    withLeds((elem) => {
+        variableListeners(listeners());
+        groupSettingsOnAddElem(elem, () => {
+            addLed(elem);
+        });
     });
 }

@@ -1,213 +1,347 @@
 import { sendAction } from './connection.mjs';
-import { variableListeners } from './settings.mjs';
 
 import {
-    loadConfigTemplate,
-    loadTemplate,
-    mergeTemplate,
-} from './template.mjs';
-
-import {
-    showPanel,
+    onPanelTargetClick,
     showPanelByName,
     styleInject,
     styleVisible,
 } from './core.mjs';
 
 import {
-    fromSchema,
     initSelect,
     setChangedElement,
-    setOriginalsFromValuesForNode,
+    setOriginalsFromValues,
     setSelectValue,
+    variableListeners,
 } from './settings.mjs';
 
+import {
+    fromSchema,
+    loadConfigTemplate,
+    loadTemplate,
+    mergeTemplate,
+    NumberInput,
+} from './template.mjs';
+
+/** @typedef {{name: string, units: number, type: number, index_global: number, description: string}} Magnitude */
+
+/** @typedef {[number, string]} SupportedUnits */
+
 const Magnitudes = {
-    properties: {},
-    errors: {},
-    types: {},
+    /** @type {Map<number, Magnitude>} */
+    properties: new Map(),
+
+    /** @type {Map<number, string>} */
+    errors: new Map(),
+
+    /** @type {Map<number, string>} */
+    types: new Map(),
+
     units: {
-        names: {},
-        supported: {}
+        /** @type {Map<number, SupportedUnits[]>} */
+        supported: new Map(),
+
+        /** @type {Map<number, string>} */
+        names: new Map(),
     },
-    typePrefix: {},
-    prefixType: {}
+
+    /** @type {Map<number, string>} */
+    typePrefix: new Map(),
+
+    /** @type {Map<string, number>} */
+    prefixType: new Map(),
 };
 
+/**
+ * @param {Magnitude} magnitude
+ * @param {string} name
+ */
 function magnitudeTypedKey(magnitude, name) {
-    const prefix = Magnitudes.typePrefix[magnitude.type];
+    const prefix = Magnitudes.typePrefix
+        .get(magnitude.type);
     const index = magnitude.index_global;
     return `${prefix}${name}${index}`;
 }
 
-function initModuleMagnitudes(data) {
-    const targetId = `${data.prefix}-magnitudes`;
+/**
+ * @param {string} prefix
+ * @param {any[][]} values
+ * @param {string[]} schema
+ */
+function initModuleMagnitudes(prefix, values, schema) {
+    const container = document.getElementById(`${prefix}-magnitudes`);
+    if (!container || container.childElementCount > 0) {
+        return;
+    }
 
-    let target = document.getElementById(targetId);
-    if (target.childElementCount > 0) { return; }
+    values.forEach((value) => {
+        const magnitude = fromSchema(value, schema);
 
-    data.values.forEach((values) => {
-        const entry = fromSchema(values, data.schema);
+        const type = /** @type {!number} */
+            (magnitude.type);
+        const index_global = /** @type {!number} */
+            (magnitude.index_global);
+        const index_module = /** @type {!number} */
+            (magnitude.index_module);
 
-        let line = loadConfigTemplate("module-magnitude");
-        line.querySelector("label").textContent =
-            `${Magnitudes.types[entry.type]} #${entry.index_global}`;
-        line.querySelector("span").textContent =
-            Magnitudes.properties[entry.index_global].description;
+        const line = loadConfigTemplate("module-magnitude");
 
-        let input = line.querySelector("input");
-        input.name = `${data.prefix}Magnitude`;
-        input.value = entry.index_module;
+        const label = /** @type {!HTMLLabelElement} */
+            (line.querySelector("label"));
+        label.textContent =
+            `${Magnitudes.types.get(type) ?? "?"} #${magnitude.index_global}`;
+
+        const span = /** @type {!HTMLSpanElement} */
+            (line.querySelector("span"));
+        span.textContent =
+            Magnitudes.properties.get(index_global)?.description ?? "";
+
+        const input = /** @type {!HTMLInputElement} */
+            (line.querySelector("input"));
+        input.name = `${prefix}Magnitude`;
+        input.value = index_module.toString();
         input.dataset["original"] = input.value;
 
-        mergeTemplate(target, line);
+        mergeTemplate(container, line);
     });
 }
 
-function initMagnitudes(data) {
-    data.types.values.forEach((cfg) => {
-        const info = fromSchema(cfg, data.types.schema);
-        Magnitudes.types[info.type] = info.name;
-        Magnitudes.typePrefix[info.type] = info.prefix;
-        Magnitudes.prefixType[info.prefix] = info.type;
+/**
+ * @param {any} types
+ * @param {any} errors
+ * @param {any} units
+ */
+function initMagnitudes(types, errors, units) {
+    /** @type {[number, string, string][]} */
+    (types.values).forEach((value) => {
+        const info = fromSchema(value, types.schema);
+
+        const type = /** @type {number} */(info.type);
+        Magnitudes.types.set(type,
+            /** @type {string} */(info.name));
+
+        const prefix = /** @type {string} */(info.prefix);
+        Magnitudes.typePrefix.set(type, prefix);
+        Magnitudes.prefixType.set(prefix, type);
     });
 
-    data.errors.values.forEach((cfg) => {
-        const error = fromSchema(cfg, data.errors.schema);
-        Magnitudes.errors[error.type] = error.name;
+    /** @type {[number, string][]} */
+    (errors.values).forEach((value) => {
+        const error = fromSchema(value, errors.schema);
+        Magnitudes.errors.set(
+            /** @type {number} */(error.type),
+            /** @type {string} */(error.name));
     });
 
-    data.units.values.forEach((cfg, id) => {
-        const values = fromSchema(cfg, data.units.schema);
-        values.supported.forEach(([type, name]) => {
-            Magnitudes.units.names[type] = name;
+    /** @type {SupportedUnits[][]} */
+    (units).forEach((value, id) => {
+        Magnitudes.units.supported.set(id, value);
+        value.forEach(([type, name]) => {
+            Magnitudes.units.names.set(type, name);
         });
-
-        Magnitudes.units.supported[id] = values.supported;
     });
 }
 
-function initMagnitudesList(data, callbacks) {
-    data.values.forEach((cfg, id) => {
-        const magnitude = fromSchema(cfg, data.schema);
-        const prettyName = Magnitudes.types[magnitude.type]
-            .concat(" #").concat(parseInt(magnitude.index_global, 10));
+/**
+ * @typedef {function(number, Magnitude): void} MagnitudeCallback
+ * @param {any[]} values
+ * @param {string[]} schema
+ * @param {MagnitudeCallback[]} callbacks
+ */
+function initMagnitudesList(values, schema, callbacks) {
+    values.forEach((value, id) => {
+        const magnitude = fromSchema(value, schema);
 
+        const type = /** @type {number} */(magnitude.type);
+        const prettyName =
+            `${Magnitudes.types.get(type) ?? "?"} #${magnitude.index_global}`;
+
+        /** @type {Magnitude} */
         const result = {
             name: prettyName,
-            units: magnitude.units,
-            type: magnitude.type,
-            index_global: magnitude.index_global,
-            description: magnitude.description
+            units: /** @type {number} */(magnitude.units),
+            type: type,
+            index_global: /** @type {number} */(magnitude.index_global),
+            description: /** @type {string} */(magnitude.description),
         };
 
-        Magnitudes.properties[id] = result;
+        Magnitudes.properties.set(id, result);
         callbacks.forEach((callback) => {
             callback(id, result);
         });
     });
 }
 
+/**
+ * @param {number} id
+ * @param {Magnitude} magnitude
+ */
 function createMagnitudeInfo(id, magnitude) {
     const container = document.getElementById("magnitudes");
+    if (!container) {
+        return;
+    }
 
-    const info = loadTemplate("magnitude-info");
-    const label = info.querySelector("label");
+    const line = loadTemplate("magnitude-info");
+
+    const label = /** @type {!HTMLLabelElement} */
+        (line.querySelector("label"));
     label.textContent = magnitude.name;
 
-    const input = info.querySelector("input");
-    input.dataset["id"] = id;
-    input.dataset["type"] = magnitude.type;
+    const input = /** @type {!HTMLInputElement} */
+        (line.querySelector("input"));
+    input.dataset["id"] = id.toString();
+    input.dataset["type"] = magnitude.type.toString();
 
-    const description = info.querySelector(".magnitude-description");
+    const info = /** @type {!HTMLSpanElement} */
+        (line.querySelector(".magnitude-info"));
+    info.style.display = "none";
+
+    const description = /** @type {!HTMLSpanElement} */
+        (line.querySelector(".magnitude-description"));
     description.textContent = magnitude.description;
 
-    const extra = info.querySelector(".magnitude-info");
-    extra.style.display = "none";
-
-    mergeTemplate(container, info);
+    mergeTemplate(container, line);
 }
 
+/**
+ * @param {number} id
+ * @param {Magnitude} magnitude
+ */
 function createMagnitudeUnitSelector(id, magnitude) {
     // but, no need for the element when there's no choice
-    const supported = Magnitudes.units.supported[id];
-    if ((supported !== undefined) && (supported.length > 1)) {
-        const line = loadTemplate("magnitude-units");
-        line.querySelector("label").textContent =
-            `${Magnitudes.types[magnitude.type]} #${magnitude.index_global}`;
-
-        const select = line.querySelector("select");
-        select.setAttribute("name", magnitudeTypedKey(magnitude, "Units"));
-
-        const options = [];
-        supported.forEach(([id, name]) => {
-            options.push({id, name});
-        });
-
-        initSelect(select, options);
-        setSelectValue(select, magnitude.units);
-        setOriginalsFromValuesForNode(line, [select]);
-
-        const container = document.getElementById("magnitude-units");
-        container.parentElement.classList.remove("maybe-hidden");
-        mergeTemplate(container, line);
+    const supported = Magnitudes.units.supported.get(id);
+    if ((supported === undefined) || (!supported.length)) {
+        return;
     }
+
+    const container = document.getElementById("magnitude-units");
+    if (!container) {
+        return;
+    }
+
+    const line = loadTemplate("magnitude-units");
+
+    const label = /** @type {!HTMLLabelElement} */
+        (line.querySelector("label"));
+    label.textContent =
+        `${Magnitudes.types.get(magnitude.type) ?? "?"} #${magnitude.index_global}`;
+
+    const select = /** @type {!HTMLSelectElement} */
+        (line.querySelector("select"));
+    select.setAttribute("name",
+        magnitudeTypedKey(magnitude, "Units"));
+
+    /** @type {{id: number, name: string}[]} */
+    const options = [];
+    supported.forEach(([id, name]) => {
+        options.push({id, name});
+    });
+
+    initSelect(select, options);
+    setSelectValue(select, magnitude.units);
+    setOriginalsFromValues([select]);
+
+    container?.parentElement?.classList?.remove("maybe-hidden");
+    mergeTemplate(container, line);
 }
 
-function magnitudeSettingInfo(id, key) {
+/**
+ * @typedef {{id: number, name: string, key: string, prefix: string, index_global: number}} SettingInfo
+ * @param {number} id
+ * @param {string} suffix
+ * @returns {SettingInfo | null}
+ */
+function magnitudeSettingInfo(id, suffix) {
+    const props = Magnitudes.properties.get(id);
+    if (!props) {
+        return null;
+    }
+
+    const prefix = Magnitudes.typePrefix.get(props.type);
+    if (!prefix) {
+        return null;
+    }
+
     const out = {
         id: id,
-        name: Magnitudes.properties[id].name,
-        prefix: `${Magnitudes.typePrefix[Magnitudes.properties[id].type]}`,
-        index_global: `${Magnitudes.properties[id].index_global}`
+        name: props.name,
+        key: `${prefix}${suffix}${props.index_global}`,
+        prefix: prefix, 
+        index_global: props.index_global,
     };
 
-    out.key = `${out.prefix}${key}${out.index_global}`;
+
     return out;
 }
 
+/**
+ * @param {number} id
+ * @returns {SettingInfo | null}
+ */
 function emonRatioInfo(id) {
     return magnitudeSettingInfo(id, "Ratio");
 }
 
-function initMagnitudeTextSetting(containerId, id, keySuffix, value) {
-    const template = loadTemplate("text-input");
-    const input = template.querySelector("input");
+/**
+ * @param {string} containerId
+ * @param {number} id
+ * @param {string} keySuffix
+ * @param {number} value
+ */
+function initMagnitudeNumberSetting(containerId, id, keySuffix, value) {
+    const container = document.getElementById(containerId);
+    if (!container) {
+        return;
+    }
 
     const info = magnitudeSettingInfo(id, keySuffix);
-    input.id = info.key;
-    input.name = input.id;
-    input.value = value;
-    setOriginalsFromValuesForNode(template, [input]);
+    if (!info) {
+        return;
+    }
 
-    const label = template.querySelector("label");
-    label.textContent = info.name;
-    label.htmlFor = input.id;
+    container?.parentElement?.classList?.remove("maybe-hidden");
 
-    const container = document.getElementById(containerId);
-    container.parentElement.classList.remove("maybe-hidden");
-    mergeTemplate(container, template);
+    const template = new NumberInput();
+    mergeTemplate(container, template.with(
+        (label, input) => {
+            label.textContent = info.name;
+            label.htmlFor = input.id;
+
+            input.id = info.key;
+            input.name = input.id;
+            input.value = value.toString();
+
+            setOriginalsFromValues([input]);
+        }));
 }
 
-function initMagnitudesRatio(id, value) {
-    initMagnitudeTextSetting("emon-ratios", id, "Ratio", value);
-}
-
+/**
+ * @param {number} id
+ */
 function initMagnitudesExpected(id) {
-    // TODO: also display currently read value?
-    const template = loadTemplate("emon-expected");
-    const [expected, result] = template.querySelectorAll("input");
+    const container = document.getElementById("emon-expected");
+    if (!container) {
+        return;
+    }
 
     const info = emonRatioInfo(id);
+    if (!info) {
+        return;
+    }
 
-    expected.name += `${info.key}`;
+    // TODO: also display currently read value?
+    const template = loadTemplate("emon-expected");
+
+    const [expected, result] = template.querySelectorAll("input");
+    expected.name += info.key;
     expected.id = expected.name;
-    expected.dataset["id"] = info.id;
+    expected.dataset["id"] = info.id.toString();
 
-    result.name += `${info.key}`;
+    result.name += info.key;
     result.id = result.name;
 
-    const label = template.querySelector("label");
+    const [label] = template.querySelectorAll("label");
     label.textContent = info.name;
     label.htmlFor = expected.id;
 
@@ -215,141 +349,215 @@ function initMagnitudesExpected(id) {
         styleVisible(`.emon-expected-${info.prefix}`, true)
     ]);
 
-    mergeTemplate(document.getElementById("emon-expected"), template);
+    mergeTemplate(container, template);
 }
 
 function emonCalculateRatios() {
-    const inputs = document.getElementById("emon-expected")
-        .querySelectorAll(".emon-expected-input");
+    const expected = document.getElementById("emon-expected")
+        ?.querySelectorAll("input.emon-expected-input");
+    if (!expected) {
+        return;
+    }
 
-    inputs.forEach((input) => {
-        if (input.value.length) {
-            sendAction("emon-expected", {
-                id: parseInt(input.dataset["id"], 10),
-                expected: parseFloat(input.value) });
+    /** @type {NodeListOf<HTMLInputElement>} */
+    (expected).forEach((input) => {
+        if (!input.value || !input.dataset["id"]) {
+            return;
         }
+
+        sendAction("emon-expected", {
+            id: parseInt(input.dataset["id"], 10),
+            expected: parseFloat(input.value) });
     });
 }
 
 function emonApplyRatios() {
     const results = document.getElementById("emon-expected")
-        .querySelectorAll(".emon-expected-result");
+        ?.querySelectorAll("input.emon-expected-result");
 
-    results.forEach((result) => {
-        if (result.value.length) {
-            const ratio = document.getElementById(
-                result.name.replace("result:", ""));
-            ratio.value = result.value;
-            setChangedElement(ratio);
-
-            result.value = "";
-
-            const expected = document.getElementById(
-                result.name.replace("result:", "expected:"));
-            expected.value = "";
+    /** @type {NodeListOf<HTMLInputElement>} */
+    (results).forEach((result) => {
+        if (!result.value) {
+            return;
         }
+
+        let next = result.name
+            .replace("result:", "");
+
+        const ratio = document.getElementById(next);
+        if (!(ratio instanceof HTMLInputElement)) {
+            return;
+        }
+
+        ratio.value = result.value;
+        setChangedElement(ratio);
+
+        result.value = "";
+
+        next = result.name
+            .replace("result:", "expected:");
+        const expected = document.getElementById(next);
+        if (!(expected instanceof HTMLInputElement)) {
+            return;
+        }
+
+        expected.value = "";
     });
 
     showPanelByName("sns");
 }
 
-function initMagnitudesCorrection(id, value) {
-    initMagnitudeTextSetting("magnitude-corrections", id, "Correction", value);
-}
+/**
+ * @param {any[]} values
+ * @param {string[]} schema
+ */
+function initMagnitudesSettings(values, schema) {
+    values.forEach((value, id) => {
+        const settings = fromSchema(value, schema);
 
-function initMagnitudesSettings(data) {
-    data.values.forEach((cfg, id) => {
-        const settings = fromSchema(cfg, data.schema);
-
-        if (settings.Ratio !== null) {
-            initMagnitudesRatio(id, settings.Ratio);
+        if (typeof settings.Ratio === "number") {
+            initMagnitudeNumberSetting(
+                "emon-ratios", id,
+                "Ratio", settings.Ratio);
             initMagnitudesExpected(id);
         }
 
-        if (settings.Correction !== null) {
-            initMagnitudesCorrection(id, settings.Correction);
+        if (typeof settings.Correction === "number") {
+            initMagnitudeNumberSetting(
+                "magnitude-corrections", id,
+                "Correction", settings.Correction);
         }
 
-        let threshold = settings.ZeroThreshold;
-        if (threshold === null) {
-            threshold = NaN;
+        const threshold =
+            (typeof settings.ZeroThreshold === "number")
+                ? settings.ZeroThreshold :
+            (typeof settings.ZeroThreshold === "string")
+                ? NaN : null;
+
+        if (typeof threshold === "number") {
+            initMagnitudeNumberSetting(
+                "magnitude-zero-thresholds", id,
+                "ZeroThreshold", threshold);
         }
 
-        initMagnitudeTextSetting(
-            "magnitude-zero-thresholds", id,
-            "ZeroThreshold", threshold);
+        if (typeof settings.MinDelta === "number") {
+            initMagnitudeNumberSetting(
+                "magnitude-min-deltas", id,
+                "MinDelta", settings.MinDelta);
+        }
 
-        initMagnitudeTextSetting(
-            "magnitude-min-deltas", id,
-            "MinDelta", settings.MinDelta);
-
-        initMagnitudeTextSetting(
-            "magnitude-max-deltas", id,
-            "MaxDelta", settings.MaxDelta);
+        if (typeof settings.MaxDelta === "number") {
+            initMagnitudeNumberSetting(
+                "magnitude-max-deltas", id,
+                "MaxDelta", settings.MaxDelta);
+        }
     });
 }
 
+/**
+ * @param {number} id
+ * @returns {HTMLInputElement | null}
+ */
 function magnitudeValueContainer(id) {
     return document.querySelector(`input[name='magnitude'][data-id='${id}']`);
 }
 
-function updateMagnitudes(data) {
-    data.values.forEach((cfg, id) => {
-        if (!Magnitudes.properties[id]) {
+/**
+ * @param {any[]} values
+ * @param {string[]} schema
+ */
+function updateMagnitudes(values, schema) {
+    values.forEach((value, id) => {
+        const props = Magnitudes.properties.get(id);
+        if (!props) {
             return;
         }
 
-        const magnitude = fromSchema(cfg, data.schema);
-        const properties = Magnitudes.properties[id];
-        properties.units = magnitude.units;
-
-        const units = Magnitudes.units.names[properties.units] || "";
         const input = magnitudeValueContainer(id);
-        input.value = (0 !== magnitude.error)
-            ? Magnitudes.errors[magnitude.error]
-            : (("nan" === magnitude.value)
-                ? ""
-                : `${magnitude.value}${units}`);
-    });
-}
-
-function updateEnergy(data) {
-    data.values.forEach((cfg) => {
-        const energy = fromSchema(cfg, data.schema);
-        if (!Magnitudes.properties[energy.id]) {
+        if (!input) {
             return;
         }
 
-        if (energy.saved.length) {
-            const input = magnitudeValueContainer(energy.id);
-            const info = input.parentElement.parentElement
-                .querySelector(".magnitude-info");
-            info.style.display = "inherit";
-            info.textContent = energy.saved;
+        const magnitude = fromSchema(value, schema);
+        if (typeof magnitude.units === "number") {
+            props.units = magnitude.units;
+        }
+
+        const units =
+            Magnitudes.units.names.get(props.units) ?? "";
+
+        if (typeof magnitude.error === "number" && 0 !== magnitude.error) {
+            input.value =
+                Magnitudes.errors.get(magnitude.error) ?? "Unknown error";
+        } else if (typeof magnitude.value === "string") {
+            input.value = `${magnitude.value}${units}`;
+        } else {
+            input.value = magnitude.value?.toString() ?? "?";
         }
     });
 }
 
+/**
+ * @param {any[]} values
+ * @param {string[]} schema
+ */
+function updateEnergy(values, schema) {
+    values.forEach((value) => {
+        const energy = fromSchema(value, schema);
+        if (typeof energy.id !== "number") {
+            return;
+        }
+
+        const input = magnitudeValueContainer(energy.id);
+        if (!input) {
+            return;
+        }
+
+        const props = Magnitudes.properties.get(energy.id);
+        if (!props) {
+            return;
+        }
+
+        if (typeof energy.saved !== "string" || !energy.saved) {
+            return;
+        }
+
+        const info = input?.parentElement?.parentElement
+            ?.querySelector(".magnitude-info");
+        if (!(info instanceof HTMLElement)) {
+            return;
+        }
+
+        info.style.display = "inherit";
+        info.textContent = energy.saved;
+    });
+}
+
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
 function listeners() {
     return {
         "magnitudes-init": (_, value) => {
-            initMagnitudes(value);
+            initMagnitudes(
+                value.types, value.errors, value.units);
         },
         "magnitudes-module": (_, value) => {
-            initModuleMagnitudes(value);
+            initModuleMagnitudes(
+                value.prefix, value.values, value.schema);
         },
         "magnitudes-list": (_, value) => {
-            initMagnitudesList(value, [
+            initMagnitudesList(value.values, value.schema, [
                 createMagnitudeUnitSelector, createMagnitudeInfo]);
         },
         "magnitudes-settings": (_, value) => {
-            initMagnitudesSettings(value);
+            initMagnitudesSettings(value.values, value.schema);
         },
         "magnitudes": (_, value) => {
-            updateMagnitudes(value);
+            updateMagnitudes(value.values, value.schema);
         },
         "energy": (_, value) => {
-            updateEnergy(value);
+            updateEnergy(value.values, value.schema);
         },
     };
 }
@@ -358,9 +566,9 @@ export function init() {
     variableListeners(listeners());
 
     document.querySelector(".button-emon-expected")
-        .addEventListener("click", showPanel);
+        ?.addEventListener("click", onPanelTargetClick);
     document.querySelector(".button-emon-expected-calculate")
-        .addEventListener("click", emonCalculateRatios);
+        ?.addEventListener("click", emonCalculateRatios);
     document.querySelector(".button-emon-expected-apply")
-        .addEventListener("click", emonApplyRatios);
+        ?.addEventListener("click", emonApplyRatios);
 }

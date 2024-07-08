@@ -2364,7 +2364,7 @@ bool _relayWebSocketOnKeyCheck(espurna::StringView key, const JsonVariant&) {
 
 void _relayWebSocketUpdate(JsonObject& root) {
     espurna::web::ws::EnumerablePayload payload{root, STRING_VIEW("relayState")};
-    payload(STRING_VIEW("states"), _relays.size(), {
+    payload(STRING_VIEW("values"), _relays.size(), {
         {STRING_VIEW("status"), [](JsonArray& out, size_t index) {
             out.add(_relays[index].target_status ? 1 : 0);
         }},
@@ -2385,7 +2385,7 @@ void _relayWebSocketSendRelays(JsonObject& root) {
     container[F("size")] = _relays.size();
     container[F("start")] = 0;
 
-    config(STRING_VIEW("relays"), _relays.size(),
+    config(STRING_VIEW("values"), _relays.size(),
         espurna::relay::settings::query::IndexedSettings);
 }
 

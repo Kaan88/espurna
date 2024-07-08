@@ -21,6 +21,7 @@
     "html-minifier-terser": "^7.2.0",
     "html-validate": "^8.19.1",
     "inline-source": "^8.0.3",
-    "jsdom": "^24.1.0"
+    "jsdom": "^24.1.0",
+    "vitest": "^1.6.0"
   }
 }

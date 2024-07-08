@@ -3,32 +3,54 @@
 // (and notice that document.querySelector(...) won't be able to read inside of these)
 
 import {
+    initEnumerableSelect,
+    initSelect,
+    onGroupSettingsDel,
     setInputValue,
     setOriginalsFromValuesForNode,
     setSelectValue,
     setSpanValue,
-    initSelect,
-    initEnumerableSelect,
-    onGroupSettingsDel,
 } from './settings.mjs';
 
 import { moreElem } from './core.mjs';
 
+/**
+ * @param {Event} event
+ */
 function moreParent(event) {
-    moreElem(event.target.parentElement.parentElement);
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+        return;
+    }
+
+    const parent = target?.parentElement?.parentElement;
+    if (parent) {
+        moreElem(parent);
+    }
 }
 
 /**
- * @returns {HTMLElement}
+ * @param {string} name
+ * @returns {DocumentFragment}
  */
 export function loadTemplate(name) {
-    let template = document.getElementById(`template-${name}`);
+    const template = /** @type {HTMLTemplateElement} */
+        (document.getElementById(`template-${name}`));
     return document.importNode(template.content, true);
 }
 
-export function loadConfigTemplate(id) {
-    let template = loadTemplate(id);
-    for (let elem of template.querySelectorAll("input,select")) {
+/** @import { InputOrSelect } from './settings.mjs' */
+
+/**
+ * @param {string} name
+ * @returns {DocumentFragment}
+ */
+export function loadConfigTemplate(name) {
+    const template = loadTemplate(name);
+    for (let elem of /** @type {NodeListOf<InputOrSelect>} */(template.querySelectorAll("input,select"))) {
         elem.dataset["settingsGroupElement"] = "true";
     }
 
@@ -40,7 +62,7 @@ export function loadConfigTemplate(id) {
         elem.addEventListener("click", moreParent);
     }
 
-    for (let elem of template.querySelectorAll("select.enumerable")) {
+    for (let elem of /** @type {NodeListOf<HTMLSelectElement>} */(template.querySelectorAll("select.enumerable"))) {
         initEnumerableSelect(elem, initSelect);
     }
 
@@ -48,47 +70,159 @@ export function loadConfigTemplate(id) {
 }
 
 /**
- * @param {HTMLElement} line
- * @param {number} id
- * @param {any} cfg
+ * @import { DisplayValue } from './settings.mjs'
+ * @typedef {{[k: string]: DisplayValue}} TemplateConfig
  */
-export function fillTemplateLineFromCfg(line, id, cfg) {
-    let local = {"template-id": id};
-    if (cfg === undefined) {
-        cfg = {};
-    }
 
-    Object.assign(local, cfg);
-    cfg = local;
+/** @typedef {InputOrSelect | HTMLSpanElement} TemplateLineElement */
 
-    for (let elem of line.querySelectorAll("input,select,span")) {
-        let key = elem.name || elem.dataset.key;
-        if (key && (key in cfg)) {
-            switch (elem.tagName) {
-            case "INPUT":
-                setInputValue(elem, cfg[key]);
-                break;
-            case "SELECT":
-                setSelectValue(elem, cfg[key]);
-                break;
-            case "SPAN":
-                setSpanValue(elem, cfg[key]);
-                break;
-            }
+/**
+ * @param {DocumentFragment} fragment
+ * @param {number} id
+ * @param {TemplateConfig} cfg
+ */
+export function fillTemplateFromCfg(fragment, id, cfg = {}) {
+    const local = {"template-id": id};
+    cfg = Object.assign({}, local, cfg);
+
+    for (let elem of /** @type {NodeListOf<TemplateLineElement>} */(fragment.querySelectorAll("input,select,span"))) {
+        const key =
+           ((elem instanceof HTMLInputElement)
+         || (elem instanceof HTMLSelectElement))
+                ? (elem.name) :
+            (elem instanceof HTMLElement)
+                ? elem.dataset["key"]
+                : "";
+
+        if (!key) {
+            continue;
+        }
+
+        const value = cfg[key];
+        if ((value === undefined) || (value === null)) {
+            continue;
+        }
+
+        const is_array = Array.isArray(value);
+        if (!is_array && elem instanceof HTMLInputElement) {
+            setInputValue(elem, value);
+        } else if (!is_array && elem instanceof HTMLSelectElement) {
+            setSelectValue(elem, value);
+        } else if (elem instanceof HTMLSpanElement) {
+            setSpanValue(elem, value);
         }
     }
 
-    setOriginalsFromValuesForNode(line);
+    setOriginalsFromValuesForNode(fragment);
 }
 
+/**
+ * @param {HTMLElement} target
+ * @param {DocumentFragment} template
+ */
 export function mergeTemplate(target, template) {
     for (let child of Array.from(template.children)) {
         target.appendChild(child);
     }
 }
 
-export function addFromTemplate(container, template, cfg) {
-    const line = loadConfigTemplate(template);
-    fillTemplateLineFromCfg(line, container.childElementCount, cfg);
-    mergeTemplate(container, line);
+/**
+ * @param {HTMLElement} container
+ * @param {string} name
+ * @param {TemplateConfig} cfg
+ */
+export function addFromTemplate(container, name, cfg) {
+    const fragment = loadConfigTemplate(name);
+    fillTemplateFromCfg(fragment, container.childElementCount, cfg);
+    mergeTemplate(container, fragment);
+}
+
+// TODO: note that we also include kv schema as 'data-settings-schema' on the container.
+// produce a 'set' and compare instead of just matching length?
+
+/**
+ * @param {DisplayValue[]} values
+ * @param {string[]} schema
+ * @returns {TemplateConfig}
+ */
+export function fromSchema(values, schema) {
+    if (schema.length !== values.length) {
+        throw `Schema mismatch! Expected length ${schema.length} vs. ${values.length}`;
+    }
+
+    /** @type {{[k: string]: any}} */
+    const out = {};
+    schema.forEach((key, index) => {
+        out[key] = values[index];
+    });
+
+    return out;
+}
+
+/**
+ * @param {DisplayValue[][]} source
+ * @param {string[]} schema
+ * @returns {TemplateConfig[]}
+ */
+export function prepareFromSchema(source, schema) {
+    return source.map((values) => fromSchema(values, schema));
+}
+
+/**
+ * @param {HTMLElement} container
+ * @param {string} name
+ * @param {DisplayValue[][]} entries
+ * @param {string[]} schema
+ * @param {number} max
+ */
+export function addFromTemplateWithSchema(container, name, entries, schema, max = 0) {
+    const prepared = prepareFromSchema(entries, schema);
+    if (!prepared) {
+        return;
+    }
+
+    if (max > 0) {
+        container.dataset["settingsMax"] = max.toString();
+    }
+
+    prepared.forEach((cfg) => {
+        addFromTemplate(container, name, cfg);
+    });
+}
+
+export class BaseInput {
+    /** @param {string} name */
+    constructor(name) {
+        this.fragment = loadConfigTemplate(name);
+    }
+
+    /**
+     * @param {function(HTMLLabelElement, HTMLInputElement): void} callback
+     * @returns {DocumentFragment}
+     */
+    with(callback) {
+        const out = document.createDocumentFragment();
+        out.appendChild(this.fragment.cloneNode(true));
+
+        const root = /** @type {!HTMLDivElement} */
+            (out.children[0]);
+
+        callback(
+            /** @type {!HTMLLabelElement} */(root.children[0]),
+            /** @type {!HTMLInputElement} */(root.children[1]));
+
+        return out;
+    }
+}
+
+export class TextInput extends BaseInput {
+    constructor() {
+        super("text-input");
+    }
+}
+
+export class NumberInput extends BaseInput {
+    constructor() {
+        super("number-input");
+    }
 }

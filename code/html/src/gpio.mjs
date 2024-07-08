@@ -1,17 +1,24 @@
 import { addEnumerables, variableListeners } from './settings.mjs';
-import { showErrorNotification } from './errors.mjs';
+import { notifyMessage } from './errors.mjs';
 
-function makeConfig(value) {
-    let types = [];
+/**
+ * @param {any} config
+ */
+function updateEnumerables(config) {
+    /** @type {import('./settings.mjs').EnumerableEntry[]} */
+    const types = [];
 
-    for (const [type, id] of value.types) {
+    for (const [type, id] of /** @type {[string, number][]} */(config.types)) {
         types.push({
             "id": id,
             "name": type
         });
 
-        let gpios = [{"id": 153, "name": "NONE"}];
-        value[type].forEach((pin) => {
+        /** @type {import('./settings.mjs').EnumerableEntry[]} */
+        const gpios = [{"id": 153, "name": "NONE"}];
+
+        /** @type {number[]} */
+        (config[type]).forEach((pin) => {
             gpios.push({"id": pin, "name": `GPIO${pin}`});
         });
 
@@ -21,24 +28,32 @@ function makeConfig(value) {
     addEnumerables("gpio-types", types);
 }
 
-function reportFailed(value) {
-    let failed = "";
-    for (const [pin, file, func, line] of value["failed-locks"]) {
-        failed += `GPIO${pin} @ ${file}:${func}:${line}\n`;
+/** @param {[pin: number, file: string, func: string, line: number]} failed */
+function reportFailed(failed) {
+    if (!failed.length) {
+        return;
     }
 
-    if (failed.length > 0) {
-        showErrorNotification("Could not acquire locks on the following pins, check configuration\n\n" + failed);
+    let report = [];
+    for (const [pin, file, func, line] of failed) {
+        report.push(`GPIO${pin} @ ${file}:${func}:${line}`);
     }
+
+    notifyMessage(`
+        Could not acquire locks on the following pins, check configuration
+        \n\n${report.join("\n")}`);
 }
 
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
 function listeners() {
     return {
         "gpioConfig": (_, value) => {
-            makeConfig(value);
+            updateEnumerables(value);
         },
         "gpioInfo": (_, value) => {
-            reportFailed(value);
+            reportFailed(value["failed-locks"]);
         },
     };
 }

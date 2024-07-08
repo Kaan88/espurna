@@ -2,17 +2,16 @@ import { sendAction } from './connection.mjs';
 import { loadConfigTemplate, mergeTemplate } from './template.mjs';
 import { addSimpleEnumerables, variableListeners } from './settings.mjs';
 
-function listeners() {
-    return {
-        "curtainState": (_, value) => {
-            initCurtain();
-            updateCurtain(value);
-        },
-    };
-}
+const BACKGROUND_MOVING = "rgb(192, 0, 0)";
+const BACKGROUND_STOPPED = "rgb(64, 184, 221)";
 
+/** @param {Event} event */
 function buttonHandler(event) {
     if (event.type !== "click") {
+        return;
+    }
+
+    if (!(event.target instanceof HTMLButtonElement)) {
         return;
     }
 
@@ -35,47 +34,123 @@ function buttonHandler(event) {
     }
 }
 
+/**
+ * @param {boolean} moving
+ * @param {number} button
+ */
+function styleButtons(moving, button) {
+    const elems = /** @type {NodeListOf<HTMLButtonElement>} */
+        (document.querySelectorAll("curtain-button"));
+    if (!moving || (0 === button)) {
+        if (!moving) {
+            elems.forEach((elem) => {
+                elem.style.background = BACKGROUND_STOPPED;
+            });
+        }
+        if (0 === button) {
+            elems.forEach((elem) => {
+                if (elem.classList.contains("button-curtain-pause")) {
+                    elem.style.background = BACKGROUND_MOVING;
+                }
+            });
+        }
+
+        return;
+    }
+
+    elems.forEach((elem) => {
+        if (elem.classList.contains("button-curtain-open")) {
+            elem.style.background =
+                (1 === button) ? BACKGROUND_MOVING :
+                (2 === button) ? BACKGROUND_STOPPED :
+                    BACKGROUND_STOPPED;
+        } else if (elem.classList.contains("button-curtain-close")) {
+            elem.style.background =
+                (1 === button) ? BACKGROUND_STOPPED :
+                (2 === button) ? BACKGROUND_MOVING :
+                    BACKGROUND_STOPPED;
+        }
+    });
+
+}
+
+/** @param {Event} event */
 function positionHandler(event) {
+    if (!(event.target instanceof HTMLButtonElement)) {
+        return;
+    }
+
     sendAction("curtainAction", {position: event.target.value});
 }
 
 //Create the controls for one curtain. It is called when curtain is updated (so created the first time)
 //Let this there as we plan to have more than one curtain per switch
 function initCurtain() {
-    let container = document.getElementById("curtains");
-    if (container.childElementCount > 0) {
+    const container = document.getElementById("curtains");
+    if (!container || container.childElementCount > 0) {
         return;
     }
 
     // add and init curtain template, prepare multi switches
-    let line = loadConfigTemplate("curtain-control");
-    line.querySelector(".button-curtain-open")
-        .addEventListener("click", buttonHandler);
-    line.querySelector(".button-curtain-pause")
-        .addEventListener("click", buttonHandler);
-    line.querySelector(".button-curtain-close")
-        .addEventListener("click", buttonHandler);
+    const line = loadConfigTemplate("curtain-control");
+    ["open", "pause", "close"]
+        .forEach((name) => {
+            line.querySelector(`.button-curtain-${name}`)
+                ?.addEventListener("click", buttonHandler);
+        });
+
     mergeTemplate(container, line);
 
     // simple position slider
     document.getElementById("curtainSet")
-        .addEventListener("change", positionHandler);
+        ?.addEventListener("change", positionHandler);
 
     addSimpleEnumerables("curtain", "Curtain", 1);
 }
 
-function setBackground(a, b) {
-    let elem = document.getElementById("curtainGetPicture");
-    elem.style.background = `linear-gradient(${a}, black ${b}%, #a0d6ff ${b}%)`;
+/** @param {function(HTMLInputElement): void} callback */
+function withSet(callback) {
+    const elem = document.getElementById("curtain-set");
+    if (elem instanceof HTMLInputElement) {
+        callback(elem);
+    }
 }
 
-function setBackgroundTwoSides(a, b) {
-    let elem = document.getElementById("curtainGetPicture");
-    elem.style.background = `linear-gradient(90deg, black ${a}%, #a0d6ff ${a}% ${b}%, black ${b}%)`;
+/** @param {function(HTMLElement): void} callback */
+function withPicture(callback) {
+    const elem = document.getElementById("curtain-picture");
+    if (elem instanceof HTMLElement) {
+        callback(elem);
+    }
 }
 
+/**
+ * @param {string} side_or_corner
+ * @param {number} angle
+ */
+function setBackground(side_or_corner, angle) {
+    withPicture((elem) => {
+        elem.style.background =
+            `linear-gradient(${side_or_corner}, black ${angle}%, #a0d6ff ${angle}%)`;
+    });
+}
+
+/**
+ * @param {number} angle
+ * @param {number} hint_angle
+ */
+function setBackgroundTwoSides(angle, hint_angle) {
+    withPicture((elem) => {
+        elem.style.background =
+            `linear-gradient(90deg, black ${angle}%, #a0d6ff ${angle}% ${hint_angle}%, black ${hint_angle}%)`;
+    });
+}
+
+/** @typedef {{get: number, set: number, button: number, moving: boolean, type: string}} CurtainValue */
+
+/** @param {CurtainValue} value */
 function updateCurtain(value) {
-    switch(value.type) {
+    switch (value.type) {
     case '1': //One side left to right
         setBackground('90deg', value.get);
         break;
@@ -83,7 +158,7 @@ function updateCurtain(value) {
         setBackground('270deg', value.get);
         break;
     case '3': //Two sides
-        setBackgroundTwoSides(value.get / 2, (100 - value.get/2));
+        setBackgroundTwoSides(value.get / 2, (100 - value.get / 2));
         break;
     case '0': //Roller
     default:
@@ -91,29 +166,23 @@ function updateCurtain(value) {
         break;
     }
 
-    let set = document.getElementById("curtainSet");
-    set.value = value.set;
+    withSet((elem) => {
+        elem.value = value.set.toString();
+    });
 
-    const backgroundMoving = 'rgb(192, 0, 0)';
-    const backgroundStopped = 'rgb(64, 184, 221)';
+    styleButtons(value.moving, value.button);
+}
 
-    if (!value.moving) {
-        let button = document.querySelector("button.curtain-button");
-        button.style.background = backgroundStopped;
-    } else if (!value.button) {
-        let pause = document.querySelector("button.curtain-pause");
-        pause.style.background = backgroundMoving;
-    } else {
-        let open = document.querySelector("button.button-curtain-open");
-        let close = document.querySelector("button.button-curtain-close");
-        if (value.button === 1) {
-            open.style.background = backgroundMoving;
-            close.style.background = backgroundStopped;
-        } else if (value.button === 2) {
-            open.style.background = backgroundStopped;
-            close.style.background = backgroundMoving;
-        }
-    }
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
+function listeners() {
+    return {
+        "curtainState": (_, value) => {
+            initCurtain();
+            updateCurtain(value);
+        },
+    };
 }
 
 export function init() {

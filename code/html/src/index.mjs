@@ -1,34 +1,26 @@
 /// <reference path="index.build.d.mts" />
 
-/**
- * @typedef {function(string, any): void} Listener
- */
-
-/**
- * @typedef {{[k: string]: Listener}} Listeners
- */
-
-import { notifyError } from './errors.mjs';
-window.onerror = notifyError;
+import { notifyError, notifyErrorEvent } from './errors.mjs';
+window.addEventListener("error", (event) => {
+    notifyErrorEvent(event);
+    console.error(event.error);
+});
 
 import {
     pageReloadIn,
     randomString,
-    showPanel,
+    onPanelTargetClick,
     styleInject,
 } from './core.mjs';
 
 import { validatePassword, validateFormsPasswords } from './validate.mjs';
 
-import {
-    askAndCallAction,
-    askAndCallReboot,
-    askAndCallReconnect,
-} from './question.mjs';
+import { askAndCall } from './question.mjs';
 
 import {
     init as initSettings,
     applySettings,
+    askSaveSettings,
     getData,
     setChangedElement,
     updateVariables,
@@ -37,7 +29,11 @@ import {
 
 import { init as initWiFi } from './wifi.mjs';
 import { init as initGpio } from './gpio.mjs';
-import { init as initConnection, connect } from './connection.mjs';
+import {
+    init as initConnection,
+    connect,
+    sendAction,
+} from './connection.mjs';
 
 import { init as initApi } from './api.mjs';
 import { init as initCurtain } from './curtain.mjs';
@@ -57,6 +53,7 @@ import { init as initSchedule } from './schedule.mjs';
 import { init as initSensor } from './sensor.mjs';
 import { init as initThermostat } from './thermostat.mjs';
 import { init as initThingspeak } from './thingspeak.mjs';
+import { init as initLocal } from './local.mjs';
 
 /** @type {number | null} */
 let KeepTime = null;
@@ -68,29 +65,18 @@ let Ago = 0;
  * @typedef {{date: Date | null, offset: string}} NowType
  * @type NowType
  */
-
 const Now = {
     date: null,
     offset: "",
 };
 
 /**
- * @param {{[k: string]: string}} cache
- * @param {string} key
- * @param {string} value
- */
-function documentTitleCache(cache, key, value) {
-    cache[key] = value;
-    document.title = `${cache.hostname} - ${cache.app_name} ${cache.app_version}`;
-}
-
-/**
  * @type {{[k: string]: string}}
  */
 const __title_cache = {
-    "hostname": "?",
-    "app_name": "ESPurna",
-    "app_version": "0.0.0",
+    hostname: "?",
+    app_name: "ESPurna",
+    app_version: "0.0.0",
 };
 
 /**
@@ -98,7 +84,8 @@ const __title_cache = {
  * @param {string} value
  */
 function documentTitle(key, value) {
-    documentTitleCache(__title_cache, key, value);
+    __title_cache[key] = value;
+    document.title = `${__title_cache.hostname} - ${__title_cache.app_name} ${__title_cache.app_version}`;
 }
 
 /**
@@ -132,7 +119,7 @@ function deviceNow(value) {
         Now.date = normalizedDate(value);
         Now.offset = timestampOffset(value);
     } catch (e) {
-        notifyError(null, null, 0, 0, e);
+        notifyError(/** @type {Error} */(e));
     }
 }
 
@@ -222,18 +209,77 @@ function normalizedDate(value) {
 
 
 function keepTime() {
-    document.querySelector("span[data-key='app:ago']").textContent = Ago.toString();
+    const ago = document.querySelector("span[data-key='app:ago']");
+    if (ago) {
+        ago.textContent = Ago.toString();
+    }
+
     ++Ago;
 
     if (null !== Now.date) {
-        document.querySelector("span[data-key='app:now']")
-            .textContent = displayDatetime(Now);
+        const now = document.querySelector("span[data-key='app:now']");
+        if (now) {
+            now.textContent = displayDatetime(Now);
+        }
+
         Now.date = new Date(Now.date.valueOf() + 1000);
     }
 }
 
+/** @import { QuestionWrapper } from './question.mjs' */
+
+/** @type {QuestionWrapper} */
+function askDisconnect(ask) {
+    return ask("Are you sure you want to disconnect from the current WiFi network?");
+}
+
+/** @type {QuestionWrapper} */
+function askReboot(ask) {
+    return ask("Are you sure you want to reboot the device?");
+}
+
+/** @param {CloseEvent} event */
+function askReload(event) {
+    /** @type {QuestionWrapper} */
+    return function(ask) {
+        return ask(`Connection lost with the device - ${event.reason}. Click OK to refresh the page.`);
+    };
+}
+
+function askAndCallReconnect() {
+    askAndCall([askSaveSettings, askDisconnect], () => {
+        sendAction("reconnect");
+    });
+}
+
+function askAndCallReboot() {
+    askAndCall([askSaveSettings, askReboot], () => {
+        sendAction("reboot");
+    });
+}
+
+/** @param {Event} event */
+function askAndCallSimpleAction(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLButtonElement)) {
+        return;
+    }
+
+    /** @type {QuestionWrapper} */
+    const wrapper =
+        (ask) => ask(`Confirm the action: "${target.textContent}"`);
+
+    askAndCall([wrapper], () => {
+        sendAction(target.name);
+    });
+}
+
+// TODO https://github.com/microsoft/TypeScript/issues/58969
+// at-import'ed type becomes 'unused' for some reason
+// until fixed, prefer direct import vs. typedef
+
 /**
- * @returns {Listeners}
+ * @returns {import('./settings.mjs').KeyValueListeners}
  */
 function listeners() {
     return {
@@ -264,7 +310,7 @@ function listeners() {
 function generatePassword() {
     let password = "";
     do {
-        password = randomString(10);
+        password = randomString(10, {special: true});
     } while (!validatePassword(password));
 
     return password;
@@ -275,27 +321,40 @@ function generatePassword() {
  */
 function generatePasswordsForForm(form) {
     const value = generatePassword();
-    for (let elem of [form.elements.adminPass0, form.elements.adminPass1]) {
-        setChangedElement(elem);
-        elem.type = "text";
-        elem.value = value;
-    }
+
+    ["adminPass0", "adminPass1"]
+        .map((x) => form.elements.namedItem(x))
+        .filter((x) => x instanceof HTMLInputElement)
+        .forEach((elem) => {
+            setChangedElement(elem);
+            elem.type = "text";
+            elem.value = value;
+        });
 }
 
 /**
  * @param {HTMLFormElement} form
  */
 function initSetupPassword(form) {
-    document.querySelector(".button-setup-password")
-        .addEventListener("click", (event) => {
-            event.preventDefault();
-            const forms = [form];
-            if (validateFormsPasswords(forms, true)) {
-                applySettings(getData(forms, true));
-            }
+    document.querySelectorAll(".button-setup-password")
+        .forEach((elem) => {
+            elem.addEventListener("click", (event) => {
+                event.preventDefault();
+
+                const target = /** @type {HTMLInputElement} */
+                    (event.target);
+                const lenient = target.classList
+                    .contains("button-setup-lenient");
+
+                const forms = [form];
+                if (validateFormsPasswords(forms, {strict: !lenient})) {
+                    applySettings(getData(forms, {cleanup: false}));
+                }
+            });
         });
+
     document.querySelector(".button-generate-password")
-        .addEventListener("click", (event) => {
+        ?.addEventListener("click", (event) => {
             event.preventDefault();
             generatePasswordsForForm(form);
         });
@@ -305,23 +364,47 @@ function initSetupPassword(form) {
  * @param {Event} event
  * @returns {any}
  */
-function toggleMenu(event) {
+function onMenuLinkClick(event) {
     event.preventDefault();
-    /** @type {HTMLElement} */(event.target).parentElement?.classList.toggle("active");
+
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+        return;
+    }
+
+    if (target?.parentElement) {
+        target.parentElement.classList.toggle("active");
+    }
 }
 
 /**
  * @param {Event} event
  */
-function toggleVisiblePassword(event) {
-    const target = /** @type {HTMLSpanElement} */(event.target);
-    const input = /** @type {HTMLInputElement} */(target.previousElementSibling);
+function onPasswordRevealClick(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+        return;
+    }
+
+    const input = target.previousElementSibling;
+    if (!(input instanceof HTMLInputElement)) {
+        return;
+    }
 
     if (input.type === "password") {
         input.type = "text";
     } else {
         input.type = "password";
     }
+}
+
+/**
+ * @param {CloseEvent} event
+ */
+function onConnectionClose(event) {
+    askAndCall([askReload(event)], () => {
+        pageReloadIn(1000);
+    });
 }
 
 /**
@@ -337,33 +420,40 @@ function onJsonPayload(event) {
     try {
         const parsed = JSON.parse(
             event.data
+                .replace(/:Infinity/g, ':"inf"')
+                .replace(/:-Infinity/g, ':"-inf"')
+                .replace(/:NaN/g, ':"nan"')
                 .replace(/\n/g, "\\n")
                 .replace(/\r/g, "\\r")
                 .replace(/\t/g, "\\t"));
         updateVariables(parsed);
     } catch (e) {
-        notifyError(null, null, 0, 0, e);
+        notifyError(/** @type {Error} */(e));
     }
 }
 
 function init() {
     // Initial page, when webMode only allows to change the password
-    initSetupPassword(document.forms["form-setup-password"]);
+    const passwd = document.forms.namedItem("form-setup-password");
+    if (passwd) {
+        initSetupPassword(passwd);
+    }
+
     document.querySelectorAll(".password-reveal")
         .forEach((elem) => {
-            elem.addEventListener("click", toggleVisiblePassword);
+            elem.addEventListener("click", onPasswordRevealClick);
         });
 
     // Sidebar menu & buttons
     document.querySelector(".menu-link")
-        .addEventListener("click", toggleMenu);
+        ?.addEventListener("click", onMenuLinkClick);
     document.querySelectorAll(".pure-menu-link")
         .forEach((elem) => {
-            elem.addEventListener("click", showPanel);
+            elem.addEventListener("click", onPanelTargetClick);
         });
 
     document.querySelector(".button-reconnect")
-        .addEventListener("click", askAndCallReconnect);
+        ?.addEventListener("click", askAndCallReconnect);
     document.querySelectorAll(".button-reboot")
         .forEach((elem) => {
             elem.addEventListener("click", askAndCallReboot);
@@ -372,7 +462,7 @@ function init() {
     // Generic action sender
     document.querySelectorAll(".button-simple-action")
         .forEach((elem) => {
-            elem.addEventListener("click", askAndCallAction);
+            elem.addEventListener("click", askAndCallSimpleAction);
         });
 
     variableListeners(listeners());
@@ -454,18 +544,15 @@ function init() {
         initCurtain();
     }
 
-    // don't autoconnect w/ localhost or file://
     if (MODULE_LOCAL) {
-        updateVariables({
-            webMode: 0,
-            now: "2024-01-01T00:00:00+01:00",
-        });
+        initLocal();
         KeepTime = window.setInterval(keepTime, 1000);
         modulesVisibleAll();
         return;
     }
 
-    connect(onJsonPayload);
+    // don't autoconnect w/ localhost or file://
+    connect({onclose: onConnectionClose, onmessage: onJsonPayload});
 }
 
 document.addEventListener("DOMContentLoaded", init);

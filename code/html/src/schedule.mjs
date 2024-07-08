@@ -1,26 +1,47 @@
-import { addFromTemplate } from './template.mjs';
-import { groupSettingsOnAdd, variableListeners, fromSchema } from './settings.mjs';
+import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
+import { groupSettingsOnAddElem, variableListeners } from './settings.mjs';
 
-function addNode(cfg) {
-    addFromTemplate(document.getElementById("schedules"), "schedule-config", cfg);
+/** @param {function(HTMLElement): void} callback */
+function withSchedules(callback) {
+    callback(/** @type {!HTMLElement} */
+        (document.getElementById("schedules")));
 }
 
+/**
+ * @param {HTMLElement} elem
+ */
+function scheduleAdd(elem) {
+    addFromTemplate(elem, "schedule-config", {});
+}
+
+/**
+ * @param {any} value
+ */
+function onConfig(value) {
+    withSchedules((elem) => {
+        addFromTemplateWithSchema(
+            elem, "schedule-config",
+            value.schedules, value.schema,
+            value.max ?? 0);
+    });
+}
+
+/**
+ * @returns {import('./settings.mjs').KeyValueListeners}
+ */
 function listeners() {
     return {
         "schConfig": (_, value) => {
-            let container = document.getElementById("schedules");
-            container.dataset["settingsMax"] = value.max;
-
-            value.schedules.forEach((entries) => {
-                addNode(fromSchema(entries, value.schema));
-            });
+            onConfig(value);
         },
     };
 }
 
 export function init() {
-    variableListeners(listeners());
-    groupSettingsOnAdd("schedules", () => {
-        addNode();
+    withSchedules((elem) => {
+        variableListeners(listeners());
+        groupSettingsOnAddElem(elem, () => {
+            scheduleAdd(elem);
+        });
     });
 }
