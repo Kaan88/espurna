@@ -10,9 +10,9 @@ import {
 
 import {
     addEnumerables,
-    getEnumerables,
     setOriginalsFromValues,
     variableListeners,
+    listenEnumerableLabel,
 } from './settings.mjs';
 
 /** @param {Event} event */
@@ -32,9 +32,8 @@ function onToggle(event) {
 
 /**
  * @param {number} id
- * @param {any} cfg
  */
-function initToggle(id, cfg) {
+function initToggle(id) {
     const container = document.getElementById("relays");
     if (!container) {
         return;
@@ -46,11 +45,12 @@ function initToggle(id, cfg) {
         (line.querySelector("div"));
     root.classList.add(`relay-control-${id}`);
 
-    const name = /** @type {!HTMLSpanElement} */
-        (line.querySelector("span[data-key='relayName']"));
-    name.textContent = cfg.relayName;
-    name.dataset["id"] = id.toString();
-    name.setAttribute("title", cfg.relayProv);
+    const realId = `relay${id}`;
+
+    const [label] = line.querySelectorAll("label");
+    label.setAttribute("for", realId);
+
+    listenEnumerableLabel(label, id, "relay");
 
     const toggle = /** @type {!HTMLInputElement} */
         (line.querySelector("input[type='checkbox']"));
@@ -59,7 +59,6 @@ function initToggle(id, cfg) {
     toggle.dataset["id"] = id.toString();
     toggle.addEventListener("change", onToggle);
 
-    const realId = `relay${id}`;
     toggle.setAttribute("id", realId);
     toggle.previousElementSibling?.setAttribute("for", realId);
     
@@ -124,7 +123,7 @@ function updateFromConfig(configs, schema) {
             "name": `${relay.relayName} (${relay.relayProv})`
         });
 
-        initToggle(id, relay);
+        initToggle(id);
         addConfigNode(relay);
     });
 
@@ -147,11 +146,7 @@ export function createNodeList(id, values, keyPrefix) {
     values.forEach((value, index) => {
         mergeTemplate(container, template.with(
             (label, input) => {
-                const enumerables = getEnumerables("relay");
-                label.textContent =
-                    (enumerables[index])
-                        ? enumerables[index].name
-                        : `Switch #${index}`;
+                listenEnumerableLabel(label, index, "relay");
 
                 input.name = keyPrefix;
                 input.value = value;

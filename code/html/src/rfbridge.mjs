@@ -3,6 +3,7 @@ import { sendAction } from './connection.mjs';
 import {
     setInputValue,
     setOriginalsFromValues,
+    listenEnumerableName,
     variableListeners,
 } from './settings.mjs';
 
@@ -49,6 +50,10 @@ function addNode() {
 
     const id = container.childElementCount.toString();
     const line = loadConfigTemplate("rfb-node");
+
+    const [span] = line.querySelectorAll("span");
+    span.dataset["enumerableId"] = id.toString();
+    listenEnumerableName(span, "relay");
 
     line.querySelectorAll("input")
         .forEach((input) => {

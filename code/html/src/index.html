@@ -7,9 +7,9 @@
 
         <link type="image" rel="icon" href="../favicon.ico" inline>
 
-        <link rel="stylesheet" href="../vendor/pure-2.0.3.min.css" inline inline-compress="false">
-        <link rel="stylesheet" href="../vendor/pure-grids-responsive-2.0.3.min.css" inline inline-compress="false">
-        <link rel="stylesheet" href="../vendor/side-menu.css" inline>
+        <link rel="stylesheet" href="../vendor/pure-3.0.0.min.css" inline inline-compress="false">
+        <link rel="stylesheet" href="../vendor/pure-grids-responsive-3.0.0.min.css" inline inline-compress="false">
+        <link rel="stylesheet" href="../vendor/side-menu-layout.css" inline>
         <link rel="stylesheet" href="index.css" inline>
 
         <script src="index.mjs" type="module" inline inline-compress="false"></script>
@@ -17,14 +17,6 @@
 
     <body>
         <div id="error-notification" class="pure-g content">
-        </div>
-
-        <div id="password" class="webmode">
-            <div class="content">
-                <object type="text/html"
-                    data="./panel-password.html"
-                    inline inline-raw="true"></object>
-            </div>
         </div>
 
         <div id="layout" class="webmode">
@@ -77,6 +69,10 @@
                         </form>
                     </div>
                 </div>
+
+                <object type="text/html"
+                    data="./panel-password.html"
+                    inline inline-raw="true"></object>
 
                 <object type="text/html"
                     data="./panel-admin.html"

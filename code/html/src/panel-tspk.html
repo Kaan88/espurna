@@ -40,16 +40,18 @@
                 </div>
             </fieldset>
 
-            <fieldset>
-                <legend>Sensors &amp; actuators</legend>
+            <p class="pure-form-message">
+                Enter the field number to send each data to. Set to 0 to disable notifications from that component.
+            </p>
 
-                <span class="pure-form-message">
-                    Enter the field number to send each data to, 0 disable notifications from that component.
-                </span>
+            <fieldset class="module module-relay">
+                <legend>Relays</legend>
+                <div id="tspk-relays" class="settings-group" ></div>
+            </fieldset>
 
-                <div id="tspk-relays" class="settings-group module module-relay" data-settings-target="tspkRelay" ></div>
-
-                <div id="tspk-magnitudes" class="settings-group module module-sns" data-settings-target="tspkMagnitude" ></div>
+            <fieldset class="module module-sns">
+                <legend>Sensors</legend>
+                <div id="tspk-magnitudes" class="settings-group" ></div>
             </fieldset>
         </div>
 

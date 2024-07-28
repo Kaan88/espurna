@@ -3,8 +3,7 @@
 // (and notice that document.querySelector(...) won't be able to read inside of these)
 
 import {
-    initEnumerableSelect,
-    initSelect,
+    listenEnumerable,
     onGroupSettingsDel,
     setInputValue,
     setOriginalsFromValuesForNode,
@@ -62,8 +61,12 @@ export function loadConfigTemplate(name) {
         elem.addEventListener("click", moreParent);
     }
 
-    for (let elem of /** @type {NodeListOf<HTMLSelectElement>} */(template.querySelectorAll("select.enumerable"))) {
-        initEnumerableSelect(elem, initSelect);
+    for (let elem of template.querySelectorAll("[data-enumerable]")) {
+        if (!(elem instanceof HTMLElement)) {
+            continue;
+        }
+
+        listenEnumerable(elem);
     }
 
     return template;

@@ -18,7 +18,7 @@
 
                 <div class="pure-control-group">
                     <label>Passphrase</label>
-                    <input name="wifiApPass" maxlength="32" type="password" spellcheck="false" data-action="reboot" >
+                    <input name="wifiApPass" minlength="8" maxlength="63" type="password" spellcheck="false" data-action="reboot" >
                     <span class="no-select password-reveal"></span>
                     <span class="pure-form-message">
                         When specified, ESPurna will use these values in place of the hostname (see <strong>GENERAL</strong> panel) as SSID and device password (see <strong>ADMIN</strong> panel) as passphrase.
@@ -80,7 +80,7 @@
 
             <fieldset>
                 <legend>Configured networks</legend>
-                <div id="networks" class="settings-group" data-settings-target="ssid pass" data-settings-schema="ssid pass ip gw mask dns bssid chan" >
+                <div id="networks" class="settings-group" data-settings-schema-del="ssid pass" data-settings-schema="ssid pass ip gw mask dns bssid chan" >
                 </div>
                 <button type="button" class="pure-button button-add-settings-group" data-settings-group="networks">Add network</button>
             </fieldset>

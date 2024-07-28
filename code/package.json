@@ -12,16 +12,18 @@
     "@jaames/iro": "^5.5.2",
     "@types/node": "^20.14.2",
     "@typescript/lib-dom": "npm:@types/web@^0.0.149",
+    "convert-source-map": "^2.0.0",
     "esbuild": "^0.21.4",
     "eslint": "^9.3.0",
+    "fancy-log": "^2.0.0",
     "globals": "^15.4.0",
     "gulp": "^5.0.0",
-    "gulp-gzip": "^1.4.0",
     "gulp-rename": "^2.0.0",
     "html-minifier-terser": "^7.2.0",
     "html-validate": "^8.19.1",
     "inline-source": "^8.0.3",
     "jsdom": "^24.1.0",
+    "through2": "^4.0.2",
     "vitest": "^1.6.0"
   }
 }

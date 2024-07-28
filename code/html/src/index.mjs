@@ -7,25 +7,22 @@ window.addEventListener("error", (event) => {
 });
 
 import {
-    pageReloadIn,
-    randomString,
+    onMenuLinkClick,
     onPanelTargetClick,
+    pageReloadIn,
+    showPanelByName,
     styleInject,
 } from './core.mjs';
-
-import { validatePassword, validateFormsPasswords } from './validate.mjs';
 
 import { askAndCall } from './question.mjs';
 
 import {
     init as initSettings,
-    applySettings,
     askSaveSettings,
-    getData,
-    setChangedElement,
     updateVariables,
     variableListeners,
 } from './settings.mjs';
+import { init as initPassword } from './password.mjs';
 
 import { init as initWiFi } from './wifi.mjs';
 import { init as initGpio } from './gpio.mjs';
@@ -143,16 +140,13 @@ function onMessage(value) {
  * @param {number} value
  */
 function initWebMode(value) {
-    const initial = (1 === value);
+    const layout = /** @type {!HTMLElement} */
+        (document.getElementById("layout"));
+    layout.style.display = "inherit";
 
-    const layout = document.getElementById("layout")
-    if (layout) {
-        layout.style.display = (initial ? "none" : "inherit");
-    }
-
-    const password = document.getElementById("password");
-    if (password) {
-        password.style.display = initial ? "inherit" : "none";
+    if (1 === value) {
+        layout.classList.add("initial");
+        showPanelByName("password");
     }
 }
 
@@ -305,100 +299,6 @@ function listeners() {
 }
 
 /**
- * @returns {string}
- */
-function generatePassword() {
-    let password = "";
-    do {
-        password = randomString(10, {special: true});
-    } while (!validatePassword(password));
-
-    return password;
-}
-
-/**
- * @param {HTMLFormElement} form
- */
-function generatePasswordsForForm(form) {
-    const value = generatePassword();
-
-    ["adminPass0", "adminPass1"]
-        .map((x) => form.elements.namedItem(x))
-        .filter((x) => x instanceof HTMLInputElement)
-        .forEach((elem) => {
-            setChangedElement(elem);
-            elem.type = "text";
-            elem.value = value;
-        });
-}
-
-/**
- * @param {HTMLFormElement} form
- */
-function initSetupPassword(form) {
-    document.querySelectorAll(".button-setup-password")
-        .forEach((elem) => {
-            elem.addEventListener("click", (event) => {
-                event.preventDefault();
-
-                const target = /** @type {HTMLInputElement} */
-                    (event.target);
-                const lenient = target.classList
-                    .contains("button-setup-lenient");
-
-                const forms = [form];
-                if (validateFormsPasswords(forms, {strict: !lenient})) {
-                    applySettings(getData(forms, {cleanup: false}));
-                }
-            });
-        });
-
-    document.querySelector(".button-generate-password")
-        ?.addEventListener("click", (event) => {
-            event.preventDefault();
-            generatePasswordsForForm(form);
-        });
-}
-
-/**
- * @param {Event} event
- * @returns {any}
- */
-function onMenuLinkClick(event) {
-    event.preventDefault();
-
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-        return;
-    }
-
-    if (target?.parentElement) {
-        target.parentElement.classList.toggle("active");
-    }
-}
-
-/**
- * @param {Event} event
- */
-function onPasswordRevealClick(event) {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-        return;
-    }
-
-    const input = target.previousElementSibling;
-    if (!(input instanceof HTMLInputElement)) {
-        return;
-    }
-
-    if (input.type === "password") {
-        input.type = "text";
-    } else {
-        input.type = "password";
-    }
-}
-
-/**
  * @param {CloseEvent} event
  */
 function onConnectionClose(event) {
@@ -433,21 +333,10 @@ function onJsonPayload(event) {
 }
 
 function init() {
-    // Initial page, when webMode only allows to change the password
-    const passwd = document.forms.namedItem("form-setup-password");
-    if (passwd) {
-        initSetupPassword(passwd);
-    }
-
-    document.querySelectorAll(".password-reveal")
-        .forEach((elem) => {
-            elem.addEventListener("click", onPasswordRevealClick);
-        });
-
     // Sidebar menu & buttons
     document.querySelector(".menu-link")
         ?.addEventListener("click", onMenuLinkClick);
-    document.querySelectorAll(".pure-menu-link")
+    document.querySelectorAll("[data-panel]")
         .forEach((elem) => {
             elem.addEventListener("click", onPanelTargetClick);
         });
@@ -469,6 +358,7 @@ function init() {
 
     initConnection();
     initSettings();
+    initPassword();
     initWiFi();
     initGpio();
 

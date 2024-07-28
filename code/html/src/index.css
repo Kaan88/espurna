@@ -2,6 +2,35 @@
     General
    -------------------------------------------------------------------------- */
 
+#layout.initial {
+    padding-left: 0;
+}
+
+#layout.initial .content {
+    margin: 0 auto;
+}
+
+#layout.initial .menu-link,
+#layout.initial #menu {
+    display: none;
+}
+
+#layout.initial .button-setup-password {
+    display: inline-block;
+}
+
+#layout .button-setup-password {
+    display: none;
+}
+
+#layout.initial .setup-password-initial {
+    display: block;
+}
+
+#layout .setup-password-initial {
+    display: none;
+}
+
 #menu .pure-menu-heading {
     font-size: 100%;
     padding: .5em .5em;
@@ -96,10 +125,6 @@ div.center {
 
 .webmode {
     display: none;
-}
-
-#password .content {
-    margin: 0 auto;
 }
 
 #layout .content {
@@ -229,6 +254,7 @@ label {
 .button-clear-messages,
 .button-clear-counts,
 .button-settings-factory,
+.button-settings-password,
 .button-setup-password.button-setup-lenient {
     background: rgb(192, 0, 0); /* redish */
 }

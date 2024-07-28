@@ -1,6 +1,16 @@
 import { notifyError } from './errors.mjs';
-import { pageReloadIn } from './core.mjs';
-import { send, sendAction, connectionUrls } from './connection.mjs';
+import {
+    count,
+    pageReloadIn,
+    showPanelByName,
+} from './core.mjs';
+
+import {
+    send,
+    sendAction,
+    listenAppConnected,
+} from './connection.mjs';
+
 import { validateForms } from './validate.mjs';
 
 /**
@@ -8,6 +18,22 @@ import { validateForms } from './validate.mjs';
  */
 export function isChangedElement(elem) {
     return stringToBoolean(elem.dataset["changed"] ?? "");
+}
+
+/**
+ * @param {Element} node
+ */
+export function getElements(node) {
+    return /** @type {Array<InputOrSelect>} */(
+        Array.from(node.querySelectorAll(
+            "input[data-changed],select[data-changed]")));
+}
+
+/**
+ * @param {Element} node
+ */
+export function countChangedElements(node) {
+    return count(getElements(node), isChangedElement);
 }
 
 /**
@@ -50,10 +76,7 @@ function groupElementInfo(target) {
     /** @type {GroupElementInfo[]} */
     const out = [];
 
-    /** @type {NodeListOf<InputOrSelect>} */
-    const inputs = target.querySelectorAll("input,select");
-
-    inputs.forEach((elem) => {
+    findInputOrSelect(target).forEach((elem) => {
         const name = elem.dataset.settingsRealName || elem.name;
         if (name === undefined) {
             return;
@@ -76,6 +99,15 @@ function groupElementInfo(target) {
 
 /**
  * @param {HTMLElement} elem
+ * @param {string[]} pending
+ */
+function setGroupPending(elem, pending) {
+    elem.dataset["settingsGroupPending"] =
+        ([...new Set(pending)]).join(" ");
+}
+
+/**
+ * @param {HTMLElement} elem
  * @returns {string[]}
  */
 function getGroupPending(elem) {
@@ -84,43 +116,7 @@ function getGroupPending(elem) {
         return [];
     }
 
-    return raw.split(",");
-}
-
-/**
- * @param {HTMLElement} elem
- * @param {number} index
- * @param {string} lhs
- * @param {string} rhs
- */
-function modifyGroupPending(elem, index, lhs, rhs) {
-    const pending = getGroupPending(elem);
-
-    const removed = pending.indexOf(`${lhs}:${index}`);
-    if (removed >= 0) {
-        pending.splice(removed, 1);
-    } else {
-        pending.push(`${rhs}:${index}`);
-    }
-
-    elem.dataset["settingsGroupPending"] = pending.join(",");
-}
-
-/**
- * @param {HTMLElement} elem
- * @param {number} index
- */
-function addGroupPending(elem, index) {
-    modifyGroupPending(elem, index, "del", "set");
-}
-
-
-/**
- * @param {HTMLElement} elem
- * @param {number} index
- */
-function popGroupPending(elem, index) {
-    modifyGroupPending(elem, index, "set", "del");
+    return raw.split(" ");
 }
 
 /**
@@ -137,21 +133,39 @@ function isIgnoredElement(elem) {
     return elem.dataset["settingsIgnore"] !== undefined;
 }
 
-
 /**
  * @param {HTMLElement} group
  */
 export function groupSettingsAdd(group) {
     const index = group.children.length - 1;
     const last = group.children[index];
-    addGroupPending(group, index);
 
-    for (const target of settingsTargets(group)) {
-        const elem = last.querySelector(`[name='${target}']`);
-        if (elem instanceof HTMLElement) {
-            setChangedElement(elem);
+    const before = countChangedElements(group);
+
+    const pending = getGroupPending(group);
+    pending.push(`set:${index}`);
+    setGroupPending(group, pending);
+
+    let once = true;
+
+    for (let elem of findInputOrSelect(last)) {
+        if (once && elem.required) {
+            elem.focus();
+            elem.reportValidity();
+            once = false;
+        }
+
+        if (elem.required
+            && elem.checkValidity()
+            && (getDataForElement(elem) !== null))
+        {
+                setChangedElement(elem);
         }
     }
+
+    Settings.countFor(
+        countChangedElements(group) - before);
+    Settings.stylizeSave();
 }
 
 /**
@@ -171,11 +185,34 @@ function onGroupSettingsEventAdd(event) {
 
 /**
  * @param {HTMLElement} group
+ */
+function delGroupPending(group) {
+    const top = group.childElementCount - 1;
+    if (top < 0) {
+        return;
+    }
+
+    let pending = getGroupPending(group);
+
+    const set = pending.indexOf(`set:${top}`);
+    if (set >= 0) {
+        pending.splice(set, 1);
+    } else {
+        pending.push(`del:${top}`);
+    }
+
+    setGroupPending(group, pending);
+}
+
+/**
+ * @param {HTMLElement} group
  * @param {HTMLElement} target
  */
 export function groupSettingsDel(group, target) {
     const elems = Array.from(group.children);
     const shiftFrom = elems.indexOf(target);
+
+    const before = countChangedElements(group);
 
     const info = elems.map(groupElementInfo);
     for (let index = -1; index < info.length; ++index) {
@@ -194,11 +231,12 @@ export function groupSettingsDel(group, target) {
         }
     }
 
-    if (elems.length) {
-        popGroupPending(group, elems.length - 1);
-    }
-
+    delGroupPending(group);
     target.remove();
+
+    Settings.countFor(
+        countChangedElements(group) - before);
+    Settings.stylizeSave();
 }
 
 /**
@@ -322,9 +360,10 @@ function onGroupSettingsAddClick(event) {
 
 /**
  * @param {HTMLElement} container
+ * @param {string[]} keys
  * @returns {string[]} - key# for each node that needs removal
  */
-function groupSettingsCleanup(container) {
+function groupSettingsCleanup(container, keys) {
     /** @type {string[]} */
     const out = [];
 
@@ -333,19 +372,35 @@ function groupSettingsCleanup(container) {
             continue;
         }
 
-        for (let pair of getGroupPending(elem)) {
-            const [action, index] = pair.split(":");
-            if (action === "del") {
-                const keysRaw = elem.dataset["settingsSchema"]
-                    || elem.dataset["settingsTarget"];
-                (keysRaw ?? "").split(" ").forEach((key) => {
-                    out.push(`${key}${index}`);
-                });
-            }
+        const schema = elem.dataset["settingsSchemaDel"]
+            ?? elem.dataset["settingsSchema"]
+            ?? "";
+        if (!schema) {
+            continue;
         }
+
+        const prefix = "del:";
+
+        getGroupPending(elem)
+            .filter((x) => x.startsWith(prefix))
+            .map((x) => x.slice(prefix.length))
+            .forEach((index) => {
+                const elem_keys = schema
+                    .split(" ")
+                    .map((x) => `${x}${index}`);
+                if (!elem_keys.length) {
+                    return;
+                }
+
+                elem_keys.forEach((key) => {
+                    if (!keys.includes(key)) {
+                        out.push(key);
+                    }
+                });
+            });
     }
 
-    return out;
+    return [...new Set(out)];
 }
 
 /**
@@ -442,18 +497,20 @@ export function getData(forms, {cleanup = true, assumeChanged = false} = {}) {
                 data[data_name] = data_value;
             }
         }
-
-        // Make sure to remove dynamic group entries from the kvs
-        // Only group keys can be removed atm, so only process .settings-group
-        if (cleanup) {
-            out.del.push(...groupSettingsCleanup(form));
-        }
     }
 
     // Finally, filter out only fields that *must* be assigned.
     for (const name of Object.keys(data)) {
         if (assumeChanged || (changed_data.indexOf(name) >= 0)) {
             out.set[name] = data[name];
+        }
+    }
+
+    // Make sure to remove dynamic group entries from the kvs
+    // Only group keys can be removed atm, so only process .settings-group
+    if (cleanup) {
+        for (let form of forms) {
+            out.del.push(...groupSettingsCleanup(form, Object.keys(out.set)));
         }
     }
 
@@ -525,11 +582,8 @@ export function getDataForElement(elem) {
  * @param {InputOrSelect} elem
  * @returns {ElementValue}
  */
-function getOriginalForElement(elem) {
+export function getOriginalForElement(elem) {
     const original = elem.dataset["original"];
-    if (original === undefined) {
-        return null;
-    }
 
     if (elem instanceof HTMLInputElement) {
         switch (elem.type) {
@@ -537,18 +591,23 @@ function getOriginalForElement(elem) {
         case "text":
         case "password":
         case "hidden":
-            return original;
+            return original ?? "";
 
         case "checkbox":
-            return stringToBoolean(original);
+            return (original !== undefined)
+                ? stringToBoolean(original)
+                : false;
 
         case "number":
         case "range":
-            return parseInt(original);
-
+            return (original !== undefined)
+                ? parseInt(original)
+                : null;
         }
     } else if (elem instanceof HTMLSelectElement) {
-        if (elem.multiple) {
+        if (original === undefined) {
+            return "";
+        } else if (elem.multiple) {
             return bitsetFromSelectedValues(original.split(","));
         } else {
             return original;
@@ -568,19 +627,6 @@ function resetSettingsGroup() {
         resetChangedElement(elem);
         resetGroupPending(elem);
     }
-}
-
-/**
- * @param {HTMLElement} elem
- * @returns {string[]}
- */
-function settingsTargets(elem) {
-    let targets = elem.dataset["settingsTarget"];
-    if (!targets) {
-        return [];
-    }
-
-    return targets.split(" ");
 }
 
 /**
@@ -774,18 +820,26 @@ export function setOriginalsFromValues(elems) {
 }
 
 /**
+ * @param {Element | HTMLElement | DocumentFragment} node
+ * @returns {Array<InputOrSelect>}
+ */
+function findInputOrSelect(node) {
+    return Array.from(node.querySelectorAll("input,select"));
+}
+
+/**
  * @param {HTMLElement | DocumentFragment} node
  */
 export function setOriginalsFromValuesForNode(node) {
-    setOriginalsFromValues(
-        Array.from(node.querySelectorAll("input,select")));
+    setOriginalsFromValues(findInputOrSelect(node));
 }
 
- /**
-  * automatically generate <select> options for know entities
-  * @typedef {{id: number, name: string}} EnumerableEntry
-  * @type {{[k: string]: EnumerableEntry[]}}
-  */
+/**
+ * automatically generate <select> options for know entities
+ * @typedef {{id: number, name: string}} EnumerableEntry
+ */
+
+/** @type {{[k: string]: EnumerableEntry[]}} */
 const Enumerable = {};
 
 // <select> initialization from simple {id: ..., name: ...} that map as <option> value=... and textContent
@@ -800,63 +854,134 @@ const Enumerable = {};
  * @param {SelectValue[]} values
  */
 export function initSelect(select, values) {
+    const initial = document.createElement("option");
+    initial.disabled = true;
+    initial.value = "";
+
+    select.appendChild(initial);
+    select.selectedIndex = 0;
+
     for (let value of values) {
-        let option = document.createElement("option");
-        option.setAttribute("value", value.id.toString());
+        const option = document.createElement("option");
         option.textContent = value.name;
+        option.value = value.id.toString();
         select.appendChild(option);
     }
 }
 
 /**
- * @callback EnumerableCallback
  * @param {HTMLSelectElement} select
  * @param {EnumerableEntry[]} enumerables
  */
+function onEnumerableUpdateSelect(select, enumerables) {
+    while (select.childElementCount && select.firstElementChild) {
+        select.removeChild(select.firstElementChild);
+    }
 
-/**
- * @param {HTMLSelectElement} select
- * @param {EnumerableCallback} callback
- */
-export function initEnumerableSelect(select, callback) {
-    for (let className of select.classList) {
-        const prefix = "enumerable-";
-        if (className.startsWith(prefix)) {
-            const name = className.replace(prefix, "");
-            if ((Enumerable[name] !== undefined) && Enumerable[name].length) {
-                callback(select, Enumerable[name]);
-            }
-            break;
-        }
+    initSelect(select, enumerables);
+
+    const original = getOriginalForElement(select);
+    if (original !== null) {
+        setSelectValue(select, original);
     }
 }
 
 /**
+ * @param {HTMLSpanElement} span
+ * @param {EnumerableEntry[]} enumerables
+ */
+function onEnumerableUpdateSpan(span, enumerables) {
+    const id = parseInt(span.dataset["enumerableId"] ?? "");
+    if ((id < 0) || isNaN(id)) {
+        return;
+    }
+
+    const [entry] = enumerables.filter((x) => x.id === id);
+    if (!entry) {
+        return;
+    }
+
+    setSpanValue(span, entry.name);
+}
+
+/**
+ * @param {HTMLElement} elem
+ * @param {EnumerableEntry[]} enumerables
+ */
+function onEnumerableUpdateElem(elem, enumerables) {
+    if (elem instanceof HTMLSelectElement) {
+        onEnumerableUpdateSelect(elem, enumerables);
+    } else if (elem instanceof HTMLSpanElement) {
+        onEnumerableUpdateSpan(elem, enumerables);
+    }
+}
+
+/**
+ * @param {Event} event
+ */
+function onEnumerableUpdate(event) {
+    const elem = /** @type {!HTMLElement} */(event.target);
+    const enumerables = /** @type {CustomEvent<{enumerables: EnumerableEntry[]}>} */
+        (event).detail.enumerables;
+    onEnumerableUpdateElem(elem, enumerables);
+}
+
+/**
+ * @param {string} name
+ * @param {EnumerableEntry[]} enumerables
+ */
+function notifyEnumerables(name, enumerables) {
+    document.querySelectorAll(`[data-enumerable=${name}]`)
+        .forEach((elem) => {
+            if (!(elem instanceof HTMLElement)) {
+                return;
+            }
+
+            elem.dispatchEvent(
+                new CustomEvent(`enumerable-update-${name}`,
+                    {detail: {enumerables}}));
+        });
+}
+
+/**
+ * @param {HTMLElement} elem
  * @param {string} name
  */
-function refreshEnumerableSelect(name) {
-    const selector = (name !== undefined)
-        ? `select.enumerable.enumerable-${name}`
-        : "select.enumerable";
-
-    for (let select of document.querySelectorAll(selector)) {
-        if (!(select instanceof HTMLSelectElement)) {
-            break;
-        }
-
-        initEnumerableSelect(select, (_, enumerable) => {
-            while (select.childElementCount && select.firstElementChild) {
-                select.removeChild(select.firstElementChild);
-            }
-
-            initSelect(select, enumerable);
-
-            const original = select.dataset["original"];
-            if (original) {
-                setSelectValue(select, original);
-            }
-        });
+export function listenEnumerableName(elem, name) {
+    elem.addEventListener(
+        `enumerable-update-${name}`, onEnumerableUpdate);
+    const current = Enumerable[name];
+    if (!current || !current.length) {
+        return;
     }
+
+    onEnumerableUpdateElem(elem, current);
+}
+
+/**
+ * @param {HTMLElement} elem
+ * @param {number} id
+ * @param {string} name
+ */
+export function listenEnumerableLabel(elem, id, name) {
+    const span = document.createElement("span");
+    span.dataset["enumerable"] = name;
+    span.dataset["enumerableId"] = id.toString();
+
+    listenEnumerableName(span, name);
+    elem.appendChild(span);
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+export function listenEnumerable(elem) {
+    const name = elem.dataset["enumerable"];
+    if (!name) {
+        return;
+    }
+
+    listenEnumerableName(elem, name);
 }
 
 /**
@@ -873,7 +998,7 @@ export function getEnumerables(name) {
  */
 export function addEnumerables(name, enumerables) {
     Enumerable[name] = enumerables;
-    refreshEnumerableSelect(name);
+    notifyEnumerables(name, enumerables);
 }
 
 /**
@@ -882,14 +1007,16 @@ export function addEnumerables(name, enumerables) {
  * @param {number} count
  */
 export function addSimpleEnumerables(name, prettyName, count) {
-    if (count) {
-        let enumerables = [];
-        for (let id = 0; id < count; ++id) {
-            enumerables.push({"id": id, "name": `${prettyName} #${id}`});
-        }
-
-        addEnumerables(name, enumerables);
+    if (count <= 0) {
+        return;
     }
+
+    const enumerables = [];
+    for (let id = 0; id < count; ++id) {
+        enumerables.push({"id": id, "name": `${prettyName} #${id}`});
+    }
+
+    addEnumerables(name, enumerables);
 }
 
 // track <input> values, count total number of changes and their side-effects / needed actions
@@ -906,9 +1033,9 @@ class SettingsBase {
 
     /**
      * @param {number} count
-     * @param {string | undefined} action
+     * @param {string?} action
      */
-    countFor(count, action) {
+    countFor(count, action = null) {
         this.counters.changed += count;
         if (typeof action === "string") {
             switch (action) {
@@ -922,16 +1049,16 @@ class SettingsBase {
     }
 
     /**
-     * @param {string | undefined} action
+     * @param {string?} action
      */
-    increment(action) {
+    increment(action = null) {
         this.countFor(1, action);
     }
 
     /**
-     * @param {string | undefined} action
+     * @param {string?} action
      */
-    decrement(action) {
+    decrement(action = null) {
         this.countFor(-1, action);
     }
 
@@ -976,18 +1103,30 @@ export function initDisplayKeyValueElement(key, value) {
 }
 
 /**
+ * @param {InputOrSelect} elem
+ * @param {ElementValue} value
+ */
+function setInputOrSelect(elem, value) {
+    if (elem instanceof HTMLInputElement) {
+        setInputValue(elem, value);
+    } else if (elem instanceof HTMLSelectElement) {
+        setSelectValue(elem, value);
+    }
+}
+
+/**
  * handle plain kv pairs when they are already on the page, and don't need special template handlers
  * @param {string} key
  * @param {ElementValue} value
  */
 export function initInputKeyValueElement(key, value) {
     const inputs = [];
+
     for (const elem of document.querySelectorAll(`[name='${key}'`)) {
-        if (elem instanceof HTMLInputElement) {
-            setInputValue(elem, value);
-            inputs.push(elem);
-        } else if (elem instanceof HTMLSelectElement) {
-            setSelectValue(elem, value);
+        if ((elem instanceof HTMLInputElement)
+         || (elem instanceof HTMLSelectElement))
+        {
+            setInputOrSelect(elem, value);
             inputs.push(elem);
         }
     }
@@ -1041,6 +1180,10 @@ export function onElementChange(event) {
         Settings.increment(action);
     } else {
         Settings.decrement(action);
+    }
+
+    if (target.required) {
+        target.reportValidity();
     }
 
     Settings.stylizeSave();
@@ -1145,17 +1288,24 @@ export function applySettings(settings) {
     send(JSON.stringify({settings}));
 }
 
-export function applySettingsFromAllForms() {
-    const elems = /** @type {NodeListOf<HTMLFormElement>} */(document.querySelectorAll("form.form-settings"));
+/** @param {HTMLFormElement[]} forms */
+export function applySettingsFromForms(forms) {
+    applySettings(getData(forms));
+    Settings.resetChanged();
+    waitForSaved();
+}
+
+/** @param {Event} event */
+function applySettingsFromAllForms(event) {
+    event.preventDefault();
+
+    const elems = /** @type {NodeListOf<HTMLFormElement>} */
+        (document.querySelectorAll("form.form-settings"));
 
     const forms = Array.from(elems);
     if (validateForms(forms)) {
-        applySettings(getData(forms));
-        Settings.resetChanged();
-        waitForSaved();
+        applySettingsFromForms(forms);
     }
-
-    return false;
 }
 
 /** @param {Event} event */
@@ -1246,26 +1396,30 @@ export function init() {
         ?.addEventListener("change", handleSettingsFile);
 
     document.querySelector(".button-save")
-        ?.addEventListener("click", (event) => {
-            event.preventDefault();
-            applySettingsFromAllForms();
+        ?.addEventListener("click", applySettingsFromAllForms);
+
+    const backup = document.querySelector(".button-settings-backup");
+    if (backup instanceof HTMLButtonElement) {
+        listenAppConnected((urls) => {
+            backup.dataset["url"] = urls.config.href;
         });
 
-    document.querySelector(".button-settings-backup")
-        ?.addEventListener("click", (event) => {
+        backup.addEventListener("click", (event) => {
             event.preventDefault();
 
-            const urls = connectionUrls();
-            if (!urls) {
+            const url = backup.dataset["url"];
+            if (!url) {
+                alert("Not connected");
                 return;
             }
 
             const elem = document.getElementById("downloader");
             if (elem instanceof HTMLAnchorElement) {
-                elem.href = urls.config.href;
+                elem.href = url;
                 elem.click();
             }
         });
+    }
 
     document.querySelector(".button-settings-restore")
         ?.addEventListener("click", () => {
@@ -1274,9 +1428,23 @@ export function init() {
     document.querySelector(".button-settings-factory")
         ?.addEventListener("click", resetToFactoryDefaults);
 
+    document.querySelector(".button-settings-password")
+        ?.addEventListener("click", () => {
+            showPanelByName("password");
+        });
+
     document.querySelectorAll(".button-add-settings-group")
         .forEach((elem) => {
             elem.addEventListener("click", onGroupSettingsAddClick);
+        });
+
+    document.querySelectorAll("[data-enumerable]")
+        .forEach((elem) => {
+            if (!(elem instanceof HTMLElement)) {
+                return;
+            }
+
+            listenEnumerable(elem);
         });
 
     // No group handler should be registered after this point, since we depend on the order

@@ -4,7 +4,7 @@
             <legend>LED #<span data-key="template-id"></span></legend>
             <div class="pure-control-group">
                 <label>GPIO</label>
-                <select class="pure-input-2-3 enumerable enumerable-gpio-hardware" name="ledGpio" data-action="reboot"></select>
+                <select class="pure-input-2-3" name="ledGpio" data-action="reboot" data-enumerable="gpio-hardware" required></select>
             </div>
             <div class="pure-control-group">
                 <label>Inverse logic</label>
@@ -12,7 +12,8 @@
             </div>
             <div class="pure-control-group">
                 <label>Mode</label>
-                <select class="pure-input-2-3" name="ledMode">
+                <select class="pure-input-2-3" name="ledMode" required>
+                    <option disabled selected value=""></option>
                     <option value="wifi">WiFi status</option>
                     <option value="relay">Follow switch</option>
                     <option value="relay-inverse">Inverse switch</option>
@@ -27,7 +28,7 @@
             </div>
             <div class="module-relay pure-control-group">
                 <label>Relay ID</label>
-                <select class="pure-input-2-3 enumerable enumerable-relay" name="ledRelay" ></select>
+                <select class="pure-input-2-3" name="ledRelay" data-enumerable="relay"></select>
             </div>
         </fieldset>
         <button class="pure-button button-del-settings-group more" type="button">Delete LED</button>

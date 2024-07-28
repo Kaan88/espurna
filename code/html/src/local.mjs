@@ -52,11 +52,11 @@ export function init() {
                 'relayMqttDisc',
             ],
             values: [
-                ['111', 'gpio', 0, 1, 4, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
+                ['', 'gpio', 0, 1, 4, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
                 ['222', 'gpio', 0, 1, 5, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
-                ['333', 'gpio', 0, 1, 12, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
+                ['', 'gpio', 0, 1, 12, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
                 ['444', 'gpio', 0, 1, 13, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
-                ['555', 'gpio', 0, 1, 14, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
+                ['foo', 'gpio', 0, 1, 14, 153, 0, 0, 0, 0, 0, '', '', 0, 0],
             ],
         },
         ledConfig: {
@@ -95,7 +95,7 @@ export function init() {
     });
     updateVariables({
         hostname: 'localhost',
-        desc: 'local.mjs variables',
+        desc: `${new URL(import.meta.url)}`,
         ssid: 'ESPURNA-12345',
         bssid: '11:22:33:aa:ee',
         channel: 13,
@@ -173,8 +173,8 @@ export function init() {
         },
         schConfig: {
             schedules: [
-                [1, 0, 'relay 0 1', '05,10:00'],
-                [1, 0, 'relay 1 2', '05:00'],
+                [2, 0, 'relay 0 1', '05,10:00'],
+                [2, 0, 'relay 1 2', '05:00'],
                 [1, 0, 'relay 2 0\nrelay 0 0', '10:00'],
             ],
             schema: [
@@ -260,21 +260,23 @@ export function init() {
         },
     });
 
-    updateVariables({
-        'magnitudes-module': {
-            prefix: "dcz",
-            values: [
-                [1, 0, 0],
-                [2, 0, 0],
-                [3, 0, 0],
-            ],
-            schema: [
-                "type",
-                "index_global",
-                "index_module"
-            ]
-        },
-    });
+    for (let module of ["dcz", "tspk"]) {
+        updateVariables({
+            'magnitudes-module': {
+                prefix: module,
+                values: [
+                    [1, 0, 0],
+                    [2, 0, 0],
+                    [3, 0, 0],
+                ],
+                schema: [
+                    "type",
+                    "index_global",
+                    "index_module"
+                ]
+            },
+        });
+    }
 
     updateVariables({
         'magnitudes-list': {

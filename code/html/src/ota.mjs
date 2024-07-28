@@ -1,5 +1,5 @@
 import { notifyMessage } from './errors.mjs';
-import { connectionUrls } from './connection.mjs';
+import { listenAppConnected } from './connection.mjs';
 import { variableListeners } from './settings.mjs';
 
 let __free_size = 0;
@@ -74,8 +74,12 @@ function notifyValueError(event) {
 function onButtonClick(event) {
     event.preventDefault();
 
-    const urls = connectionUrls();
-    if (!urls) {
+    if (!(event.target instanceof HTMLButtonElement)) {
+        return;
+    }
+
+    const url = event.target.dataset["url"];
+    if (!url) {
         alert("Not connected");
         return;
     }
@@ -119,7 +123,7 @@ function onButtonClick(event) {
                 }, false);
         });
 
-        xhr.open("POST", urls.upgrade.href);
+        xhr.open("POST", url);
         xhr.send(data);
     });
 }
@@ -213,6 +217,10 @@ export function init() {
     if (!(button instanceof HTMLButtonElement)) {
         return;
     }
+
+    listenAppConnected((urls) => {
+        button.dataset["url"] = urls.upgrade.href;
+    });
 
     button.addEventListener("click", onButtonClick);
     button.disabled = true;

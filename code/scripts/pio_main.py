@@ -73,10 +73,21 @@ app_add_target_build_and_copy(projenv)
 # handle special GzipFile builder
 app_add_gzip_file(projenv)
 
-# pre-processed single-source only makes sense from projenv
-pre_process = env.get("ESPURNA_SINGLE_SOURCE_TARGET")
-if pre_process:
-    projenv.PreProcess(pre_process)
+# pre-processing single-source only makes sense from projenv
+# (however, this means dependencies are already attached)
+single_source = env.get("ESPURNA_SINGLE_SOURCE_TARGET")
+if single_source:
+    projenv.AddCustomTarget(
+        "dependencies",
+        [
+            projenv.PreProcess(single_source),
+            projenv.SourceDep(single_source),
+        ],
+        None,
+        title="Intermediate dependency files",
+        description=None,
+        always_build=False,
+    )
 
 # hijack SCons signature generation to exclude BUILD_DIR, making our builds faster
 # when using different environments (i.e. itead-sonoff-basic, itead-sonoff-pow, etc.)

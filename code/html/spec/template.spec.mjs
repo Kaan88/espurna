@@ -1,5 +1,6 @@
 import { assert, expect, test, beforeAll } from 'vitest';
 import { loadTemplate, mergeTemplate, addFromTemplate } from '../src/template.mjs';
+import { countChangedElements } from '../src/settings.mjs';
 
 beforeAll(async () => {
     document.body.innerHTML += `
@@ -113,5 +114,7 @@ test('template fragment with config', () => {
     });
 
     expect(container.children.length)
-        .toBe(cfgs.length);
+        .toEqual(cfgs.length);
+    expect(countChangedElements(container))
+        .toEqual(0);
 });

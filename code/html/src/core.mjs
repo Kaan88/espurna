@@ -61,28 +61,55 @@ export function lastMoreElem(elem) {
 }
 
 /**
- * @param {string} name
+ * @param {HTMLElement} elem
  */
-export function showPanelByName(name) {
-    // only a single panel is shown on the 'layout'
-    const target = document.getElementById(`panel-${name}`);
-    if (!target) {
+function menuToggle(elem) {
+    elem.classList.toggle("active");
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+function menuHide(elem) {
+    elem.classList.remove("active");
+}
+
+/**
+ * @param {Event} event
+ * @returns {any}
+ */
+export function onMenuLinkClick(event) {
+    event.preventDefault();
+
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
         return;
     }
 
-    for (const panel of document.getElementsByClassName("panel")) {
-        if (!(panel instanceof HTMLElement)) {
-            continue;
+    if (target.parentElement) {
+        menuToggle(target.parentElement);
+    }
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+export function showPanel(elem) {
+    if (elem.style.display !== "revert") {
+        for (const panel of document.getElementsByClassName("panel")) {
+            if (!(panel instanceof HTMLElement)) {
+                continue;
+            }
+
+            panel.style.display = "none";
         }
 
-        panel.style.display = "none";
+        elem.style.display = "revert";
     }
 
-    target.style.display = "revert";
-
-    const layout = document.getElementById("layout");
+    const layout = document.getElementById("layout")
     if (layout) {
-        layout.classList.remove("active");
+        menuHide(layout);
     }
 
     // TODO: sometimes, switching view causes us to scroll past
@@ -92,6 +119,19 @@ export function showPanelByName(name) {
     if (document.documentElement) {
         document.documentElement.scrollTop = 0;
     }
+}
+
+/**
+ * @param {string} name
+ */
+export function showPanelByName(name) {
+    // only a single panel is shown on the 'layout'
+    const panel = document.getElementById(`panel-${name}`);
+    if (!panel) {
+        return;
+    }
+
+    showPanel(panel);
 }
 
 /**
@@ -136,4 +176,26 @@ export function randomString(length, {hex = false, lowercase = true, numbers = t
         });
 
     return result.join("");
+}
+
+/**
+ * @throws {Error}
+ * @param {boolean} value
+ * @param {string} message
+ * @returns {asserts value}
+ */
+export function assert(value, message = "") {
+    if (!value) {
+        throw new Error(message ?? "assertion failed");
+    }
+}
+
+/**
+ * @template T
+ * @param {T[]} values
+ * @param {function(T): boolean} callback
+ * @returns {number}
+ */
+export function count(values, callback) {
+    return values.filter(callback).length;
 }

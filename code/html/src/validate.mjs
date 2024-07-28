@@ -1,10 +1,19 @@
-import { isChangedElement } from './settings.mjs';
+import { isChangedElement, getElements } from './settings.mjs';
+import { showPanel } from './core.mjs';
+import {
+    formPassPair,
+    filterForm as filterPasswordForm,
+} from './password.mjs';
+
+const DIFFERENT_PASSWORD = "Passwords are different!";
+const EMPTY_PASSWORD = "Password cannot be empty!";
+const INVALID_PASSWORD = "Invalid password!";
 
 /**
- * @param {string} password
+ * @param {string} value
  * @returns {boolean}
  */
-export function validatePassword(password) {
+export function validatePassword(value) {
     // http://www.the-art-of-web.com/javascript/validate-password/
     // at least one lowercase and one uppercase letter or number
     // at least eight characters (letters, numbers or special characters)
@@ -14,89 +23,123 @@ export function validatePassword(password) {
     // https://github.com/xoseperez/espurna/issues/1151
 
     const Pattern = /^(?=.*[A-Z\d])(?=.*[a-z])[\w~!@#$%^&*()<>,.?;:{}[\]\\|]{8,63}/;
-    return ((typeof password === "string")
-        && (password.length >= 8)
-        && Pattern.test(password));
+    return ((typeof value === "string")
+        && (value.length >= 8)
+        && Pattern.test(value));
 }
 
 /**
- * Try to validate 'adminPass{0,1}', searching the first form containing both.
- * In case it's default webMode, avoid checking things when both fields are empty (`required === false`)
- * @param {HTMLFormElement[]} forms
- * @param {{required?: boolean, strict?: boolean}} options
- * @returns {boolean}
+ * @typedef {{strict?: boolean, assumeChanged?: boolean}} ValidationOptions
  */
-export function validateFormsPasswords(forms, {required = true, strict = true} = {}) {
-    const [first, second] = Array.from(forms)
-        .flatMap((x) => {
-            return [
-                x.elements.namedItem("adminPass0"),
-                x.elements.namedItem("adminPass1"),
-            ];
-        })
-        .filter((x) => x instanceof HTMLInputElement);
 
-    if (first && second) {
-        if (!required && !first.value.length && !second.value.length) {
-            return true;
-        }
+/**
+ * @typedef {[HTMLInputElement, HTMLInputElement]} PasswordInputPair
+ */
 
-        if (first.value !== second.value) {
-            alert("Passwords are different!");
-            return false;
-        }
 
-        const firstValid = first.checkValidity()
-            && (!strict || validatePassword(first.value));
-        const secondValid = second.checkValidity()
-            && (!strict || validatePassword(second.value));
-
-        if (firstValid && secondValid) {
-            return true;
-        }
+/**
+ * @param {import('./settings.mjs').InputOrSelect} elem
+ * @param {function(HTMLElement): void} callback
+ */
+function findPanel(elem, callback) {
+    const panel = elem.closest(".panel");
+    if (!(panel instanceof HTMLElement)) {
+        return;
     }
 
-    alert(`Invalid password!`);
+    callback(panel);
+}
 
+/**
+ * @param {import('./settings.mjs').InputOrSelect} elem
+ */
+function reportValidityForInputOrSelect(elem) {
+    findPanel(elem, (panel) => {
+        showPanel(panel);
+        elem.reportValidity();
+    });
+}
+
+/**
+ * @param {import('./settings.mjs').InputOrSelect} elem
+ * @returns {boolean}
+ */
+function validateInputOrSelect(elem) {
+    if (elem.checkValidity()) {
+        return true;
+    }
+
+    reportValidityForInputOrSelect(elem);
     return false;
 }
 
 /**
- * Same as above, but only applies to the general settings page.
- * Find the first available form that contains 'hostname' input
+ * Try to validate password pair in the given list of forms. Alerts when validation fails.
+ * With initial setup, this usually happens to be the only validation func w/ optional strict mode.
+ * With normal panel, strict is expected to be false.
+ * Only 'changed' elements affect validation, password fields can remain empty and still pass validation.
  * @param {HTMLFormElement[]} forms
+ * @param {ValidationOptions} options
+ * @returns {boolean}
  */
-export function validateFormsHostname(forms) {
-    // per. [RFC1035](https://datatracker.ietf.org/doc/html/rfc1035)
-    // Hostname may contain:
-    // - the ASCII letters 'a' through 'z' (case-insensitive),
-    // - the digits '0' through '9', and the hyphen.
-    // Hostname labels cannot begin or end with a hyphen.
-    // No other symbols, punctuation characters, or blank spaces are permitted.
-    const [hostname] = Array.from(forms)
-        .flatMap(form => form.elements.namedItem("hostname"))
-        .filter((x) => x instanceof HTMLInputElement);
-    if (!hostname) {
+export function validateFormsPasswords(forms, {strict = true, assumeChanged = false} = {}) {
+    const [form] = filterPasswordForm(forms);
+    if (!form) {
         return true;
     }
 
-    // Validation pattern is attached to the element itself, so just check that.
-    // (and, we also re-use the hostname for fallback SSID, thus limited to 1...32 chars instead of 1...63)
+    let err = "";
 
-    const result = (hostname.value.length > 0)
-        && (!isChangedElement(hostname) || hostname.checkValidity());
-    if (!result) {
-        alert(`Hostname cannot be empty and may only contain the ASCII letters ('A' through 'Z' and 'a' through 'z'),
-            the digits '0' through '9', and the hyphen ('-')! They can neither start or end with an hyphen.`);
+    const inputs = formPassPair(form);
+    if (!inputs || inputs.length !== 2) {
+        err = EMPTY_PASSWORD;
+    } else if (assumeChanged || inputs.some(isChangedElement)) {
+        if (!inputs[0].value.length || !inputs[1].value.length) {
+            err = EMPTY_PASSWORD;
+        } else if (inputs[0].value !== inputs[1].value) {
+            err = DIFFERENT_PASSWORD;
+        } else if (strict && !validatePassword(inputs[0].value)) {
+            err = INVALID_PASSWORD;
+        }
     }
 
-    return result;
+    if (!err) {
+        return true;
+    }
+
+    if (inputs.length === 2) {
+        const first = inputs[0];
+        findPanel(first, (panel) => {
+            showPanel(panel);
+            first.focus();
+        });
+    }
+
+    alert(err);
+    return false;
 }
 
 /**
  * @param {HTMLFormElement[]} forms
+ * @returns {boolean}
+ */
+export function validateFormsReportValidity(forms) {
+    const elems = forms
+        .flatMap((form) => getElements(form))
+        .filter(isChangedElement)
+
+    if (!elems.length) {
+        return false;
+    }
+
+    return elems.every(validateInputOrSelect);
+}
+
+/**
+ * @param {HTMLFormElement[]} forms
+ * @returns {boolean}
  */
 export function validateForms(forms) {
-    return validateFormsPasswords(forms, {strict: false})
-        && validateFormsHostname(forms);
+    return validateFormsReportValidity(forms)
+        && validateFormsPasswords(forms, {strict: false});
 }

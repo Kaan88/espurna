@@ -4,13 +4,103 @@ import {
     addSimpleEnumerables,
     checkAndSetElementChanged,
     getDataForElement,
+    getOriginalForElement,
     getEnumerables,
     isChangedElement,
     setOriginalsFromValues,
+    setOriginalsFromValuesForNode,
     setSpanValue,
     setInputValue,
     setSelectValue,
 } from '../src/settings.mjs';
+
+test('select unchanged with empty value when original is missing', () => {
+    const node = document.createElement('select');
+    for (let value of ['', '1', '2', '3']) {
+        const elem = document.createElement('option');
+        elem.value = value;
+        node.appendChild(elem);
+    }
+
+    expect(getDataForElement(node))
+        .toEqual(getOriginalForElement(node));
+
+    node.selectedIndex = -1;
+    expect(getDataForElement(node)).toBe(null);
+    assert(!isChangedElement(node));
+
+    node.selectedIndex = 1;
+    assert(!isChangedElement(node));
+    assert(checkAndSetElementChanged(node));
+
+    node.selectedIndex = 0;
+    assert(isChangedElement(node));
+
+    assert(checkAndSetElementChanged(node));
+    assert(!isChangedElement(node));
+
+    setOriginalsFromValuesForNode(node);
+    node.selectedIndex = 0;
+
+    assert(!checkAndSetElementChanged(node));
+    assert(!isChangedElement(node));
+});
+
+test('number input unchanged with empty value when original is missing', () => {
+    const node = document.createElement('input');
+    node.type = 'number';
+
+    expect(getDataForElement(node))
+        .toEqual(getOriginalForElement(node));
+
+    const data = 12345;
+    expect(getDataForElement(node)).toBe(null);
+    assert(!isChangedElement(node));
+
+    node.valueAsNumber = data;
+    assert(!isChangedElement(node));
+    assert(checkAndSetElementChanged(node));
+
+    node.value = '';
+    assert(isChangedElement(node));
+
+    assert(checkAndSetElementChanged(node));
+    assert(!isChangedElement(node));
+
+    setOriginalsFromValuesForNode(node);
+    node.value = '';
+
+    assert(!checkAndSetElementChanged(node));
+    assert(!isChangedElement(node));
+});
+
+test('text input unchanged with empty value when original is missing', () => {
+    const node = document.createElement('input');
+    node.type = 'text';
+
+    expect(getDataForElement(node))
+        .toEqual(getOriginalForElement(node));
+
+    const data = 'this never gets commited';
+    expect(getDataForElement(node)).toBe('');
+    assert(!isChangedElement(node));
+
+    node.value = data;
+    assert(!isChangedElement(node));
+    assert(checkAndSetElementChanged(node));
+
+    node.value = '';
+    assert(isChangedElement(node));
+
+    assert(checkAndSetElementChanged(node));
+    assert(!isChangedElement(node));
+
+    setOriginalsFromValuesForNode(node);
+    node.value = '';
+
+    assert(!checkAndSetElementChanged(node));
+    assert(!isChangedElement(node));
+});
 
 test('element input data with and without original', () => {
     const node = document.createElement('input');

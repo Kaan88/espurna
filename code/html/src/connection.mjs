@@ -142,18 +142,13 @@ export function isConnected() {
 }
 
 /**
- * @returns {ConnectionUrls | null}
- */
-export function connectionUrls() {
-    return Connection.urls();
-}
-
-/**
  * @param {ConnectionUrls} urls
  * @param {ConnectionOptions} options
  */
 function onAuthorized(urls, options) {
     Connection.open(urls, options);
+    window.dispatchEvent(
+        new CustomEvent("app-connected", {detail: {urls}}));
 }
 
 /**
@@ -212,6 +207,17 @@ async function onConnectEvent(event) {
 function onSendEvent(event) {
     Connection.send(/** @type {CustomEvent<{data: string}>} */
         (event).detail.data);
+}
+
+/** @param {function(ConnectionUrls): void} callback */
+export function listenAppConnected(callback) {
+    window.addEventListener("app-connected", (event) => {
+        event.preventDefault();
+
+        const urls = /** @type {CustomEvent<{urls: ConnectionUrls}>} */
+            (event).detail.urls;
+        callback(urls);
+    });
 }
 
 /** @param {string} data */

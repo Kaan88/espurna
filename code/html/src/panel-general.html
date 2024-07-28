@@ -13,10 +13,13 @@
 
                 <div class="pure-control-group">
                     <label>Hostname</label>
-                    <input name="hostname" class="pure-input-2-3" minlength="1" maxlength="32" type="text" data-action="reboot" pattern="^[A-za-z]([A-Za-z\d\-]{1,30}[A-Za-z\d]|[A-Za-z\d]{0,31})$" spellcheck="false">
+                    <input name="hostname" class="pure-input-2-3" minlength="1" maxlength="32" type="text" data-action="reboot"
+                        pattern="^[A-za-z]([A-Za-z\d\-]{1,30}[A-Za-z\d]|[A-Za-z\d]{0,31})$" spellcheck="false">
                     <span class="pure-form-message-inline">
-                        This name will identify this device in your network (this name will be used as DHCP hostname, thus the device will be accessible as http://&lt;hostname&gt;). Notice that this value may contain only the <strong>ASCII letters 'a' through 'z'</strong> (in a case-insensitive manner), <strong>digits '0' through '9'</strong>, and <strong>the hyphen ('-')</strong>. The hostname can neither start or end with a hyphen.<br>
-                    For this setting to take effect only on initial connection to the network, make sure to <code>Reconnect</code> if the device is already connected.
+                        This name will identify this device in your network. It should be possible to access this page at <samp>http://&lt;hostname&gt;</samp>, <samp>http://&lt;hostname&gt;.lan</samp> (DNS) or <samp>http://&lt;hostname&gt;.local</samp> (mDNS).<br>
+                        <a href="https://datatracker.ietf.org/doc/html/rfc1035#section-2.3.1">Per RFC1035</a>, this value may contain only the <strong>ASCII letters 'a' through 'z'</strong> (in a case-insensitive manner),
+                        <strong>digits '0' through '9'</strong>, and <strong>the hyphen ('-')</strong>. The hostname can neither start or end with a hyphen.<br>
+                        For this setting to take effect make sure to <code>Reconnect</code> when device is already connected to a network.
                     </span>
                 </div>
 

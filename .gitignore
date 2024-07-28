@@ -17,6 +17,7 @@
 .vscode/launch.json
 _pycache_/
 code/.cache/
+code/html/build/
 code/espurna/config/custom.h
 code/libraries/
 code/node_modules
