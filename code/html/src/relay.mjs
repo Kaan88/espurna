@@ -12,7 +12,7 @@ import {
     addEnumerables,
     setOriginalsFromValues,
     variableListeners,
-    listenEnumerableLabel,
+    listenEnumerableTarget,
 } from './settings.mjs';
 
 /** @param {Event} event */
@@ -50,7 +50,7 @@ function initToggle(id) {
     const [label] = line.querySelectorAll("label");
     label.setAttribute("for", realId);
 
-    listenEnumerableLabel(label, id, "relay");
+    listenEnumerableTarget(label, id, "relay");
 
     const toggle = /** @type {!HTMLInputElement} */
         (line.querySelector("input[type='checkbox']"));
@@ -146,7 +146,7 @@ export function createNodeList(id, values, keyPrefix) {
     values.forEach((value, index) => {
         mergeTemplate(container, template.with(
             (label, input) => {
-                listenEnumerableLabel(label, index, "relay");
+                listenEnumerableTarget(label, index, "relay");
 
                 input.name = keyPrefix;
                 input.value = value;

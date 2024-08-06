@@ -146,8 +146,10 @@ function initWebMode(value) {
 
     if (1 === value) {
         layout.classList.add("initial");
-        showPanelByName("password");
     }
+
+    showPanelByName(
+        (1 === value) ? "password" : "status");
 }
 
 /**

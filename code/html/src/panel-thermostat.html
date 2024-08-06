@@ -34,14 +34,14 @@
 
                 <div class="pure-control-group">
                     <label>Maximum</label>
-                    <input id="tempRangeMaxInput" name="tempRangeMax" type="number" min="1" max="100" data="20">
+                    <input id="tempRangeMaxInput" name="tempRangeMax" type="number" min="1" max="100" data="20" required >
                     <span class="pure-form-message-inline" data-key="thermostatTmpUnit">
                     </span>
                 </div>
 
                 <div class="pure-control-group">
                     <label>Minimum</label>
-                    <input id="tempRangeMinInput" name="tempRangeMin" type="number" min="0" max="99" data="10">
+                    <input id="tempRangeMinInput" name="tempRangeMin" type="number" min="0" max="99" data="10" required >
                     <span class="pure-form-message-inline" data-key="thermostatTmpUnit">
                     </span>
                 </div>
@@ -66,7 +66,7 @@
 
                 <div class="pure-control-group">
                     <label for="remoteTempMaxWait">Remote temperature waiting</label>
-                    <input name="remoteTempMaxWait" type="number" min="0" max="1800" data="120">
+                    <input name="remoteTempMaxWait" type="number" min="0" max="1800" data="120" required >
                     <span class="pure-form-message-inline">
                         (seconds)
                     </span>
@@ -80,7 +80,7 @@
 
                 <div class="pure-control-group">
                     <label for="maxOnTime">Max heating time</label>
-                    <input name="maxOnTime" type="number" min="0" max="180" data="30">
+                    <input name="maxOnTime" type="number" min="0" max="180" data="30" required >
                     <span class="pure-form-message-inline">
                         (minutes)
                     </span>
@@ -88,7 +88,7 @@
 
                 <div class="pure-control-group">
                     <label for="minOffTime">Min rest time</label>
-                    <input name="minOffTime" type="number" min="0" max="60" data="10">
+                    <input name="minOffTime" type="number" min="0" max="60" data="10" required >
                     <span class="pure-form-message-inline">
                         (minutes)
                     </span>
@@ -102,7 +102,7 @@
 
                 <div class="pure-control-group">
                     <label for="aloneOnTime">Heating time</label>
-                    <input name="aloneOnTime" type="number" min="0" max="180" data="5">
+                    <input name="aloneOnTime" type="number" min="0" max="180" data="5" required >
                     <span class="pure-form-message-inline">
                         (minutes)
                     </span>
@@ -110,7 +110,7 @@
 
                 <div class="pure-control-group">
                     <label for="aloneOffTime">Rest time</label>
-                    <input name="aloneOffTime" type="number" min="0" max="180" data="55">
+                    <input name="aloneOffTime" type="number" min="0" max="180" data="55" required >
                     <span class="pure-form-message-inline">
                         (minutes)
                     </span>

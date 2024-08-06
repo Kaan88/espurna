@@ -191,11 +191,17 @@ export function init() {
                     'type',
                     'prefix',
                     'name',
+                    'units',
                 ],
                 values: [
-                    [0, 'foo', 'Foo'],
-                    [1, 'bar', 'Bar'],
-                    [2, 'baz', 'Baz'],
+                    [1, 'tmp', 'Temperature', [2,3,4]],
+                    [2, 'hum', 'Humidity', [5]],
+                    [3, 'press', 'Pressure', [6]],
+                    [4, 'curr', 'Current', [7]],
+                    [5, 'volt', 'Voltage', [8]],
+                    [6, 'pwrP', 'Active Power', [13]],
+                    [10, 'ene', 'Energy', [15,16]],
+                    [11, 'eneDelta', 'Energy (delta)', [15,16]],
                 ],
             },
             errors: {
@@ -209,29 +215,24 @@ export function init() {
                     [99, 'OUT_OF_RANGE'],
                 ],
             },
-            units: [
-                [[1, 'C']],
-                [[2, 'F']],
-                [[3, 'K']],
-            ],
-        },
-        'magnitudes-settings': {
-            values: [
-                [0,null,"NaN",0,0],
-                [0,null,"NaN",0,0],
-                [0,null,"NaN",0,0],
-                [0,null,"NaN",0,0],
-                [null,null,"NaN",0,0],
-                [null,1,"NaN",0,0],
-                [null,null,"NaN",0,0]
-            ],
-            schema: [
-                "Correction",
-                "Ratio",
-                "ZeroThreshold",
-                "MinDelta",
-                "MaxDelta"
-            ]
+            units: {
+                schema: [
+                    'type',
+                    'name',
+                ],
+                values: [
+                    [2, '°C'],
+                    [3, '°F'],
+                    [4, 'K'],
+                    [5, '%'],
+                    [6, 'hPa'],
+                    [7, 'A'],
+                    [8, 'V'],
+                    [13, 'W'],
+                    [15, 'J'],
+                    [16, 'kWh'],
+                ],
+            },
         },
         snsRealTime: false,
         snsRead: 6,
@@ -266,13 +267,19 @@ export function init() {
                 prefix: module,
                 values: [
                     [1, 0, 0],
+                    [1, 1, 0],
                     [2, 0, 0],
                     [3, 0, 0],
+                    [5, 0, 0],
+                    [4, 0, 0],
+                    [6, 0, 0],
+                    [10, 0, 0],
+                    [11, 0, 0],
                 ],
                 schema: [
                     "type",
                     "index_global",
-                    "index_module"
+                    "index_module",
                 ]
             },
         });
@@ -281,16 +288,45 @@ export function init() {
     updateVariables({
         'magnitudes-list': {
             schema: [
-                'index_global',
                 'type',
+                'index_global',
                 'description',
                 'units',
             ],
             values: [
-                [0, 1, "Foo measurements", 1],
-                [0, 2, "Bar simulation", 2],
-                [0, 3, "Baz calculation", 2],
+                [1, 0, "Foo measurements", 2],
+                [1, 1, "Foo measurements", 2],
+                [2, 0, "Bar simulation", 5],
+                [3, 0, "Baz calculation", 6],
+                [5, 0, "Powermeter", 8],
+                [4, 0, "Powermeter", 7],
+                [6, 0, "Powermeter", 13],
+                [10, 0, "Powermeter", 16],
+                [11, 0, "Powermeter", 15],
             ],
+        },
+    });
+
+    updateVariables({
+        'magnitudes-settings': {
+            values: [
+                [0,null,"NaN",0,0],
+                [0,null,"NaN",0,0],
+                [0,null,"NaN",0,0],
+                [0,null,"NaN",0,0],
+                [0,1,"NaN",0,0],
+                [0,1,"NaN",0,0],
+                [0,1,"NaN",0,0],
+                [null,1,"NaN",0,0],
+                [null,null,"NaN",0,0],
+            ],
+            schema: [
+                "Correction",
+                "Ratio",
+                "ZeroThreshold",
+                "MinDelta",
+                "MaxDelta"
+            ]
         },
     });
 
@@ -302,9 +338,15 @@ export function init() {
                 'error',
             ],
             values: [
-                ["23", 1, 0],
-                ["98", 2, 0],
-                ["296", 3, 99],
+                ["28", 2, 0],
+                ["23", 2, 0],
+                ["98", 5, 0],
+                ["296", 6, 99],
+                ["240", 8, 0],
+                ["2.4", 7, 0],
+                ["576", 13, 0],
+                ["12345", 16, 0],
+                ["111", 15, 0],
             ],
         },
         relayState: {

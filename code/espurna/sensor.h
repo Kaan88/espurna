@@ -55,7 +55,16 @@ enum class Unit : int {
     MicrosievertPerHour,       // 2nd unit of local dose rate (Geiger counting)
     Meter,
     Hertz,
-    Ph
+    Ph,
+    Max_ = 32
+};
+
+enum class Filter : int {
+    Last,
+    Max,
+    Median,
+    MovingAverage,
+    Sum,
 };
 
 struct Watts {

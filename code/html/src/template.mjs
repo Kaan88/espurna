@@ -200,7 +200,7 @@ export class BaseInput {
     }
 
     /**
-     * @param {function(HTMLLabelElement, HTMLInputElement): void} callback
+     * @param {function(HTMLLabelElement, HTMLInputElement, HTMLSpanElement): void} callback
      * @returns {DocumentFragment}
      */
     with(callback) {
@@ -212,7 +212,8 @@ export class BaseInput {
 
         callback(
             /** @type {!HTMLLabelElement} */(root.children[0]),
-            /** @type {!HTMLInputElement} */(root.children[1]));
+            /** @type {!HTMLInputElement} */(root.children[1]),
+            /** @type {!HTMLSpanElement} */(root.children[2]));
 
         return out;
     }

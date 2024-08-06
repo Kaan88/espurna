@@ -38,7 +38,7 @@
                 <div class="pure-form-aligned">
                     <div class="pure-control-group">
                         <label>Read every</label>
-                        <input name="snsRead" type="number" min="1" list="list:snsRead" class="pure-input-1-4">
+                        <input name="snsRead" type="number" min="1" list="list:snsRead" class="pure-input-1-4" required >
                         <span>second(s)</span>
                         <datalist id="list:snsRead">
                             <option value="1"></option>
@@ -62,13 +62,13 @@
 
                     <div class="pure-control-group">
                         <label>Report aggregated value every</label>
-                        <input name="snsReport" type="number" min="1" step="1" max="60">
+                        <input name="snsReport" type="number" min="1" max="60" step="1" required >
                         <span>reading(s)</span>
                     </div>
 
                     <div class="pure-control-group module module-emon">
                         <label>Save aggregated value every</label>
-                        <input name="snsSave" type="number" min="0" step="1" max="200">
+                        <input name="snsSave" type="number" min="0" step="1" required >
                         <span> report(s)</span>
                         <span class="pure-form-message-inline">
                             At this moment, only applies to total energy readings.
@@ -140,7 +140,7 @@
 
             <fieldset>
                 <legend>Zero threshold</legend>
-                <span class="pure-form-message">Report only when the value is above this threshold. Set to <code>NaN</code> (default) to disable.</span>
+                <span class="pure-form-message">Report only when the value is above this threshold. No threshold by default (empty value).</span>
                 <div id="magnitude-zero-thresholds" class="pure-form-aligned settings-group">
                 </div>
             </fieldset>

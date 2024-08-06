@@ -34,7 +34,7 @@
 
                 <div class="pure-control-group module module-btn">
                     <label>Click repeat delay</label>
-                    <input name="btnRepDel" type="number" data-action="reboot" min="0" step="100" max="1000">
+                    <input name="btnRepDel" type="number" data-action="reboot" min="0" step="100" max="1000" required >
                     <span class="pure-form-message-inline">
                         Delay in milliseconds to detect a double or triple click (from 0 to 1000ms).<br>
                         The lower this number the faster the device will respond to button clicks but the harder it will be to get the expected event.
@@ -78,7 +78,7 @@
 
                 <div class="pure-control-group">
                     <label>Message interval</label>
-                    <input name="hbInterval" type="number" min="1">
+                    <input name="hbInterval" type="number" min="1" required >
                     <span class="pure-form-message-inline">
                         How often the heartbeat messages should be sent (number of <strong>seconds</strong>).
                     </span>

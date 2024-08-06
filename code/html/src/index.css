@@ -123,6 +123,14 @@ div.center {
     margin: .5em 0 1em;
 }
 
+span.hidden {
+    content-visibility: hidden;
+}
+
+span.visible {
+    content-visibility: visible;
+}
+
 .webmode {
     display: none;
 }
@@ -189,11 +197,9 @@ label {
     text-align: left;
 }
 
-.emon-expected-pwrP,
-.emon-expected-volt,
-.emon-expected-curr,
-.emon-expected-ene {
-    content-visibility: hidden;
+.emon-expected {
+    border-bottom: 1px solid #e5e5e5;
+    margin-bottom: 1.6em;
 }
 
 /* -----------------------------------------------------------------------------

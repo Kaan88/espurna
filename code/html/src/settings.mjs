@@ -558,8 +558,7 @@ export function getDataForElement(elem) {
 
         case "number":
         case "range":
-            return !isNaN(elem.valueAsNumber)
-                ? elem.valueAsNumber : null;
+            return elem.valueAsNumber;
 
         }
     } else if (elem instanceof HTMLSelectElement) {
@@ -602,7 +601,7 @@ export function getOriginalForElement(elem) {
         case "range":
             return (original !== undefined)
                 ? parseInt(original)
-                : null;
+                : NaN;
         }
     } else if (elem instanceof HTMLSelectElement) {
         if (original === undefined) {
@@ -707,19 +706,25 @@ export function setInputValue(input, value) {
     case "radio":
         input.checked = (value === input.value);
         break;
+
     case "checkbox":
         input.checked =
             (typeof value === "boolean") ? value :
             (typeof value === "string") ? stringToBoolean(value) :
             (typeof value === "number") ? (value !== 0) : false;
         break;
+
     case "number":
-    case "password":
     case "range":
+        input.valueAsNumber =
+            (typeof value === "string") ? parseInt(value) :
+            (typeof value === "number") ? value : NaN;
+        break;
+
+    case "password":
     case "text":
-        if (value !== null) {
-            input.value = value.toString();
-        }
+        input.value =
+            (value ?? "").toString();
         break;
     }
 }
@@ -797,25 +802,32 @@ export function setSelectValue(select, value) {
 }
 
 /**
+ * @param {InputOrSelect} elem
+ */
+export function setOriginalFromValue(elem) {
+    if (elem instanceof HTMLInputElement) {
+        if (elem.readOnly) {
+            return;
+        }
+
+        if (elem.type === "checkbox") {
+            elem.dataset["original"] = elem.checked.toString();
+        } else {
+            elem.dataset["original"] = elem.value;
+        }
+    } else if (elem instanceof HTMLSelectElement) {
+        elem.dataset["original"] = selectedValues(elem).join(",");
+    }
+
+    resetChangedElement(elem);
+}
+
+/**
  * @param {InputOrSelect[]} elems
  */
 export function setOriginalsFromValues(elems) {
     for (let elem of elems) {
-        if (elem instanceof HTMLInputElement) {
-            if (elem.readOnly) {
-                continue;
-            }
-
-            if (elem.type === "checkbox") {
-                elem.dataset["original"] = elem.checked.toString();
-            } else {
-                elem.dataset["original"] = elem.value;
-            }
-        } else if (elem instanceof HTMLSelectElement) {
-            elem.dataset["original"] = selectedValues(elem).join(",");
-        }
-
-        resetChangedElement(elem);
+        setOriginalFromValue(elem);
     }
 }
 
@@ -905,8 +917,14 @@ function onEnumerableUpdateSpan(span, enumerables) {
 }
 
 /**
+ * @callback EnumerableElemCallback
  * @param {HTMLElement} elem
  * @param {EnumerableEntry[]} enumerables
+ * @returns {void}
+ */
+
+/**
+ * @type {EnumerableElemCallback}
  */
 function onEnumerableUpdateElem(elem, enumerables) {
     if (elem instanceof HTMLSelectElement) {
@@ -918,12 +936,13 @@ function onEnumerableUpdateElem(elem, enumerables) {
 
 /**
  * @param {Event} event
+ * @param {EnumerableElemCallback} callback
  */
-function onEnumerableUpdate(event) {
+function onEnumerableUpdate(event, callback) {
     const elem = /** @type {!HTMLElement} */(event.target);
     const enumerables = /** @type {CustomEvent<{enumerables: EnumerableEntry[]}>} */
         (event).detail.enumerables;
-    onEnumerableUpdateElem(elem, enumerables);
+    callback(elem, enumerables);
 }
 
 /**
@@ -945,17 +964,26 @@ function notifyEnumerables(name, enumerables) {
 
 /**
  * @param {HTMLElement} elem
- * @param {string} name
+ * @param {EnumerableEntry[]} enumerables
  */
-export function listenEnumerableName(elem, name) {
+
+/**
+ * @param {HTMLElement} elem
+ * @param {string} name
+ * @param {EnumerableElemCallback?} callback
+ */
+export function listenEnumerableName(elem, name, callback = null) {
+    callback = callback ?? onEnumerableUpdateElem;
     elem.addEventListener(
-        `enumerable-update-${name}`, onEnumerableUpdate);
+        `enumerable-update-${name}`,
+        (event) => onEnumerableUpdate(event, callback));
+
     const current = Enumerable[name];
     if (!current || !current.length) {
         return;
     }
 
-    onEnumerableUpdateElem(elem, current);
+    callback(elem, current);
 }
 
 /**
@@ -963,25 +991,35 @@ export function listenEnumerableName(elem, name) {
  * @param {number} id
  * @param {string} name
  */
-export function listenEnumerableLabel(elem, id, name) {
-    const span = document.createElement("span");
-    span.dataset["enumerable"] = name;
-    span.dataset["enumerableId"] = id.toString();
+export function prepareEnumerableTarget(elem, id, name) {
+    elem.dataset["enumerableId"] = id.toString();
+    elem.dataset["enumerable"] = name;
+}
 
-    listenEnumerableName(span, name);
+/**
+ * @param {HTMLElement} elem
+ * @param {number} id
+ * @param {string} name
+ * @param {EnumerableElemCallback?} callback
+ */
+export function listenEnumerableTarget(elem, id, name, callback = null) {
+    const span = document.createElement("span");
+    prepareEnumerableTarget(span, id, name);
+    listenEnumerableName(span, name, callback);
     elem.appendChild(span);
 }
 
 /**
  * @param {HTMLElement} elem
+ * @param {EnumerableElemCallback?} callback
  */
-export function listenEnumerable(elem) {
+export function listenEnumerable(elem, callback = null) {
     const name = elem.dataset["enumerable"];
     if (!name) {
         return;
     }
 
-    listenEnumerableName(elem, name);
+    listenEnumerableName(elem, name, callback);
 }
 
 /**
@@ -1140,10 +1178,29 @@ const Settings = new SettingsBase();
  * @param {InputOrSelect} elem
  * @returns {boolean}
  */
+function checkElementChanged(elem) {
+    const lhs = getOriginalForElement(elem);
+    const rhs = getDataForElement(elem);
+
+    if (typeof lhs === "number"
+     && typeof rhs === "number"
+     && isNaN(lhs)
+     && isNaN(rhs))
+    {
+        return false;
+    }
+
+    return lhs !== rhs;
+}
+
+/**
+ * @param {InputOrSelect} elem
+ * @returns {boolean}
+ */
 export function checkAndSetElementChanged(elem) {
     const changed = isChangedElement(elem);
 
-    if (getOriginalForElement(elem) !== getDataForElement(elem)) {
+    if (checkElementChanged(elem)) {
         setChangedElement(elem);
     } else {
         resetChangedElement(elem);

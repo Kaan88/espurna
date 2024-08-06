@@ -26,7 +26,7 @@ test('select unchanged with empty value when original is missing', () => {
         .toEqual(getOriginalForElement(node));
 
     node.selectedIndex = -1;
-    expect(getDataForElement(node)).toBe(null);
+    expect(getDataForElement(node)).toBeNull();
     assert(!isChangedElement(node));
 
     node.selectedIndex = 1;
@@ -53,22 +53,21 @@ test('number input unchanged with empty value when original is missing', () => {
     expect(getDataForElement(node))
         .toEqual(getOriginalForElement(node));
 
-    const data = 12345;
-    expect(getDataForElement(node)).toBe(null);
+    expect(getDataForElement(node)).toBeNaN();
     assert(!isChangedElement(node));
 
-    node.valueAsNumber = data;
+    setInputValue(node, 12345);
     assert(!isChangedElement(node));
     assert(checkAndSetElementChanged(node));
 
-    node.value = '';
+    setInputValue(node, '');
     assert(isChangedElement(node));
 
     assert(checkAndSetElementChanged(node));
     assert(!isChangedElement(node));
 
     setOriginalsFromValuesForNode(node);
-    node.value = '';
+    setInputValue(node, '');
 
     assert(!checkAndSetElementChanged(node));
     assert(!isChangedElement(node));
@@ -255,16 +254,19 @@ test('input value update', () => {
     input.value = '';
 
     setInputValue(input, null);
-    expect(getDataForElement(input)).toBeNull();
+    expect(getDataForElement(input)).toBeNaN();
 
     setInputValue(input, 12345);
     expect(getDataForElement(input)).toBe(12345);
+
+    setInputValue(input, '');
+    expect(getDataForElement(input)).toBeNaN();
 
     setInputValue(input, '56789');
     expect(getDataForElement(input)).toBe(56789);
 
     setInputValue(input, 'text');
-    expect(getDataForElement(input)).toBe(null);
+    expect(getDataForElement(input)).toBeNaN();
 
     input.type = 'text';
     input.value = '';

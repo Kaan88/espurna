@@ -31,7 +31,7 @@
 
                 <div class="pure-control-group">
                     <label>HTTP port</label>
-                    <input name="webPort" type="text" data-action="reboot">
+                    <input name="webPort" type="number" data-action="reboot" min="1" max="65535" required >
                     <span class="pure-form-message">
                         This is the port for the web interface and API requests.
                         If different than 80 (standard HTTP port) you will have to add it explicitly to your requests: http://myip:myport/
