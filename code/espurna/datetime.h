@@ -19,10 +19,13 @@ Copyright (C) 2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 namespace espurna {
 namespace datetime {
 
-using Days = std::chrono::duration<time_t, std::ratio<86400> >;
-using Hours = std::chrono::duration<time_t, std::ratio<3600> >;
-using Minutes = std::chrono::duration<time_t, std::ratio<60> >;
-using Seconds = std::chrono::duration<time_t>;
+using rep_type = time_t;
+
+using Seconds = std::chrono::duration<rep_type>;
+using Minutes = std::chrono::duration<rep_type, std::ratio<60> >;
+using Hours = std::chrono::duration<rep_type, std::ratio<Minutes::period::num * 60> >;
+using Days = std::chrono::duration<rep_type, std::ratio<Hours::period::num * 24> >;
+using Weeks = std::chrono::duration<rep_type, std::ratio<Days::period::num * 7> >;
 
 // TODO import std::chrono::{floor,ceil,trunc}
 

@@ -61,7 +61,7 @@ function initToggle(id) {
 
     toggle.setAttribute("id", realId);
     toggle.previousElementSibling?.setAttribute("for", realId);
-    
+
     mergeTemplate(container, line);
 }
 

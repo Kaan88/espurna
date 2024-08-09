@@ -82,7 +82,7 @@ void run(WiFiClient* client, const String& url) {
 
 void clientFromHttp(const String& url) {
     auto client = std::make_unique<WiFiClient>();
-    run(client.get(), url); 
+    run(client.get(), url);
 }
 
 #if SECURE_CLIENT == SECURE_CLIENT_BEARSSL

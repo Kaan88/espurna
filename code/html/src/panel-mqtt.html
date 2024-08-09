@@ -79,7 +79,7 @@
 
                 <div class="pure-control-group">
                     <label>Root Topic</label>
-                    <input name="mqttTopic" type="text">
+                    <input name="mqttTopic" type="text" required >
                     <span class="pure-form-message-inline">
                         This is the root topic for this device. The following placeholders can be used: {hostname} and {mac} to dynamically set the value to the device hostname and MAC address respectively. Subscribe to <samp>&lt;root&gt;/#</samp> to see all published topics.
                     </span>
@@ -121,7 +121,7 @@
 
                 <div class="pure-control-group">
                     <label>Topic name</label>
-                    <input type="text" name="mqttJson">
+                    <input type="text" name="mqttJson" required >
                     <span class="pure-form-message">
                         JSON message will be sent to <strong>&lt;root&gt;/&lt;name&gt;</strong> topic (<strong>data</strong> by default).
                     </span>

@@ -20,7 +20,7 @@ beforeAll(async () => {
     <template id="template-basic-cfg">
         <fieldset>
             <legend>Some input and text fields</legend>
-            <input name="foo" type="text"></input> 
+            <input name="foo" type="text"></input>
             <span data-key="bar"></span>
             <span data-key="template-id" data-pre="#"></span>
         </fieldset>

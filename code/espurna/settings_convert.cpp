@@ -202,7 +202,7 @@ loop:
 
 update_floating:
     {
-        // only seconds and up, anything down of milli does not make sense here 
+        // only seconds and up, anything down of milli does not make sense here
         if (den > 1) {
             goto reset;
         }

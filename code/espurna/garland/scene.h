@@ -83,7 +83,7 @@ private:
     float              cycleFactor = getCycleFactor(GARLAND_SCENE_DEFAULT_SPEED);
     // speed is reverse to cycleFactor. For forward direction control of animation speed.
     // Recommended values: 30 < speed < 60.
-    // Correspondence: 
+    // Correspondence:
     //   speed=60, cycleFactor=1
     //   speed=30, cycleFactor=4
     byte               speed = GARLAND_SCENE_DEFAULT_SPEED;

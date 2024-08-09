@@ -199,7 +199,7 @@ class MHZ19Sensor : public BaseSensor {
                 return;
             }
 
-            uint16_t value = 
+            uint16_t value =
                   uint16_t(response.data[2] << 8)
                 + uint16_t(response.data[3]);
             _co2 = value;

@@ -5,7 +5,15 @@ import { loadTemplate, mergeTemplate } from './template.mjs';
  * @returns {string}
  */
 export function formatError(error) {
-    return [error.name, error.message, error.stack].join("\n");
+    if (error.stack) {
+        return error.stack;
+    }
+
+    return [
+        error.name,
+        error.message,
+        "(no error stack)"
+    ].join("\n");
 }
 
 /**

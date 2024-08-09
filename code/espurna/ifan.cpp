@@ -359,7 +359,7 @@ void configure() {
         .speed = settings::speed()};
 
     internal::config = updated;
-    pin_update(); 
+    pin_update();
 }
 
 // Note that we use API speed endpoint strictly for the setting
@@ -477,7 +477,7 @@ RelayProviderBasePtr make_relay_provider(size_t index) {
     RelayProviderBasePtr out;
 
     if (setup()) {
-        out = std::make_unique<FanRelayProvider>(); 
+        out = std::make_unique<FanRelayProvider>();
         internal::relay_id = index;
     }
 

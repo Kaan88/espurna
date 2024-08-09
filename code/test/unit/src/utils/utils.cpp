@@ -9,6 +9,28 @@ namespace espurna {
 namespace test {
 namespace {
 
+void test_pretty_duration() {
+    const duration::Seconds one =
+        duration::Days{5}
+      + duration::Hours{15}
+      + duration::Minutes{30}
+      + duration::Seconds{45};
+
+    TEST_ASSERT_EQUAL_STRING("5d 15h 30m 45s",
+            prettyDuration(one).c_str());
+
+    const duration::Seconds two =
+        duration::Days{5}
+      + duration::Hours{15};
+
+    TEST_ASSERT_EQUAL_STRING("5d 15h",
+            prettyDuration(two).c_str());
+
+    const auto three = duration::Seconds{0};
+    TEST_ASSERT_EQUAL_STRING("0s",
+            prettyDuration(three).c_str());
+}
+
 void test_parse_unsigned_result() {
     const auto result = parseUnsigned("");
     using Value = std::is_same<decltype(result.value), uint32_t>;
@@ -62,6 +84,7 @@ void test_parse_unsigned_prefix() {
 int main(int, char**) {
     UNITY_BEGIN();
     using namespace espurna::test;
+    RUN_TEST(test_pretty_duration);
     RUN_TEST(test_parse_unsigned_result);
     RUN_TEST(test_parse_unsigned_value);
     RUN_TEST(test_parse_unsigned_overflow);

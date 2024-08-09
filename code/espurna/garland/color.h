@@ -38,7 +38,7 @@ public:
         return Color();
     }
 
-    //interpolates between this color and provided. 
+    //interpolates between this color and provided.
     //x is from 0 to 1, 0 gives this color, 1 gives provided color, values between give interpolation
     Color interpolate(Color color, float x) const {
         int r0 = x * (color.r - r) + r;
@@ -69,7 +69,7 @@ public:
         if (g>=dg) { g=g-dg; } else { g=0; }
         if (b>=db) { b=b-db; } else { b=0; }
         return *this;
-    }  
+    }
 
     Color max_bright() {
         if (r==255 || g==255 || b==255)

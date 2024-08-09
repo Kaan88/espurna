@@ -38,7 +38,7 @@ struct Commands {
     const Command* end;
 };
 
-// store name<->func association at runtime 
+// store name<->func association at runtime
 void add(Commands);
 
 template <size_t Size>

@@ -89,9 +89,19 @@ namespace settings {
 
 STRING_VIEW_INLINE(Prefix, "ntp");
 
+namespace keys {
+
+STRING_VIEW_INLINE(StartDelay, "ntpStartDelay");
+STRING_VIEW_INLINE(UpdateInterval, "ntpUpdateIntvl");
+STRING_VIEW_INLINE(Server, "ntpServer");
+STRING_VIEW_INLINE(Tz, "ntpTZ");
+STRING_VIEW_INLINE(Dhcp, "ntpDhcp");
+
+} // namespace keys
+
 espurna::duration::Seconds startDelay() {
     return std::clamp(
-        getSetting("ntpStartDelay", build::StartDelay),
+        getSetting(keys::StartDelay, build::StartDelay),
         build::StartMin, build::StartMax);
 }
 
@@ -101,7 +111,7 @@ espurna::duration::Seconds randomStartDelay() {
 
 espurna::duration::Seconds updateInterval() {
     return std::clamp(
-        getSetting("ntpUpdateIntvl", build::UpdateInterval),
+        getSetting(keys::UpdateInterval, build::UpdateInterval),
         build::UpdateMin, build::UpdateMax);
 }
 
@@ -111,27 +121,27 @@ espurna::duration::Seconds randomUpdateInterval() {
 
 // as either DNS name or IP address
 String server() {
-    return getSetting("ntpServer", build::server());
+    return getSetting(keys::Server, build::server());
 }
 
 void server(const String& value) {
-    setSetting("ntpServer", value);
+    setSetting(keys::Server, value);
 }
 
 // POSIX TZ variable, ref.
 // - https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html#tag_08_03
 // - https://www.gnu.org/software/libc/manual/html_node/TZ-Variable.html
 String tz() {
-    return getSetting("ntpTZ", build::tz());
+    return getSetting(keys::Tz, build::tz());
 }
 
 // in case DHCP packet contains a SNTP option, switch to that server instead of the one from settings
 bool dhcp() {
-    return getSetting("ntpDhcp", build::dhcp());
+    return getSetting(keys::Dhcp, build::dhcp());
 }
 
 void dhcp(bool value) {
-    setSetting("ntpDhcp", value);
+    setSetting(keys::Dhcp, value);
 }
 
 } // namespace settings
@@ -383,6 +393,8 @@ time_t now() {
 #if WEB_SUPPORT
 namespace web {
 
+STRING_VIEW_INLINE(Status, "ntpStatus");
+
 bool onKeyCheck(StringView key, const JsonVariant&) {
     return key.startsWith(settings::Prefix);
 }
@@ -392,12 +404,17 @@ void onVisible(JsonObject& root) {
 }
 
 void onData(JsonObject& root) {
-    root["ntpStatus"] = synced();
+    root[Status] = synced();
 }
 
 void onConnected(JsonObject& root) {
-    root["ntpServer"] = settings::server();
-    root["ntpTZ"] = settings::tz();
+    root[settings::keys::Dhcp] = settings::dhcp();
+
+    root[settings::keys::Server] = settings::server();
+    root[settings::keys::Tz] = settings::tz();
+
+    root[settings::keys::StartDelay] = settings::startDelay().count();
+    root[settings::keys::UpdateInterval] = settings::updateInterval().count();
 }
 
 } // namespace web
@@ -800,15 +817,15 @@ void onStationModeGotIP(WiFiEventStationModeGotIP) {
 
     const auto server = activeServer();
     if (!server.length()) {
-        DEBUG_MSG_P(PSTR("[NTP] Updating `ntpDhcp` to ignore the DHCP values\n"));
-        settings::dhcp(false);
-        sntp_servermode_dhcp(0);
-        ::espurnaRegisterOnce(configure);
+        if (settings::dhcp()) {
+            settings::dhcp(false);
+            sntp_servermode_dhcp(0);
+            ::espurnaRegisterOnce(configure);
+        }
         return;
     }
 
     if (!internal::server.length() || (server != internal::server)) {
-        DEBUG_MSG_P(PSTR("[NTP] Updating from DHCP option - \"ntpServer\" => \"%s\"\n"), server.c_str());
         internal::server = server;
         settings::server(server);
     }

@@ -61,6 +61,7 @@ enum class Unit : int {
 
 enum class Filter : int {
     Last,
+    Min,
     Max,
     Median,
     MovingAverage,

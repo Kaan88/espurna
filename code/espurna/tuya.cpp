@@ -663,7 +663,7 @@ error:
         filter = getSetting("tuyaFilter", 1 == TUYA_FILTER_ENABLED);
 
         // Install main loop method and WiFiStatus ping (only works with specific mode)
-        
+
         ::espurnaRegisterLoop(loop);
         ::wifiRegister([](espurna::wifi::Event event) {
             switch (event) {

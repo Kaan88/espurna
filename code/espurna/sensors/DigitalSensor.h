@@ -276,7 +276,7 @@ public:
     }
 
     void pre() override {
-        _current = digitalRead(_pin); 
+        _current = digitalRead(_pin);
     }
 
     // Current value for slot # index

@@ -796,7 +796,7 @@ private:
         if (!_port) {
             _port = std::make_shared<Port>();
         }
-        
+
         // TODO hybrid mode with an extra pull-up pin?
         // TODO parasite *can* be detected for DS18X, see
         // 'DS18B20 .pdf / ROM Commands / Read Power Supply (0xB4)'

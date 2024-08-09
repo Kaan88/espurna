@@ -371,7 +371,7 @@ void setup() {
     #if USE_EXTRA
         extraSetup();
     #endif
-    
+
     // Update `cfg` version
     migrate();
 

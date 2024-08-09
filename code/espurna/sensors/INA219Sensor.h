@@ -85,7 +85,7 @@ public:
 
     enum AdcMode : uint8_t {
         // raw readings, no sampling
-        // fastest conversion time (less than 1 ms) 
+        // fastest conversion time (less than 1 ms)
         // 84, 148, 276 and 532 μs respectively
         BIT_MODE_9 = 0,
         BIT_MODE_10 = 0b01,

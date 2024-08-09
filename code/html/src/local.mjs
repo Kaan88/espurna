@@ -2,6 +2,11 @@ import { updateVariables } from './settings.mjs';
 
 export function init() {
     updateVariables({
+        ntpServer: "192.168.1.1",
+        ntpTZ: 'UTC-2',
+        ntpStartDelay: 10,
+        ntpDhcp: true,
+        ntpUpdateIntvl: 1800,
         webMode: 0,
         useWhite: false,
         useCCT: false,
@@ -310,19 +315,21 @@ export function init() {
     updateVariables({
         'magnitudes-settings': {
             values: [
-                [0,null,"NaN",0,0],
-                [0,null,"NaN",0,0],
-                [0,null,"NaN",0,0],
-                [0,null,"NaN",0,0],
-                [0,1,"NaN",0,0],
-                [0,1,"NaN",0,0],
-                [0,1,"NaN",0,0],
-                [null,1,"NaN",0,0],
-                [null,null,"NaN",0,0],
+                [0,null,1,"NaN","NaN",0,0],
+                [0,null,"NaN",2,"NaN",0,0],
+                [0,null,"NaN","NaN",3,0,0],
+                [0,null,"NaN","NaN","NaN",0,0],
+                [0,1,"NaN","NaN",4,0,0],
+                [0,1,"NaN",5,"NaN",0,0],
+                [0,1,6,"NaN","NaN",0,0],
+                [null,1,"NaN","NaN","NaN",0,0],
+                [null,null,1,2,3,0,0],
             ],
             schema: [
                 "Correction",
                 "Ratio",
+                "MinThreshold",
+                "MaxThreshold",
                 "ZeroThreshold",
                 "MinDelta",
                 "MaxDelta"

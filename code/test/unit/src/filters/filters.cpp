@@ -7,6 +7,7 @@
 #include <espurna/filters/LastFilter.h>
 #include <espurna/filters/MaxFilter.h>
 #include <espurna/filters/MedianFilter.h>
+#include <espurna/filters/MinFilter.h>
 #include <espurna/filters/MovingAverageFilter.h>
 #include <espurna/filters/SumFilter.h>
 
@@ -19,149 +20,292 @@ namespace {
 void test_last() {
     auto filter = LastFilter();
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
     filter.resize(123);
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
-    filter.update(123.4);
-    TEST_ASSERT_EQUAL_DOUBLE(123.4, filter.value());
-
-    filter.update(456.7);
-    TEST_ASSERT_EQUAL_DOUBLE(456.7, filter.value());
-
-    filter.update(789.0);
-    TEST_ASSERT_EQUAL_DOUBLE(789.0, filter.value());
+    const double samples[] = {123.4, 456.7, 789.0, 1.0};
+    for (auto& sample : samples) {
+        filter.update(sample);
+        TEST_ASSERT(filter.available());
+        TEST_ASSERT(filter.ready());
+        TEST_ASSERT_EQUAL_DOUBLE(sample, filter.value());
+    }
 
     filter.reset();
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.update(111.11);
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+
+    filter.restart();
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 }
 
 void test_max() {
     auto filter = MaxFilter();
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
     filter.resize(567);
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+#define TEST_EXPECTED(EXPECTED, VALUE)\
+    filter.update(VALUE);\
+    TEST_ASSERT(filter.available());\
+    TEST_ASSERT(filter.ready());\
+    TEST_ASSERT_EQUAL_DOUBLE(EXPECTED, filter.value());\
 
-    filter.update(5.0);
-    TEST_ASSERT_EQUAL_DOUBLE(5.0, filter.value());
+    TEST_EXPECTED(5.0, 5.0);
+    TEST_EXPECTED(10.0, 10.0);
+    TEST_EXPECTED(15.0, 15.0);
+    TEST_EXPECTED(15.0, 10.0);
+    TEST_EXPECTED(15.0, -10.0);
+    TEST_EXPECTED(15.0, -15.0);
+    TEST_EXPECTED(15.0, 0.0);
+    TEST_EXPECTED(30.0, 30.0);
 
-    filter.update(10.0);
-    TEST_ASSERT_EQUAL_DOUBLE(10.0, filter.value());
-
-    filter.update(15.0);
-    TEST_ASSERT_EQUAL_DOUBLE(15.0, filter.value());
-
-    filter.update(10.0);
-    TEST_ASSERT_EQUAL_DOUBLE(15.0, filter.value());
-
-    filter.update(-10.0);
-    TEST_ASSERT_EQUAL_DOUBLE(15.0, filter.value());
-
-    filter.update(-15.0);
-    TEST_ASSERT_EQUAL_DOUBLE(15.0, filter.value());
-
-    filter.update(0.0);
-    TEST_ASSERT_EQUAL_DOUBLE(15.0, filter.value());
+#undef TEST_EXPECTED
 
     filter.reset();
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.update(123.0);
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(123.0, filter.value());
+
+    filter.restart();
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.update(567.0);
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(567.0, filter.value());
 }
 
 void test_median() {
     auto filter = MedianFilter();
-    TEST_ASSERT(!filter.status());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
     const double one[] {4., 3., 5., 6., 2., 2., 3., 4., 7., 9.};
     filter.resize(std::size(one));
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    auto it = std::begin(one);
+    filter.update(*it);
 
-    for (const auto& sample : one) {
-        filter.update(sample);
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(!filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(4., filter.value());
+
+    ++it;
+    filter.update(*it);
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(!filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(3.5, filter.value());
+
+    ++it;
+    while (it != std::end(one)) {
+        filter.update(*it);
+        ++it;
     }
 
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
     TEST_ASSERT_EQUAL_DOUBLE(4.0, filter.value());
 
     const double two[] {6., 6.1, 6.2, 6.3, 6.4, 6.5, 2.5, 4.5, 2.6, 2.5, 2.4};
+
+    static_assert(std::size(one) < std::size(two), "");
     filter.resize(std::size(two));
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(9, filter.value());
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    TEST_ASSERT_EQUAL_DOUBLE(4.0, filter.value()); // previous median, since total size increased
 
     for (const auto& sample : two) {
         filter.update(sample);
     }
 
-    TEST_ASSERT_EQUAL_DOUBLE(4.97, filter.value());
+    TEST_ASSERT_EQUAL_DOUBLE(6.0, filter.value());
 
     const double three[] {2.4, 2.4};
+
+    static_assert(std::size(three) < std::size(two), "");
     filter.resize(std::size(three));
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(2.4, filter.value());
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(2.45, filter.value()); // median([2.5, 2.4])
 
     for (const auto& sample : three) {
         filter.update(sample);
     }
 
-    TEST_ASSERT_EQUAL_DOUBLE(2.4, filter.value());
+    TEST_ASSERT_EQUAL_DOUBLE(2.4, filter.value()); // median([2.4, 2.4])
+}
+
+void test_min() {
+    auto filter = MinFilter();
+
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.resize(999);
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+#define TEST_EXPECTED(EXPECTED, VALUE)\
+    filter.update(VALUE);\
+    TEST_ASSERT(filter.available());\
+    TEST_ASSERT(filter.ready());\
+    TEST_ASSERT_EQUAL_DOUBLE(EXPECTED, filter.value());\
+
+    TEST_EXPECTED(100.0, 100.0);
+    TEST_EXPECTED(90.0, 90.0);
+    TEST_EXPECTED(90.0, 110.0);
+    TEST_EXPECTED(80.0, 80.0);
+    TEST_EXPECTED(-100.0, -100.0);
+    TEST_EXPECTED(-100.0, 200.0);
+    TEST_EXPECTED(-100.0, 0.0);
+    TEST_EXPECTED(-200.0, -200.0);
+
+#undef TEST_EXPECTED
+
+    filter.reset();
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.update(44.0);
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(44.0, filter.value());
+
+    filter.restart();
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.update(45.0);
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(45.0, filter.value());
 }
 
 void test_moving_average() {
     auto filter = MovingAverageFilter();
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
-    TEST_ASSERT(!filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    const double one[] {22., 22.3, 22.1, 22.1, 22.1, 22.0, 22.5, 22.1};
+    filter.resize(std::size(one));
 
-    const double samples[] {22., 22.3, 22.1, 22.1, 22.1, 22.0, 22.5, 22.1};
-    filter.resize(std::size(samples));
+    auto it = std::begin(one);
+    filter.update(*it);
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.ready());
+    TEST_ASSERT(filter.available());
 
-    for (const auto& sample : samples) {
+    ++it;
+    while (it != std::end(one)) {
+        filter.update(*it);
+        ++it;
+    }
+
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT(filter.available());
+
+    TEST_ASSERT_EQUAL_DOUBLE(22.15, filter.value());
+
+    const double two[] {5., 6., 7., 8., 9., 10., 11., 12., 13.};
+    static_assert(std::size(one) < std::size(two), "");
+
+    filter.resize(std::size(two));
+    TEST_ASSERT(!filter.ready());
+    TEST_ASSERT(filter.available());
+
+    for (const auto& sample : two) {
         filter.update(sample);
     }
 
-    TEST_ASSERT_EQUAL_DOUBLE(22.15, filter.value());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT(filter.available());
+
+    TEST_ASSERT_EQUAL_DOUBLE(9.0, filter.value());
+
+    const double three[] {14., 15., 16., 17.};
+    static_assert(std::size(three) < std::size(two), "");
+
+    for (const auto& sample : three) {
+        filter.update(sample);
+    }
+
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT(filter.available());
+
+    TEST_ASSERT_EQUAL_DOUBLE(13.0, filter.value());
 }
 
 void test_sum() {
     auto filter = SumFilter();
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
-    const double samples[] {20., 20.1, 13., 10., 5., 14., 29., 32.};
-    filter.resize(std::size(samples));
+    const double one[] {20., 20.1, 13., 10., 5., 14., 29., 32.};
+    filter.resize(std::size(one));
 
-    TEST_ASSERT(filter.status());
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
-    for (const auto& sample : samples) {
+    for (const auto& sample : one) {
         filter.update(sample);
     }
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
 
     TEST_ASSERT_EQUAL_DOUBLE(143.1, filter.value());
 
     filter.reset();
-    TEST_ASSERT_EQUAL_DOUBLE(0.0, filter.value());
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 
-    filter.update(-15.0);
-    filter.update(30.0);
-    filter.update(-15.0);
-    filter.update(1.0);
-    TEST_ASSERT_EQUAL_DOUBLE(1.0, filter.value());
+    const double two[] {-15.0, 30.0, -15.0, 10.0, 1.0, 3.0};
+    filter.resize(std::size(two));
+
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    auto it = std::begin(two);
+    filter.update(*it);
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+
+    ++it;
+    while (it != std::end(two)) {
+        filter.update(*it);
+        ++it;
+    }
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+
+    TEST_ASSERT_EQUAL_DOUBLE(14.0, filter.value());
 }
 
 } // namespace
@@ -174,6 +318,7 @@ int main(int, char**) {
     RUN_TEST(test_last);
     RUN_TEST(test_max);
     RUN_TEST(test_median);
+    RUN_TEST(test_min);
     RUN_TEST(test_moving_average);
     RUN_TEST(test_sum);
     return UNITY_END();

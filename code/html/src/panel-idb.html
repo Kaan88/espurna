@@ -20,10 +20,10 @@
                 </div>
 
                 <div class="pure-control-group">
-                    <label>Address</label>
-                    <input name="idbHost" type="text">
-                    <span class="pure-form-message">
-                        IP or hostname of the influxdb server
+                    <label>Server</label>
+                    <input name="idbHost" type="text" required >
+                    <span class="pure-form-message-inline">
+                        IP or hostname
                     </span>
                 </div>
 
@@ -34,12 +34,12 @@
 
                 <div class="pure-control-group">
                     <label>Database</label>
-                    <input name="idbDatabase" type="text">
+                    <input name="idbDatabase" type="text" required >
                 </div>
 
                 <div class="pure-control-group">
                     <label>Username</label>
-                    <input name="idbUsername" type="text" autocomplete="off">
+                    <input name="idbUsername" type="text" autocomplete="off" required >
                 </div>
 
                 <div class="pure-control-group">

@@ -103,7 +103,7 @@ class PM1006Sensor : public BaseSensor {
         void _read() {
 
             while(_serial->available()) {
-                
+
                 unsigned char ch = _serial->read();
                 if ((_position > 0) || (ch == 0x16)) {
                     _buffer[_position] = ch;
@@ -115,7 +115,7 @@ class PM1006Sensor : public BaseSensor {
                     }
                 }
                 yield();
-        
+
             }
 
         }
@@ -124,7 +124,7 @@ class PM1006Sensor : public BaseSensor {
 
         unsigned char _buffer[20] = {0};
         unsigned char _position = 0;
-        
+
         double _pm25 = 0;
         Stream* _serial { nullptr };
 

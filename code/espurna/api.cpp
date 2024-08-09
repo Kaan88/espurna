@@ -730,7 +730,7 @@ template <typename Handler, typename Get, typename Put>
 void add(StringView path, Get&& get, Put&& put) {
     add<Handler, Get, Put>(
         path.toString(),
-        std::forward<Get>(get), 
+        std::forward<Get>(get),
         std::forward<Put>(put));
 }
 
@@ -764,7 +764,7 @@ void setup() {
 }
 
 } // namespace
-} // namespace api 
+} // namespace api
 } // namespace espurna
 
 // -----------------------------------------------------------------------------

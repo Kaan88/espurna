@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// Max Filter
+// Min Filter
 // Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 // Copyright (C) 2023-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 // -----------------------------------------------------------------------------
@@ -10,13 +10,13 @@
 
 #include <algorithm>
 
-class MaxFilter : public BaseFilter {
+class MinFilter : public BaseFilter {
 public:
     void update(double value) override {
         if (!_status) {
             _value = value;
         } else {
-            _value = std::max(value, _value);
+            _value = std::min(value, _value);
         }
         _status = true;
     }

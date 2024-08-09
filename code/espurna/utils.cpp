@@ -132,17 +132,39 @@ bool tryParseIdPath(espurna::StringView value, size_t limit, size_t& out) {
     return false;
 }
 
+static void prettyDurationImpl(char suffix, String& out, espurna::duration::rep_type value) {
+    if (value > 0) {
+        if (out.length()) {
+            out += ' ';
+        }
+
+        out += String(value) + suffix;
+    }
+}
+
+template <typename T>
+static void prettyDurationAppend(char suffix, String& out, espurna::duration::Seconds& seconds) {
+    const auto value = std::chrono::duration_cast<T>(seconds);
+    prettyDurationImpl(suffix, out, value.count());
+    seconds -= value;
+}
+
 String prettyDuration(espurna::duration::Seconds seconds) {
-    time_t timestamp = static_cast<time_t>(seconds.count());
-    tm spec;
-    gmtime_r(&timestamp, &spec);
+    String out;
 
-    char buffer[64];
-    sprintf_P(buffer, PSTR("%02dy %02dd %02dh %02dm %02ds"),
-        (spec.tm_year - 70), spec.tm_yday, spec.tm_hour,
-        spec.tm_min, spec.tm_sec);
+    if (seconds > seconds.zero())  {
+        using namespace espurna::duration;
+        prettyDurationAppend<Weeks>('w', out, seconds);
+        prettyDurationAppend<Days>('d', out, seconds);
+        prettyDurationAppend<Hours>('h', out, seconds);
+        prettyDurationAppend<Minutes>('m', out, seconds);
 
-    return String(buffer);
+        prettyDurationImpl('s', out, seconds.count());
+    } else {
+        out += "0s";
+    }
+
+    return out;
 }
 
 // -----------------------------------------------------------------------------

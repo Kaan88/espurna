@@ -512,18 +512,6 @@ function initMagnitudesSettings(values, schema) {
                 "Correction", settings.Correction);
         }
 
-        const threshold =
-            (typeof settings.ZeroThreshold === "number")
-                ? settings.ZeroThreshold :
-            (typeof settings.ZeroThreshold === "string")
-                ? NaN : null;
-
-        if (typeof threshold === "number") {
-            initMagnitudeNumberSetting(
-                "magnitude-zero-thresholds", id,
-                "ZeroThreshold", threshold, {required: false});
-        }
-
         if (typeof settings.MinDelta === "number") {
             initMagnitudeNumberSetting(
                 "magnitude-min-deltas", id,
@@ -534,6 +522,24 @@ function initMagnitudesSettings(values, schema) {
             initMagnitudeNumberSetting(
                 "magnitude-max-deltas", id,
                 "MaxDelta", settings.MaxDelta, {min: "0"});
+        }
+
+        for (let type of ["Min", "Max", "Zero"]) {
+            const key = `${type}Threshold`;
+            const threshold =
+                (typeof settings[key] === "number")
+                    ? settings[key] :
+                (typeof settings[key] === "string")
+                    ? NaN : null;
+
+            if (typeof threshold === "number") {
+                initMagnitudeNumberSetting(
+                    `magnitude-${type.toLowerCase()}-thresholds`, id,
+                    key, threshold, {
+                        required: false,
+                        min: (type == "Zero") ? "0" : undefined
+                    });
+            }
         }
     });
 }

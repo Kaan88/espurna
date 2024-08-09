@@ -137,7 +137,7 @@ class SM300D2Sensor : public BaseSensor {
         void _read() {
 
             while(_serial->available()) {
-                
+
                 unsigned char ch = _serial->read();
                 if ((_position > 0) || (ch == 0x3C)) {
                     _buffer[_position] = ch;
@@ -148,7 +148,7 @@ class SM300D2Sensor : public BaseSensor {
                     }
                 }
                 yield();
-        
+
             }
 
         }
@@ -157,7 +157,7 @@ class SM300D2Sensor : public BaseSensor {
 
         unsigned char _buffer[17] = {0};
         unsigned char _position = 0;
-        
+
         double _co2 = 0;
         double _ch2o = 0;
         double _tvoc = 0;

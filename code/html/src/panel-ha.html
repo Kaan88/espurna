@@ -32,10 +32,7 @@
                     <label>Prefix</label>
                     <input name="haPrefix" type="text">
                     <span class="pure-form-message">
-                        The prefix for the discovery topic e.g.
-                        <code>
-                            <strong>&lt;prefix&gt;</strong>/switch/espurna-123456/config
-                        </code>
+                        Should be the same as <strong>Discovery Prefix</strong> in HA instance configuration.
                     </span>
                 </div>
 
@@ -65,15 +62,17 @@
 
             <fieldset>
                 <legend>Publish &amp; Clear</legend>
-                <span class="pure-form-message">
-                    Manually trigger discovery messages for the configured
-                    <code>
-                        <strong>&lt;prefix&gt;</strong>
-                    </code>
-                </span>
+                <div class="pure-control-group">
+                    <span class="pure-form-message">
+                        Manually trigger discovery messages for the configured prefix<br>
+                        <code>
+                            <strong>&lt;prefix&gt;</strong>/<strong>&lt;component&gt;</strong>/espurna-123456/config
+                        </code>
+                    </span>
+                </div>
                 <div class="pure-control-group">
                     <button type="button" class="pure-button button-ha-enabled pure-input-1">Publish</button>
-                    <button type="button" class="pure-button button-ha-disabled pure-input-1">Clear</button>
+                    <button type="button" class="pure-button button-ha-disabled pure-input-1">Clear (publish empty message)</button>
                 </div>
             </fieldset>
 

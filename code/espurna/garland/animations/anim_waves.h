@@ -36,7 +36,7 @@ class AnimWaves : public Anim {
 
                 // if first wave is comet - inverse second wave probability to be comer to 60%
                 if (wave1Type == WaveType::Comet) {
-                    wave2Type = wave2Type == WaveType::Comet ? WaveType::Wave : WaveType::Comet; 
+                    wave2Type = wave2Type == WaveType::Comet ? WaveType::Wave : WaveType::Comet;
                 }
 
                 // we have only one pixel array for cache

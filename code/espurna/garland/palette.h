@@ -89,7 +89,7 @@ class Palette {
     Color getCloseCleanColor(const Color& refColor) const {
         int bestDiff = 0;
         Color bestColor;
-        
+
         for (auto i = 0; i < _numColors; ++i) {
             Color newColor = _colors[i];
             int diff = refColor.howCloseTo(newColor);

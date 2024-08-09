@@ -289,7 +289,7 @@ BasePortPtr hardware_port(
         (rx == GPIO_NONE)
             ? SERIAL_TX_ONLY :
         ((tx != GPIO_NONE) && (rx != GPIO_NONE))
-            ? SERIAL_FULL 
+            ? SERIAL_FULL
             : -1;
     if (mode < 0) {
         return nullptr;
@@ -347,7 +347,7 @@ constexpr types::SoftwareConfig from_config(Config config) {
         software_serial_data_bits_from_config(config.data_bits)
         | software_serial_parity_from_config(config.parity)
         | software_serial_stop_bits_from_config(config.stop_bits));
-    
+
 }
 
 BasePortPtr software_serial_port(
@@ -408,7 +408,7 @@ BasePortPtr make_port(size_t index) {
         out = software_serial_port(baudrate, tx, rx, config, invert);
     }
 #endif
-        
+
     return out;
 }
 

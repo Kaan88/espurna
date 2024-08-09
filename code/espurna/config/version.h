@@ -9,7 +9,7 @@
 #endif
 
 #ifndef APP_VERSION
-#define APP_VERSION             "1.17.0-dev"
+#define APP_VERSION             "1.17.0"
 #endif
 
 #ifndef APP_AUTHOR

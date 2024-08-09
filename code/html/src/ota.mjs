@@ -16,7 +16,7 @@ function withProgress(callback) {
         (document.querySelector("progress#upgrade-progress")));
 }
 
-/** 
+/**
  * @param {number} flash_mode
  * @returns string
  */
@@ -29,7 +29,7 @@ function describeFlashMode(flash_mode) {
     return `Unknown flash mode ${flash_mode}`;
 }
 
-/** 
+/**
  * @param {Uint8Array} buffer
  * @returns boolean
  */
@@ -37,7 +37,7 @@ function isGzip(buffer) {
     return (0x1f === buffer[0]) && (0x8b === buffer[1]);
 }
 
-/** 
+/**
  * @param {Uint8Array} buffer
  * @returns number
  */
@@ -45,7 +45,7 @@ function flashMode(buffer) {
     return buffer[2];
 }
 
-/** 
+/**
  * @param {Uint8Array} buffer
  * @returns boolean
  */
@@ -53,7 +53,7 @@ function checkMagic(buffer) {
     return 0xe9 === buffer[0];
 }
 
-/** 
+/**
  * @param {Uint8Array} buffer
  * @returns boolean
  */
@@ -68,7 +68,7 @@ function notifyValueError(event) {
     notifyMessage(`ERROR while attempting OTA upgrade - XHR ${event.type}`);
 }
 
-/** 
+/**
  * @param {Event} event
  */
 function onButtonClick(event) {
@@ -128,7 +128,7 @@ function onButtonClick(event) {
     });
 }
 
-/** 
+/**
  * @param {number} size
  * @returns {number}
  */
@@ -136,7 +136,7 @@ function roundedSize(size) {
     return (size - (size % 4096)) + 4096;
 }
 
-/** 
+/**
  * @param {Event} event
  */
 async function onFileChanged(event) {

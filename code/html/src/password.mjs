@@ -77,7 +77,7 @@ function generatePasswordsForForm(form) {
 function clearPasswordsForForm(form) {
     for (let elem of formPassPair(form)) {
         elem.type = "password";
-        elem.value = "";            
+        elem.value = "";
         resetChangedElement(elem);
     }
 }

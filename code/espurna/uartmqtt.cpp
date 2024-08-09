@@ -80,7 +80,7 @@ String serialize(Bytes bytes, bool encode) {
     } else {
         const auto length = std::min(string.size(), bytes.size());
         bytes = Bytes(bytes.begin(), length);
-            
+
         std::copy(bytes.begin(), bytes.end(),
             string.begin());
         out.concat(string.begin(), length);
@@ -139,7 +139,7 @@ void read(Stream& stream, uint8_t termination, bool encode) {
     if (available && capacity) {
         const auto length = std::min(capacity, available);
         internal::cursor += stream.readBytes(internal::cursor, length);
-            
+
         if (!mqttConnected()) {
             internal::cursor = internal::buffer.begin();
             return;
@@ -159,7 +159,7 @@ void read(Stream& stream, uint8_t termination, bool encode) {
             if (data.size()) {
                 send(data, encode);
             }
-            
+
             ++it;
             internal::cursor = std::copy(it, cursor, begin);
         } while (internal::cursor != begin);
@@ -178,7 +178,7 @@ void enqueue(String data) {
 
 void write(Print& print, uint8_t termination, bool decode) {
     using Clock = time::CoreClock;
-    
+
     const auto start = Clock::now();
     while (!internal::queue.empty() && (Clock::now() - start < build::WriteWindow)) {
         const auto& front = internal::queue.front();

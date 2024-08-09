@@ -230,7 +230,7 @@ bool forced_modem_sleep() {
         });
 }
 
-// CPU + RF power saving mode. 
+// CPU + RF power saving mode.
 // SDK enters IDLE task with minimal amount of operations.
 // User code would not be executed while the device is asleep.
 // On wakeup, execution resumes from this point.

@@ -17,7 +17,7 @@ class AnimGlow : public Anim {
         prevColor = palette->getRndInterpColor();
         curColor = palette->getRndInterpColor();
         inc = secureRandom(2) * 2 - 1;
-        
+
         colorInterp = 0;
         colorInterpSpeed = ((float)secureRandom(10, 20)) / 1000;
         flashDeciPercent = fiftyFifty() ? 0 : secureRandom(5, 20);

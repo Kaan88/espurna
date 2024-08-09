@@ -264,7 +264,7 @@ void commonSetup() {
 
   _thermostat_mode_cooler = getSetting(NAME_THERMOSTAT_MODE, THERMOSTAT_MODE_COOLER_BY_DEFAULT);
   DEBUG_MSG_P(PSTR("[THERMOSTAT] _thermostat_mode_cooler = %d\n"), _thermostat_mode_cooler);
-  
+
   _temp_range.min         = getSetting(NAME_TEMP_RANGE_MIN, THERMOSTAT_TEMP_RANGE_MIN);
   _temp_range.max         = getSetting(NAME_TEMP_RANGE_MAX, THERMOSTAT_TEMP_RANGE_MAX);
   DEBUG_MSG_P(PSTR("[THERMOSTAT] _temp_range.min = %d\n"), _temp_range.min);
@@ -286,7 +286,7 @@ void _thermostatReload() {
   int prev_temp_range_max = _temp_range.max;
 
   commonSetup();
- 
+
   if (_temp_range.min != prev_temp_range_min)
     notifyRangeChanged(true);
   if (_temp_range.max != prev_temp_range_max)

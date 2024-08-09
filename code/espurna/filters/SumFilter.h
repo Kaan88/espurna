@@ -10,18 +10,28 @@
 class SumFilter : public BaseFilter {
 public:
     void update(double value) override {
-        _value += value;
+        if (!_status) {
+            _value = value;
+        } else {
+            _value += value;
+        }
+
+        _status = true;
     }
 
-    bool status() const override {
-        return true;
+    bool ready() const override {
+        return _status;
     }
 
-    void resize(size_t) override {
-        _reset();
+    bool available() const override {
+        return _status;
     }
 
     void reset() override {
+        _reset();
+    }
+
+    void restart() override {
         _reset();
     }
 
@@ -31,8 +41,9 @@ public:
 
 private:
     void _reset() {
-        _value = 0.0;
+        _status = false;
     }
 
-    double _value = 0.0;
+    double _value { 0.0 };
+    bool _status { false };
 };

@@ -83,7 +83,7 @@ public:
     uint8_t operator[](size_t i) const {
         return *(_begin + i);
     }
-     
+
     uint8_t version() const {
         return _version;
     }

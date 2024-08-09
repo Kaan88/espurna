@@ -264,7 +264,7 @@ Result Parser::operator()(StringView line) {
             }
             break;
 
-        case State::Done: 
+        case State::Done:
             goto out;
 
         case State::Text:

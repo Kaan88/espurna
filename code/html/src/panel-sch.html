@@ -39,18 +39,33 @@
 
                 <div class="pure-control-group">
                     <label>Latitude</label>
-                    <input name="schLat" type="text">
+                    <input name="schLat" type="text" placeholder="-90…90" required >
+                    <span class="pure-form-message-inline">
+                        &deg; (degrees)
+                    </span>
                 </div>
 
                 <div class="pure-control-group">
                     <label>Longitude</label>
-                    <input name="schLong" type="text">
+                    <input name="schLong" type="text" placeholder="-180…180" required >
+                    <span class="pure-form-message-inline">
+                        &deg; (degrees)
+                    </span>
                 </div>
 
                 <div class="pure-control-group">
                     <label>Altitude</label>
-                    <input name="schAlt" type="text">
+                    <input name="schAlt" type="text" required >
+                    <span class="pure-form-message-inline">
+                        m (meters)
+                    </span>
                 </div>
+
+                <p>
+                    <span class="pure-form-message">
+                        Longitude, latitude and altitude values use dot (<samp>.</samp>) as decimal separator.
+                    </span>
+                </p>
             </fieldset>
 
             <fieldset>

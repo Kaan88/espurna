@@ -27,9 +27,13 @@ using Milliseconds = std::chrono::duration<uint32_t, std::milli>;
 
 // Our own helper types, a lot of things are based off of the `millis()`
 // (and it can be seamlessly used with any Core functions accepting u32 millisecond inputs)
-using Seconds = std::chrono::duration<uint32_t, std::ratio<1> >;
-using Minutes = std::chrono::duration<uint32_t, std::ratio<60> >;
-using Hours = std::chrono::duration<uint32_t, std::ratio<Minutes::period::num * 60> >;
+using rep_type = uint32_t;
+
+using Seconds = std::chrono::duration<rep_type, std::ratio<1> >;
+using Minutes = std::chrono::duration<rep_type, std::ratio<60> >;
+using Hours = std::chrono::duration<rep_type, std::ratio<Minutes::period::num * 60> >;
+using Days = std::chrono::duration<rep_type, std::ratio<Hours::period::num * 24> >;
+using Weeks = std::chrono::duration<rep_type, std::ratio<Days::period::num * 7> >;
 
 } // namespace duration
 
@@ -81,7 +85,7 @@ struct Callback {
 
     // when T *can* be converted into Callback::Type
     // usually, function pointer *or* lambda without capture list
-    template <typename T, 
+    template <typename T,
               typename = typename std::enable_if<
                   is_type<T>::value
                || type_convertible<T>::value>::type>
@@ -91,7 +95,7 @@ struct Callback {
     {}
 
     // anything else convertible into std function
-    template <typename T, 
+    template <typename T,
               typename = typename std::enable_if<
                 !is_callback<T>::value>::type,
               typename = typename std::enable_if<

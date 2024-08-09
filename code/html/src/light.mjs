@@ -310,7 +310,7 @@ function onChannelSliderChange(event) {
 
     const target = event.target;
     textForNextSibling(target, target.value);
-    
+
     const id = target.dataset["id"];
     if (!id) {
         return;

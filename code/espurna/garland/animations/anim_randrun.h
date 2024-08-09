@@ -30,7 +30,7 @@ class AnimRandRun : public Anim {
         pos += speed * dir;
         if (pos >= numLeds) pos -= numLeds;
         if (pos < 0) pos += numLeds;
-            
+
         for (auto i = 0; i < numLeds; ++i) {
             int j = i + pos;
             if (j >= numLeds) j -= numLeds;

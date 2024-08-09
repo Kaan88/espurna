@@ -139,23 +139,37 @@
             </fieldset>
 
             <fieldset>
-                <legend>Zero threshold</legend>
-                <span class="pure-form-message">Report only when the value is above this threshold. No threshold by default (empty value).</span>
-                <div id="magnitude-zero-thresholds" class="pure-form-aligned settings-group">
-                </div>
-            </fieldset>
-
-            <fieldset>
-                <legend>Report - minimum delta</legend>
-                <span class="pure-form-message">Report only when the value changed at least this much (absolute difference)</span>
+                <legend>Minimum delta</legend>
+                <span class="pure-form-message">Report only when the value change is greater than this value (absolute difference). No check by default (zero).</span>
                 <div id="magnitude-min-deltas" class="pure-form-aligned settings-group">
                 </div>
             </fieldset>
 
             <fieldset>
-                <legend>Report - reading maximum delta</legend>
-                <span class="pure-form-message">Try to report on every reading, when the value changes at least this much (absolute difference)</span>
+                <legend>Maximum delta</legend>
+                <span class="pure-form-message">Report only when the value change is less than this value (absolute difference). No check by default (zero).</span>
                 <div id="magnitude-max-deltas" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Minimum threshold</legend>
+                <span class="pure-form-message">Report only when the value is greater than or equal to this threshold. No threshold by default (empty value).</span>
+                <div id="magnitude-min-thresholds" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Maximum threshold</legend>
+                <span class="pure-form-message">Report only when the value is less than or equal to this threshold. No threshold by default (empty value).</span>
+                <div id="magnitude-max-thresholds" class="pure-form-aligned settings-group">
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Zero threshold</legend>
+                <span class="pure-form-message">Report 0 unless value is above this threshold. No threshold by default (empty value).</span>
+                <div id="magnitude-zero-thresholds" class="pure-form-aligned settings-group">
                 </div>
             </fieldset>
 
