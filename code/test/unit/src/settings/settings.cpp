@@ -13,14 +13,14 @@ using CustomMinutes = std::chrono::duration<float, std::ratio<60>>;
 
 template <>
 CustomMinutes convert(const String& value) {
-    return duration_convert::unchecked_parse<CustomMinutes>(value);
+    return espurna::duration::unchecked_parse<CustomMinutes>(value);
 }
 
 using CustomHours = std::chrono::duration<float, std::ratio<3600>>;
 
 template <>
 CustomHours convert(const String& value) {
-    return duration_convert::unchecked_parse<CustomHours>(value);
+    return espurna::duration::unchecked_parse<CustomHours>(value);
 }
 
 } // namespace internal
@@ -131,7 +131,7 @@ void test_convert_duration() {
 }
 
 void test_parse_duration() {
-    using internal::duration_convert::parse;
+    using espurna::duration::parse;
 
     TEST_ASSERT(parse("6", std::milli{}).ok);
     TEST_ASSERT_EQUAL_CHRONO(duration::Milliseconds(6),
@@ -155,7 +155,7 @@ void test_parse_duration() {
 }
 
 void test_parse_duration_spec() {
-    using internal::duration_convert::parse;
+    using espurna::duration::parse;
 
     TEST_ASSERT(!parse("5s2m", std::milli{}).ok);
     TEST_ASSERT(!parse("3m10h", std::milli{}).ok);

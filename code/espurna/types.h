@@ -343,6 +343,9 @@ struct StringView {
     bool startsWith(StringView) const;
     bool endsWith(StringView) const;
 
+    StringView slice(size_t index, size_t end) const;
+    StringView slice(size_t index) const;
+
 private:
 #if defined(HOST_MOCK)
     constexpr static bool inFlash(const char*) {
@@ -545,5 +548,43 @@ private:
     StringView _current;
 };
 
+namespace duration {
 
+struct Pair {
+    Seconds seconds{};
+    Microseconds microseconds{};
+};
+
+template <typename T, typename Rep = typename T::rep, typename Period = typename T::period>
+std::chrono::duration<Rep, Period> to_chrono(Pair result) {
+    using Type = std::chrono::duration<Rep, Period>;
+    return std::chrono::duration_cast<Type>(result.seconds)
+        + std::chrono::duration_cast<Type>(result.microseconds);
+}
+
+struct PairResult {
+    Pair value;
+    bool ok { false };
+};
+
+// Attempt to parse the given string with the specific ratio
+// Same as chrono, std::ratio<1> is a second
+PairResult parse(StringView, int num, int den);
+
+template <intmax_t Num, intmax_t Den>
+PairResult parse(StringView view, std::ratio<Num, Den>) {
+    return parse(view, Num, Den);
+}
+
+template <typename T>
+T unchecked_parse(StringView view) {
+    const auto result = parse(view, typename T::period{});
+    if (result.ok) {
+        return to_chrono<T>(result.value);
+    }
+
+    return T{}.min();
+}
+
+} // namespace duration
 } // namespace espurna

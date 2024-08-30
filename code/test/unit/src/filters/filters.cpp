@@ -157,6 +157,34 @@ void test_median() {
     }
 
     TEST_ASSERT_EQUAL_DOUBLE(2.4, filter.value()); // median([2.4, 2.4])
+
+    filter.resize(1);
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(2.4, filter.value()); // median([2.4])
+
+    filter.update(4.8);
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(4.8, filter.value()); // median([4.8])
+
+    filter.update(6.51);
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT_EQUAL_DOUBLE(6.51, filter.value()); // median([6.51])
+
+    filter.resize(0);
+
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
+
+    filter.update(5.31);
+
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 }
 
 void test_min() {
@@ -257,6 +285,25 @@ void test_moving_average() {
     TEST_ASSERT(filter.available());
 
     TEST_ASSERT_EQUAL_DOUBLE(13.0, filter.value());
+
+    filter.resize(1);
+
+    TEST_ASSERT(filter.ready());
+    TEST_ASSERT(filter.available());
+
+    TEST_ASSERT_EQUAL_DOUBLE(17.0, filter.value());
+
+    filter.update(5.31);
+
+    TEST_ASSERT(filter.available());
+    TEST_ASSERT(filter.ready());
+
+    TEST_ASSERT_EQUAL_DOUBLE(5.31, filter.value());
+
+    filter.resize(0);
+
+    TEST_ASSERT(!filter.available());
+    TEST_ASSERT(!filter.ready());
 }
 
 void test_sum() {

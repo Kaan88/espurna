@@ -6,11 +6,13 @@ import {
 
 import {
     addEnumerables,
-    prepareEnumerableTarget,
+    initSelect,
     listenEnumerableName,
     listenEnumerableTarget,
-    initSelect,
+    prepareEnumerableTarget,
+    resetGroupElement,
     setChangedElement,
+    setIgnoredElement,
     setOriginalFromValue,
     setSelectValue,
     variableListeners,
@@ -389,6 +391,7 @@ function initMagnitudeNumberSetting(containerId, id, keySuffix, value, {required
             input.max = max;
             input.value = value.toString();
 
+            resetGroupElement(input);
             setOriginalFromValue(input);
             listenEnumerableMagnitudeDescription(span, id);
         }));
@@ -426,6 +429,7 @@ function initMagnitudesExpected(id) {
     expected.name += info.key;
     expected.id = expected.name;
     expected.dataset["id"] = info.id.toString();
+    setIgnoredElement(expected);
 
     const [message] = /** @type {NodeListOf<HTMLSpanElement>} */
         (template.querySelectorAll(`span.emon-expected-${info.prefix}`));
@@ -537,7 +541,7 @@ function initMagnitudesSettings(values, schema) {
                     `magnitude-${type.toLowerCase()}-thresholds`, id,
                     key, threshold, {
                         required: false,
-                        min: (type == "Zero") ? "0" : undefined
+                        min: (type === "Zero") ? "0" : undefined
                     });
             }
         }

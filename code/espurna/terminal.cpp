@@ -95,7 +95,7 @@ PROGMEM_STRING(LightSleep, "SLEEP.LIGHT");
 
 void light_sleep(CommandContext&& ctx) {
     if (ctx.argv.size() == 2) {
-        using namespace espurna::settings::internal::duration_convert;
+        using namespace espurna::duration;
 
         const auto result = parse(ctx.argv[1], std::micro{});
         if (!result.ok) {
@@ -103,7 +103,7 @@ void light_sleep(CommandContext&& ctx) {
             return;
         }
 
-        const auto duration = to_chrono_duration<sleep::Microseconds>(result.value);
+        const auto duration = to_chrono<sleep::Microseconds>(result.value);
         if (!instantLightSleep(duration)) {
             terminalError(ctx, F("Could not sleep"));
             return;
@@ -123,7 +123,7 @@ void deep_sleep(CommandContext&& ctx) {
         return;
     }
 
-    using namespace espurna::settings::internal::duration_convert;
+    using namespace espurna::duration;
     const auto result = parse(ctx.argv[1], std::micro{});
 
     if (!result.ok) {
@@ -131,7 +131,7 @@ void deep_sleep(CommandContext&& ctx) {
         return;
     }
 
-    const auto duration = to_chrono_duration<sleep::Microseconds>(result.value);
+    const auto duration = to_chrono<sleep::Microseconds>(result.value);
     if (!instantDeepSleep(duration)) {
         terminalError(ctx, F("Could not sleep"));
         return;

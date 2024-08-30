@@ -1,4 +1,4 @@
-import { isChangedElement, getElements } from './settings.mjs';
+import { isChangedElement, isIgnoredElement, getElements } from './settings.mjs';
 import { showPanel } from './core.mjs';
 import {
     formPassPair,
@@ -126,7 +126,7 @@ export function validateFormsPasswords(forms, {strict = true, assumeChanged = fa
 export function validateFormsReportValidity(forms) {
     const elems = forms
         .flatMap((form) => getElements(form))
-        .filter(isChangedElement)
+        .filter((x) => isChangedElement(x) && !isIgnoredElement(x))
 
     if (!elems.length) {
         return false;

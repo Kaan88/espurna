@@ -496,7 +496,7 @@ public:
 
     double min_delta { 0.0 }; // Minimum value change to report
     double max_delta { 0.0 }; // Maximum value change to report
-                               //
+
     double min_threshold { Value::Unknown }; // Minimum value to report
     double max_threshold { Value::Unknown }; // Maximum value to report
 
@@ -4219,9 +4219,6 @@ bool ready_to_report(ValuePair& out, const ValuePair& processed, const Magnitude
     const bool check_max_threshold { !std::isnan(magnitude.max_threshold) };
     report = report || check_max_threshold;
 
-    // Figure out whether report value is zero or not
-    const bool check_zero_threshold { !std::isnan(magnitude.zero_threshold) };
-    report = report || check_zero_threshold;
 
     if (report) {
         if (magnitude.filter->ready()) {
@@ -4234,7 +4231,8 @@ bool ready_to_report(ValuePair& out, const ValuePair& processed, const Magnitude
             out = processed;
         }
 
-        if (check_zero_threshold && out.value < magnitude.zero_threshold) {
+        // Figure out whether report value should be zero or not
+        if (!std::isnan(magnitude.zero_threshold) && out.value < magnitude.zero_threshold) {
             out.value = 0.0;
         }
 

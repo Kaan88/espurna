@@ -15,6 +15,10 @@
 class MovingAverageFilter : public BaseFilter {
 public:
     void update(double value) override {
+        if (!_size) {
+            return;
+        }
+
         if (_size == _values.size()) {
             _values.erase(_values.begin());
         }
@@ -42,10 +46,9 @@ public:
 
     void resize(size_t size) override {
         if (!size) {
-            return;
-        }
-
-        if (size < _size) {
+            _values.clear();
+            _values.shrink_to_fit();
+        } else if (size < _size) {
             _values.erase(
                 _values.begin(),
                 _values.begin() + (_size - size));

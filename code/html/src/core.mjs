@@ -149,6 +149,33 @@ export function onPanelTargetClick(event) {
     if (name) {
         showPanelByName(name);
     }
+
+    panelTargetShowSelected(target);
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+function panelTargetShowSelected(elem) {
+    const root = elem.closest("#menu");
+    if (!root) {
+        return;
+    }
+
+    const parent = elem.parentElement;
+    if (!parent) {
+        return;
+    }
+
+    parent.classList.add("pure-menu-selected");
+
+    /** @type {NodeListOf<HTMLAnchorElement>} */
+    (root.querySelectorAll("#menu a[data-panel]"))
+        .forEach((a) => {
+            if (a.parentElement && a.parentElement !== parent) {
+                a.parentElement.classList.remove("pure-menu-selected");
+            }
+        });
 }
 
 /**

@@ -16,46 +16,6 @@ Copyright (C) 2019-2023 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 namespace espurna {
 namespace settings {
 namespace internal {
-namespace duration_convert {
-
-// A more loosely typed duration, so we could have a single type
-struct Pair {
-    duration::Seconds seconds{};
-    duration::Microseconds microseconds{};
-};
-
-struct Result {
-    Pair value;
-    bool ok { false };
-};
-
-template <typename T, typename Rep = typename T::rep, typename Period = typename T::period>
-std::chrono::duration<Rep, Period> to_chrono_duration(Pair result) {
-    using Type = std::chrono::duration<Rep, Period>;
-    return std::chrono::duration_cast<Type>(result.seconds)
-        + std::chrono::duration_cast<Type>(result.microseconds);
-}
-
-// Attempt to parse the given string with the specific ratio
-// Same as chrono, std::ratio<1> is a second
-Result parse(StringView, int num, int den);
-
-template <intmax_t Num, intmax_t Den>
-Result parse(StringView view, std::ratio<Num, Den>) {
-    return parse(view, Num, Den);
-}
-
-template <typename T>
-T unchecked_parse(StringView view) {
-    const auto result = parse(view, typename T::period{});
-    if (result.ok) {
-        return to_chrono_duration<T>(result.value);
-    }
-
-    return T{}.min();
-}
-
-} // namespace duration_convert
 
 template <typename T>
 T convert(const String& value);

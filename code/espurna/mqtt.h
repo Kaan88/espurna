@@ -48,12 +48,14 @@ Updated secure client support by Niek van der Maas < mail at niekvandermaas dot 
 #define MQTT_TOPIC_LOADAVG          "loadavg"
 #define MQTT_TOPIC_BOARD            "board"
 #define MQTT_TOPIC_PULSE            "pulse"
+#define MQTT_TOPIC_TIMER            "timer"
 #define MQTT_TOPIC_SPEED            "speed"
 #define MQTT_TOPIC_OTA              "ota"
 #define MQTT_TOPIC_TELNET_REVERSE   "telnet_reverse"
 #define MQTT_TOPIC_CURTAIN          "curtain"
 #define MQTT_TOPIC_CMD              "cmd"
 #define MQTT_TOPIC_SCHEDULE         "schedule"
+#define MQTT_TOPIC_NAMED_EVENT      "named_event"
 
 void mqttHeartbeat(espurna::heartbeat::Callback);
 

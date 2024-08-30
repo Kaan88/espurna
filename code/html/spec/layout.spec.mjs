@@ -23,6 +23,7 @@ beforeAll(async () => {
     for (let panel of ['password', 'general']) {
         const html = await open(`${import.meta.dirname}/../src/panel-${panel}.html`, 'r');
         document.body.innerHTML += (await html.read()).buffer.toString();
+        await html.close();
     }
 
     document.body.querySelectorAll('input').forEach((elem) => {

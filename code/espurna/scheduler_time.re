@@ -681,12 +681,291 @@ return_out:
     return out && (YYCURSOR == YYLIMIT);
 }
 
+// Relative time triggers, "before" or "after" specific 'target' event happens.
+// Offset can be 0, causing action to immediately trigger.
+// Can depend on either fixed-time events like sunrise & sunset, or other calendar schedules.
+
+bool parse_relative_offset(datetime::Minutes& out, StringView view) {
+    if (!view.length()) {
+        return false;
+    }
+
+    if (!view.length()) {
+        return false;
+    }
+
+    auto result = duration::parse(view, datetime::Minutes::period{});
+    if (result.ok) {
+        out = duration::to_chrono<datetime::Minutes>(result.value);
+        return true;
+    }
+
+    return false;
+}
+
+bool parse_relative_keyword(Relative& out, StringView view) {
+    bool result { false };
+
+    if (STRING_VIEW("before").equalsIgnoreCase(view)) {
+        out.order = relative::Order::Before;
+        result = true;
+    } else if (STRING_VIEW("after").equalsIgnoreCase(view)) {
+        out.order = relative::Order::After;
+        result = true;
+    }
+
+    return result;
+}
+
+bool update_relative_id(Relative& out, StringView view) {
+    auto result = parseUnsigned(view, 10);
+
+    if (result.ok && result.value <= 255) {
+        out.data = result.value;
+        return true;
+    }
+
+    return false;
+}
+
+bool parse_relative_target(Relative& value, StringView view) {
+    const char* YYCURSOR { view.begin() };
+    const char* YYLIMIT { view.end() };
+    const char* YYMARKER;
+
+    StringView tmp;
+    bool out { false };
+
+    const char *p;
+
+    /*!stags:re2c:relative_target format = 'const char *@@;'; */
+
+    /*!local:re2c:relative_target
+
+      re2c:api:style = free-form;
+      re2c:define:YYCTYPE = char;
+      re2c:flags:case-insensitive = 1;
+      re2c:flags:tags = 1;
+      re2c:yyfill:enable = 0;
+      re2c:eof = 0;
+
+      calendar = "Cal" | "Calendar";
+
+      sunrise = "Sunrise";
+      sunset = "Sunset";
+
+      calendar [#] @p [0-9]+ {
+        value.type = relative::Type::Calendar;
+
+        tmp = StringView(p, YYCURSOR - p);
+        out = update_relative_id(value, tmp);
+
+        goto return_out;
+      }
+
+      ["] @p [A-Za-z0-9]+ ["] {
+        value.type = relative::Type::Named;
+
+        tmp = StringView(p, YYCURSOR - p - 1);
+        value.name = tmp.toString();
+
+        out = true;
+
+        goto return_out;
+      }
+
+
+      sunrise {
+        value.type = relative::Type::Sunrise;
+        out = true;
+
+        goto return_out;
+      }
+
+      sunset {
+        value.type = relative::Type::Sunset;
+        out = true;
+
+        goto return_out;
+      }
+
+      * {
+        out = false;
+        goto return_out;
+      }
+
+      $ {
+        goto return_out;
+      }
+    */
+
+return_out:
+    return out && (YYCURSOR == YYLIMIT);
+}
+
+// 2024-08-24T19:18:25+00:00
+// 2024-08-24T19:18:25Z
+// 2024-08-25T07:18:25
+// 2024-08-25T07:18:25+12:00
+
+namespace iso8601 {
+
+constexpr StringView year(StringView view) {
+    return StringView(&view[0], 4);
+}
+
+constexpr StringView month(StringView view) {
+    return StringView(&view[5], 2);
+}
+
+constexpr StringView day(StringView view) {
+    return StringView(&view[8], 2);
+}
+
+constexpr StringView hour(StringView view) {
+    return StringView(&view[11], 2);
+}
+
+constexpr StringView minute(StringView view) {
+    return StringView(&view[14], 2);
+}
+
+constexpr StringView second(StringView view) {
+    return StringView(&view[17], 2);
+}
+
+constexpr StringView tz(StringView view) {
+    return (view.length() == 19)
+        ? StringView{}
+        : StringView(&view[20], &view[view.length()]);
+}
+
+constexpr int from_one_digit(char value) {
+    return ((value >= '0') && (value <= '9'))
+        ? (value - '0')
+        : 0;
+}
+
+constexpr int from_two_digits(StringView view) {
+    return (from_one_digit(view.data()[0]) * 10)
+         + from_one_digit(view.data()[1]);
+}
+
+constexpr int from_four_digits(StringView view) {
+    return (from_one_digit(view.data()[0]) * 1000)
+         + (from_one_digit(view.data()[1]) * 100)
+         + (from_one_digit(view.data()[2]) * 10)
+         + from_one_digit(view.data()[3]);
+}
+
+constexpr bool is_valid(const datetime::DateHhMmSs& datetime) {
+    return (datetime.month < 13) && (datetime.month > 0)
+        && (datetime.day < 32) && (datetime.day > 0)
+        && (datetime.hours < 24)
+        && (datetime.minutes < 60)
+        && (datetime.seconds < 60);
+}
+
+constexpr datetime::DateHhMmSs make_datetime(StringView view) {
+    return datetime::DateHhMmSs{
+        .year = from_four_digits(year(view)),
+        .month = from_two_digits(month(view)),
+        .day = from_two_digits(day(view)),
+        .hours = from_two_digits(hour(view)),
+        .minutes = from_two_digits(minute(view)),
+        .seconds = from_two_digits(second(view)),
+    };
+}
+
+} // namespace iso8601
+
+bool parse_simple_iso8601(datetime::DateHhMmSs& datetime, bool& utc, StringView view) {
+    const char* YYCURSOR { view.begin() };
+    const char* YYLIMIT { view.end() };
+    const char* YYMARKER;
+
+    StringView tmp;
+    bool out { false };
+
+    const char *p;
+
+    /*!conditions:re2c:simple_iso8601*/
+    int c = yycinit;
+
+    /*!stags:re2c:simple_iso8601 format = 'const char *@@;'; */
+
+loop:
+    /*!local:re2c:simple_iso8601
+
+      re2c:api:style = free-form;
+      re2c:define:YYGETCONDITION = "c";
+      re2c:define:YYSETCONDITION = "c = @@;";
+      re2c:define:YYCTYPE = char;
+      re2c:flags:case-insensitive = 0;
+      re2c:flags:tags = 1;
+      re2c:yyfill:enable = 0;
+      re2c:eof = 0;
+
+      YYYY = [0-9]{4};
+      MM = [0-9]{2};
+      DD = [0-9]{2};
+
+      hh = [0-9]{2};
+      mm = [0-9]{2};
+      ss = [0-9]{2};
+
+      zero = "+00:00";
+      zulu = "Z";
+
+      <init> @p YYYY [-] MM [-] DD [T] hh [:] mm [:] ss => tz {
+        tmp = StringView{p, YYCURSOR};
+
+        datetime = iso8601::make_datetime(tmp);
+        if (!iso8601::is_valid(datetime)) {
+          goto return_out;
+        }
+
+        goto loop;
+      }
+
+      <tz> zulu | zero {
+        out = true;
+        utc = true;
+        goto return_out;
+      }
+
+      <tz> $ {
+        out = true;
+        utc = false;
+        goto return_out;
+      }
+
+      <*> * {
+        out = false;
+        goto return_out;
+      }
+
+      <*> $ {
+        out = false;
+        goto return_out;
+      }
+    */
+
+return_out:
+    return out && (YYCURSOR == YYLIMIT);
+
+}
+
 } // namespace parse
 
 using parse::parse_date;
 using parse::parse_weekdays;
 using parse::parse_time;
 using parse::parse_time_keyword;
+using parse::parse_relative_keyword;
+using parse::parse_relative_offset;
+using parse::parse_relative_target;
+using parse::parse_simple_iso8601;
 
 Schedule parse_schedule(StringView view) {
     Schedule out;
@@ -752,6 +1031,51 @@ Schedule parse_schedule(StringView view) {
     if (out.ok && !parsed_time && !want_sunrise_sunset(out.time)) {
         out.time.hour = 0b1;
         out.time.minute = 0b1;
+    }
+
+    return out;
+}
+
+Relative parse_relative(StringView view) {
+    Relative out;
+
+    // OFFSET " " KEYWORD " " TARGET
+    const auto spaces = std::count(view.begin(), view.end(), ' ');
+    if (spaces > 2) {
+        return out;
+    }
+
+    auto split = SplitStringView(view);
+
+    bool parsed_offset { false };
+    bool parsed_keyword { false };
+    bool parsed_target { false };
+
+    int found { 0 };
+
+    while ((found < 3) && split.next()) {
+        auto elem = split.current();
+        ++found;
+
+        if (!parsed_offset && (parsed_offset = parse_relative_offset(out.offset, elem))) {
+            continue;
+        }
+
+        if (!parsed_keyword && (parsed_keyword = parse_relative_keyword(out, elem))) {
+            continue;
+        }
+
+        if (!parsed_target && (parsed_target = parse_relative_target(out, elem))) {
+            continue;
+        }
+    }
+
+    if (!parsed_keyword || !parsed_target) {
+        out.type = relative::Type::None;
+    }
+
+    if (!parsed_offset && out.type != relative::Type::None) {
+        out.offset = datetime::Minutes{ 1 };
     }
 
     return out;

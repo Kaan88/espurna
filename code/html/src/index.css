@@ -31,11 +31,19 @@
     display: none;
 }
 
-#menu .pure-menu-heading {
+#menu .pure-menu-item.pure-menu-item:first-child {
     font-size: 100%;
-    padding: .5em .5em;
-    white-space: normal;
-    text-transform: initial;
+    font-weight: 250;
+    text-transform: uppercase;
+    background: #333;
+}
+
+#menu .pure-menu-item.pure-menu-selected.pure-menu-item:first-child {
+    background: #1f8dd6;
+}
+
+#menu .pure-menu-selected a {
+    transition: all ease 0.6s;
 }
 
 .pure-g {
@@ -113,6 +121,11 @@ input[name=upgrade] {
 select {
     margin-bottom: 10px;
     width: 100%;
+}
+
+select[multiple] {
+    overflow-y: auto;
+    resize: vertical;
 }
 
 input.center {
@@ -394,6 +407,10 @@ input.checkbox-toggle::before {
     transition: inherit;
 }
 
+input.checkbox-toggle + .pure-form-message {
+    margin-top: .625em;
+}
+
 /* module-light */
 input[name=light-state-value].checkbox-toggle {
     --toggle-color-off: black;
@@ -615,7 +632,12 @@ summary {
     font-size: 1.2em;
 }
 
-.password-reveal:after {
+.pure-form input[type="password"]:has(+ .password-reveal),
+.pure-form input[type="text"]:has(+ .password-reveal) {
+    display: inline-block;
+}
+
+.password-reveal::before {
     content: "👁";
 }
 

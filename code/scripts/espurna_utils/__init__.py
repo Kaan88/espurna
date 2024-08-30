@@ -26,6 +26,7 @@ from .build import (
     app_add_gzip_file,
     app_add_target_build_re2c,
     app_patch_cachedir,
+    app_patch_elf2bin,
 )
 from .checks import check_env, check_binsize
 from .flags import app_inject_flags

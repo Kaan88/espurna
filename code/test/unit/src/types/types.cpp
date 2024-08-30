@@ -60,6 +60,46 @@ void test_view_compare() {
     TEST_ASSERT(base.equalsIgnoreCase("aaaa BBBB cccc DDDD"));
 }
 
+void test_view_slice() {
+    StringView base("1111 55555 ab 111111");
+
+    auto tmp = base.slice(0, 4).toString();
+    TEST_ASSERT_EQUAL_STRING("1111", tmp.c_str());
+
+    tmp = base.slice(0, 10).toString();
+    TEST_ASSERT_EQUAL_STRING("1111 55555", tmp.c_str());
+
+    tmp = base.slice(0).toString();
+    TEST_ASSERT_EQUAL_STRING(base.toString().c_str(), tmp.c_str());
+
+    tmp = base.slice(0, base.length() + 2).toString();
+    TEST_ASSERT_EQUAL(0, tmp.length());
+
+    tmp = base.slice(base.length() - 1, base.length()).toString();
+    TEST_ASSERT_EQUAL(0, tmp.length());
+
+    tmp = base.slice(5, 5).toString();
+    TEST_ASSERT_EQUAL_STRING("55555", tmp.c_str());
+
+    tmp = base.slice(5, 1).toString();
+    TEST_ASSERT_EQUAL_STRING("5", tmp.c_str());
+
+    tmp = base.slice(11, 2).toString();
+    TEST_ASSERT_EQUAL_STRING("ab", tmp.c_str());
+
+    tmp = base.slice(11).toString();
+    TEST_ASSERT_EQUAL_STRING("ab 111111", tmp.c_str());
+
+    tmp = base.slice(14, 6).toString();
+    TEST_ASSERT_EQUAL_STRING("111111", tmp.c_str());
+
+    tmp = base.slice(base.length() - 1, 1).toString();
+    TEST_ASSERT_EQUAL_STRING("1", tmp.c_str());
+
+    tmp = base.slice(base.length()).toString();
+    TEST_ASSERT_EQUAL(0, tmp.length());
+}
+
 void test_callback_empty() {
     Callback callback;
     TEST_ASSERT(callback.isEmpty());
@@ -251,6 +291,7 @@ int main(int, char**) {
     RUN_TEST(test_view_nullptr);
     RUN_TEST(test_view_convert);
     RUN_TEST(test_view_compare);
+    RUN_TEST(test_view_slice);
     RUN_TEST(test_callback_empty);
     RUN_TEST(test_callback_simple);
     RUN_TEST(test_callback_lambda);

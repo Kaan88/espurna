@@ -14,6 +14,7 @@ import itertools
 
 from espurna_utils import (
     app_add_target_build_and_copy,
+    app_patch_elf2bin,
     app_inject_flags,
     app_inject_version,
     app_add_gzip_file,
@@ -94,3 +95,6 @@ if single_source:
 cachedir_fix = check_env("ESPURNA_FIX_CACHEDIR_PATH", "n")
 if cachedir_fix:
     app_patch_cachedir(projenv)
+
+# workaround for Core 2.7.4 python3.12 syntax warnings, merge upstream changes
+app_patch_elf2bin(env)

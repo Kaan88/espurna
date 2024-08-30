@@ -7,6 +7,7 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 */
 
 #include "types.h"
+#include "utils.h"
 
 namespace espurna {
 
@@ -151,6 +152,22 @@ bool StringView::endsWith(StringView other) const {
     return false;
 }
 
+StringView StringView::slice(size_t index, size_t len) const {
+    if (index >= _len) {
+        return StringView();
+    }
+
+    if ((index + len) > _len) {
+        return StringView();
+    }
+
+    return StringView(_ptr + index, len);
+}
+
+StringView StringView::slice(size_t index) const {
+    return slice(index, _len - index);
+}
+
 bool SplitStringView::next() {
     if (!_view.length()) {
         return false;
@@ -168,4 +185,343 @@ bool SplitStringView::next() {
     return true;
 }
 
+namespace duration {
+namespace {
+
+// Input is always normalized to Pair, specific units are converted on demand
+
+constexpr auto MicrosecondsPerSecond =
+    Microseconds{ Microseconds::period::den };
+
+void adjust_microseconds(Pair& pair) {
+    if (pair.microseconds >= MicrosecondsPerSecond) {
+        pair.seconds += Seconds{ 1 };
+        pair.microseconds -= MicrosecondsPerSecond;
+    }
+}
+
+Pair from_chrono(Microseconds microseconds) {
+    Pair out{};
+
+    while (microseconds > MicrosecondsPerSecond) {
+        out.seconds += Seconds{ 1 };
+        microseconds -= MicrosecondsPerSecond;
+    }
+
+    out.microseconds += microseconds;
+    adjust_microseconds(out);
+
+    return out;
+}
+
+constexpr auto MillisecondsPerSecond =
+    Milliseconds{ Milliseconds::period::den };
+
+Pair from_chrono(Milliseconds milliseconds) {
+    Pair out{};
+
+    while (milliseconds >= MillisecondsPerSecond) {
+        out.seconds += Seconds{ 1 };
+        milliseconds -= MillisecondsPerSecond;
+    }
+
+    const auto microseconds =
+        std::chrono::duration_cast<Microseconds>(milliseconds);
+    out.microseconds += microseconds;
+    adjust_microseconds(out);
+
+    return out;
+}
+
+Pair& operator+=(Pair& lhs, const Pair& rhs) {
+    lhs.seconds += rhs.seconds;
+    lhs.microseconds += rhs.microseconds;
+
+    adjust_microseconds(lhs);
+
+    return lhs;
+}
+
+template <typename T>
+Pair& operator+=(Pair&, T);
+
+template <>
+Pair& operator+=(Pair& result, Microseconds microseconds) {
+    result += from_chrono(microseconds);
+    return result;
+}
+
+template <>
+Pair& operator+=(Pair& result, Milliseconds milliseconds) {
+    result += from_chrono(milliseconds);
+    return result;
+}
+
+template <>
+Pair& operator+=(Pair& result, Hours hours) {
+    result.seconds += std::chrono::duration_cast<Seconds>(hours);
+    return result;
+}
+
+template <>
+Pair& operator+=(Pair& result, Minutes minutes) {
+    result.seconds += std::chrono::duration_cast<Seconds>(minutes);
+    return result;
+}
+
+template <>
+Pair& operator+=(Pair& result, Seconds seconds) {
+    result.seconds += seconds;
+    return result;
+}
+
+// Besides decimal or raw input with the specified ratio,
+// string parser also supports type specifiers at the end of decimal number
+
+enum class Type {
+    Unknown,
+    Seconds,
+    Minutes,
+    Hours,
+};
+
+bool validNextType(Type lhs, Type rhs) {
+    switch (lhs) {
+    case Type::Unknown:
+        return true;
+    case Type::Hours:
+        return (rhs == Type::Minutes)
+            || (rhs == Type::Seconds);
+    case Type::Minutes:
+        return (rhs == Type::Seconds);
+    case Type::Seconds:
+        break;
+    }
+
+    return false;
+}
+
+} // namespace
+
+PairResult parse(StringView view, int num, int den) {
+    PairResult out;
+    out.ok = false;
+
+    String token;
+    Type last { Type::Unknown };
+    Type type { Type::Unknown };
+
+    const char* ptr { view.begin() };
+    if (!view.begin() || !view.length()) {
+        goto output;
+    }
+
+loop:
+    while (ptr != view.end()) {
+        switch (*ptr) {
+        case '0'...'9':
+            token += (*ptr);
+            ++ptr;
+            break;
+
+        case 'h':
+            if (validNextType(last, Type::Hours)) {
+                type = Type::Hours;
+                goto update_spec;
+            }
+            goto reset;
+
+        case 'm':
+            if (validNextType(last, Type::Minutes)) {
+                type = Type::Minutes;
+                goto update_spec;
+            }
+            goto reset;
+
+        case 's':
+            if (validNextType(last, Type::Seconds)) {
+                type = Type::Seconds;
+                goto update_spec;
+            }
+            goto reset;
+
+        case 'e':
+        case 'E':
+            goto read_floating_exponent;
+
+        case ',':
+        case '.':
+            if (out.ok) {
+                goto reset;
+            }
+
+            goto read_floating;
+
+        default:
+            goto reset;
+        }
+    }
+
+    if (token.length()) {
+        goto update_decimal;
+    }
+
+    goto output;
+
+update_floating:
+    {
+        // only seconds and up, anything down of milli does not make sense here
+        if (den > 1) {
+            goto reset;
+        }
+
+        char* endp { nullptr };
+        auto value = strtod(token.c_str(), &endp);
+        if (endp && (endp != token.c_str()) && endp[0] == '\0') {
+            using Seconds = std::chrono::duration<float, std::ratio<1> >;
+
+            const auto seconds = Seconds(num * value);
+            const auto milliseconds =
+                std::chrono::duration_cast<Milliseconds>(seconds);
+
+            out.value += milliseconds;
+            out.ok = true;
+
+            goto output;
+        }
+
+        goto reset;
+    }
+
+update_decimal:
+    {
+        const auto result = parseUnsigned(token, 10);
+        if (result.ok) {
+            // num and den are constexpr and bound to ratio types, so duration cast has to happen manually
+            if ((num == 1) && (den == 1)) {
+                out.value += duration::Seconds{ result.value };
+            } else if ((num == 1) && (den > 1)) {
+                out.value += duration::Seconds{ result.value / den };
+                out.value += duration::Microseconds{ result.value % den * duration::Microseconds::period::den / den };
+            } else if ((num > 1) && (den == 1)) {
+                out.value += duration::Seconds{ result.value * num };
+            } else {
+                goto reset;
+            }
+
+            out.ok = true;
+            goto output;
+        }
+
+        goto reset;
+    }
+
+update_spec:
+    last = type;
+    ++ptr;
+
+    if (type != Type::Unknown) {
+        const auto result = parseUnsigned(token, 10);
+        if (result.ok) {
+            switch (type) {
+            case Type::Hours:
+                out.value += Hours{ result.value };
+                break;
+
+            case Type::Minutes:
+                out.value += Minutes{ result.value };
+                break;
+
+            case Type::Seconds:
+                out.value += Seconds{ result.value };
+                break;
+
+            case Type::Unknown:
+                goto reset;
+            }
+
+            out.ok = true;
+            type = Type::Unknown;
+            token = "";
+
+            goto loop;
+        }
+    }
+
+    goto reset;
+
+read_floating:
+    switch (*ptr) {
+    case ',':
+    case '.':
+        token += '.';
+        ++ptr;
+        break;
+
+    default:
+        goto reset;
+    }
+
+    while (ptr != view.end()) {
+        switch (*ptr) {
+        case '0'...'9':
+            token += (*ptr);
+            break;
+
+        case 'e':
+        case 'E':
+            goto read_floating_exponent;
+
+        case ',':
+        case '.':
+            goto reset;
+        }
+
+        ++ptr;
+    }
+
+    goto update_floating;
+
+read_floating_exponent:
+    {
+        token += (*ptr);
+        ++ptr;
+
+        bool sign { false };
+
+        while (ptr != view.end()) {
+            switch (*ptr) {
+            case '-':
+            case '+':
+                if (sign) {
+                    goto reset;
+                }
+
+                sign = true;
+
+                token += (*ptr);
+                ++ptr;
+                break;
+
+            case '0'...'9':
+                token += (*ptr);
+                ++ptr;
+                break;
+
+            default:
+                goto reset;
+            }
+        }
+
+        goto update_floating;
+    }
+
+reset:
+    out.ok = false;
+
+output:
+    return out;
+}
+
+} // namespace duration
 } // namespace espurna

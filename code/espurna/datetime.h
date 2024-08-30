@@ -68,6 +68,33 @@ constexpr HhMmSs make_hh_mm_ss(const tm& t) {
     };
 }
 
+struct DateHhMmSs {
+    int year;
+    int month;
+    int day;
+    int hours;
+    int minutes;
+    int seconds;
+
+    tm c_value() const noexcept;
+};
+
+constexpr Date make_date(const DateHhMmSs& datetime) {
+    return Date{
+        .year = datetime.year,
+        .month = datetime.month,
+        .day = datetime.day,
+    };
+}
+
+constexpr HhMmSs make_hh_mm_ss(const DateHhMmSs& datetime) {
+    return HhMmSs{
+        .hours = datetime.hours,
+        .minutes = datetime.minutes,
+        .seconds = datetime.seconds,
+    };
+}
+
 Date from_days(const Days&) noexcept;
 
 // on esp8266 this is a usually an internal timestamp timeshift'ed with `micros64()`
@@ -185,6 +212,9 @@ constexpr Weekday next(Weekday day) {
 Seconds to_seconds(const Date&, const HhMmSs&) noexcept;
 Seconds to_seconds(const tm&) noexcept;
 
+// Either local or UTC conversion
+Seconds to_seconds(const DateHhMmSs&, bool) noexcept;
+
 // main use-case is scheduler, and it needs both tm results
 struct Context {
     time_t timestamp;
@@ -208,6 +238,10 @@ time_t delta_utc(tm&, Seconds, Days);
 
 // apply both local and utc operations on the given context
 Context delta(const Context&, Days);
+
+// retrieve timezone offset from the given context
+// (impl. detail - *current* timezone offset, system wide)
+Seconds tz_offset(const Context&);
 
 // generic string format used for datetime output, without timezone
 String format(const tm&);

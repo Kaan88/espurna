@@ -3,14 +3,47 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## Pending changes
+## [1.18.0] ???
 
-???
+### Added
+- Scheduler [relative time spec](https://github.com/xoseperez/espurna/wiki/Scheduler#relative-time) [8edb7b63](https://github.com/xoseperez/espurna/commit/8edb7b633369cd04151525066ab0f8b512da7702)
+- Scheduler [named events](https://github.com/xoseperez/espurna/wiki/Scheduler#event) [8edb7b63](https://github.com/xoseperez/espurna/commit/8edb7b633369cd04151525066ab0f8b512da7702), [a8bcedab](https://github.com/xoseperez/espurna/commit/a8bcedabc581fb2ed592bdce1693ad0844ec1609)
+- `TIMER [<ID>] [<TIME>]` relay command in addition to `PULSE` [90827850](https://github.com/xoseperez/espurna/commit/90827850be35f7ad3079a1b66d0053e5ec51e95d)
+
+### Fixed
+- Restore & event offsets are calculated using local timezone when necessary [eea56d7a](https://github.com/xoseperez/espurna/commit/eea56d7a0c082745743c29f662fc185338edcd0f)
+- Schedule incorrectly discarded when sunrise or sunset flag was not set [24ebcb84](https://github.com/xoseperez/espurna/commit/24ebcb843054bd328b040e6302d2fd63322fd6c2)
+- Visual bug w/ password reveal button when using narrow screen [4c005fa9](https://github.com/xoseperez/espurna/commit/4c005fa9a53af08043821975b350ab8a8c899e38)
+
+### Changed
+- Median filter uses REPORT counter as window, not a fixed size of 3. Values are reported as-is until internal buffers are filled, median value is reported afterwards [#2543](https://github.com/xoseperez/espurna/issues/2543)
+- Various WebUI labels and messages clean-up
+- `PULSE <ID>` and `TIMER <ID>` display existing relay timers [90827850](https://github.com/xoseperez/espurna/commit/90827850be35f7ad3079a1b66d0053e5ec51e95d)
+
+## [1.17.0] (dev)
+
+### Added
+- ISO 8601 datetimes in MQTT (e.g. `2024-08-23T08:43:51+12:00`), WebUI and debug logs [a1363dda](https://github.com/xoseperez/espurna/commit/a1363ddad909b88e4c05e894f0a20756f36463ae)
+- More strict WebUI input validation [#2612](https://github.com/xoseperez/espurna/issues/2612)
+- Side-by-side expected and current values when configuring RATIO [af3f8384](https://github.com/xoseperez/espurna/commit/af3f83841fafeac164d7018dd190dec3c6d648e8)
+- MIN and MAX sensor filters [2cdc456a](https://github.com/xoseperez/espurna/commit/2cdc456a36ad6c68b587186bfd9ff7be2266bb73)
+- UPPER and LOWER threshold values for sensors [fc8ef5a2](https://github.com/xoseperez/espurna/commit/fc8ef5a298d01c78ce7d5acfcab9d591b09026d5)
+- NTP [DHCP and update interval settings](https://github.com/xoseperez/espurna/wiki/NTP#configuration) in WebUI [1ca0dcc7](https://github.com/xoseperez/espurna/commit/1ca0dcc76b4bd2bf84085918e7f9b9808cb2e453)
+
+### Fixed
+- Sensor reading counters are reset when settings reload [b11071cb](https://github.com/xoseperez/espurna/commit/b11071cb9e13a98df1058aa54d8e0822fc706360)
+- DHT sensor failing to re-enable interrupts [#2609](https://github.com/xoseperez/espurna/issues/2609)
+
+### Changed
+- Sensor WebUI waits until every configured sensor performs initial setup [2c8470c1](https://github.com/xoseperez/espurna/commit/2c8470c11ccfde80fedef24db53accac1fc65813)
+- Reworked WebUI builder, initial commit and general description at [289fea4f](https://github.com/xoseperez/espurna/commit/289fea4f3d2b5a253e981640ed2560e6453ac8ef)
+- Functional and unit tests for WebUI [#1899](https://github.com/xoseperez/espurna/issues/1899)
+- Optional password checks in WebUI [4fda8408](https://github.com/xoseperez/espurna/commit/4fda84082a6dfd1f0189569cbca51b19ba1e16af)
 
 ## [1.16.0-dev] Snapshot build 2024-06-15
 
 ### Added
-- Scheduler sunrise and sunset time triggers [#2417](https://github.com/xoseperez/espurna/issues/2417), [#1263](https://github.com/xoseperez/espurna/issues/1263), [#943](https://github.com/xoseperez/espurna/issues/943)
+- Scheduler [sunrise and sunset](https://github.com/xoseperez/espurna/wiki/Scheduler#keywords) time triggers [#2417](https://github.com/xoseperez/espurna/issues/2417), [#1263](https://github.com/xoseperez/espurna/issues/1263), [#943](https://github.com/xoseperez/espurna/issues/943)
 - Allow to specify date (`YYYY-MM-DD` or `MM-DD`) for scheduler action [#2060](https://github.com/xoseperez/espurna/issues/2060)
 - Allow scheduler action to trigger multiple times a day [#2060](https://github.com/xoseperez/espurna/issues/2060), [#1419](https://github.com/xoseperez/espurna/issues/1419)
 - Scheduler action is a terminal command when terminal support is enabled [e4b6929f](https://github.com/xoseperez/espurna/commit/e4b6929f94b82cf844cb07f4270cea7ddc80a887)

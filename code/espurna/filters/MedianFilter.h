@@ -15,6 +15,10 @@ class MedianFilter : public BaseFilter {
 public:
     void update(double value) override {
         // Inserted value is always with the last index
+        if (!_size) {
+            return;
+        }
+
         const auto size = _values.size();
         auto pending =
             Value{
@@ -92,7 +96,10 @@ public:
 
 private:
     void _resize(size_t size) {
-        if ((size < _size) && _values.size()) {
+        if (!size) {
+            _values.clear();
+            _values.shrink_to_fit();
+        } else if ((size < _size) && _values.size()) {
             _reset_offset(_size - size);
         } else if (size > _size) {
             _values.reserve(size);

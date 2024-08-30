@@ -1624,12 +1624,654 @@ return_out:
     return out && (YYCURSOR == YYLIMIT);
 }
 
+// Relative time triggers, "before" or "after" specific 'target' event happens.
+// Offset can be 0, causing action to immediately trigger.
+// Can depend on either fixed-time events like sunrise & sunset, or other calendar schedules.
+
+bool parse_relative_offset(datetime::Minutes& out, StringView view) {
+    if (!view.length()) {
+        return false;
+    }
+
+    if (!view.length()) {
+        return false;
+    }
+
+    auto result = duration::parse(view, datetime::Minutes::period{});
+    if (result.ok) {
+        out = duration::to_chrono<datetime::Minutes>(result.value);
+        return true;
+    }
+
+    return false;
+}
+
+bool parse_relative_keyword(Relative& out, StringView view) {
+    bool result { false };
+
+    if (STRING_VIEW("before").equalsIgnoreCase(view)) {
+        out.order = relative::Order::Before;
+        result = true;
+    } else if (STRING_VIEW("after").equalsIgnoreCase(view)) {
+        out.order = relative::Order::After;
+        result = true;
+    }
+
+    return result;
+}
+
+bool update_relative_id(Relative& out, StringView view) {
+    auto result = parseUnsigned(view, 10);
+
+    if (result.ok && result.value <= 255) {
+        out.data = result.value;
+        return true;
+    }
+
+    return false;
+}
+
+bool parse_relative_target(Relative& value, StringView view) {
+    const char* YYCURSOR { view.begin() };
+    const char* YYLIMIT { view.end() };
+    const char* YYMARKER;
+
+    StringView tmp;
+    bool out { false };
+
+    const char *p;
+
+    
+#line 1686 "espurna/scheduler_time.re.ipp"
+const char *yyt1;
+#line 741 "espurna/scheduler_time.re"
+
+
+    
+#line 1692 "espurna/scheduler_time.re.ipp"
+{
+	char yych;
+	yych = *YYCURSOR;
+	switch (yych) {
+		case '"': goto yy159;
+		case 'C':
+		case 'c': goto yy160;
+		case 'S':
+		case 's': goto yy161;
+		default:
+			if (YYLIMIT <= YYCURSOR) goto yy184;
+			goto yy157;
+	}
+yy157:
+	++YYCURSOR;
+yy158:
+#line 792 "espurna/scheduler_time.re"
+	{
+        out = false;
+        goto return_out;
+      }
+#line 1714 "espurna/scheduler_time.re.ipp"
+yy159:
+	yych = *(YYMARKER = ++YYCURSOR);
+	switch (yych) {
+		case '0' ... '9':
+		case 'A' ... 'Z':
+		case 'a' ... 'z':
+			yyt1 = YYCURSOR;
+			goto yy162;
+		default: goto yy158;
+	}
+yy160:
+	yych = *(YYMARKER = ++YYCURSOR);
+	switch (yych) {
+		case 'A':
+		case 'a': goto yy164;
+		default: goto yy158;
+	}
+yy161:
+	yych = *(YYMARKER = ++YYCURSOR);
+	switch (yych) {
+		case 'U':
+		case 'u': goto yy165;
+		default: goto yy158;
+	}
+yy162:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '"': goto yy166;
+		case '0' ... '9':
+		case 'A' ... 'Z':
+		case 'a' ... 'z': goto yy162;
+		default: goto yy163;
+	}
+yy163:
+	YYCURSOR = YYMARKER;
+	goto yy158;
+yy164:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'L':
+		case 'l': goto yy167;
+		default: goto yy163;
+	}
+yy165:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'N':
+		case 'n': goto yy168;
+		default: goto yy163;
+	}
+yy166:
+	++YYCURSOR;
+	p = yyt1;
+#line 766 "espurna/scheduler_time.re"
+	{
+        value.type = relative::Type::Named;
+
+        tmp = StringView(p, YYCURSOR - p - 1);
+        value.name = tmp.toString();
+
+        out = true;
+
+        goto return_out;
+      }
+#line 1779 "espurna/scheduler_time.re.ipp"
+yy167:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '#': goto yy169;
+		case 'E':
+		case 'e': goto yy170;
+		default: goto yy163;
+	}
+yy168:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'R':
+		case 'r': goto yy171;
+		case 'S':
+		case 's': goto yy172;
+		default: goto yy163;
+	}
+yy169:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9':
+			yyt1 = YYCURSOR;
+			goto yy173;
+		default: goto yy163;
+	}
+yy170:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'N':
+		case 'n': goto yy175;
+		default: goto yy163;
+	}
+yy171:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'I':
+		case 'i': goto yy176;
+		default: goto yy163;
+	}
+yy172:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'E':
+		case 'e': goto yy177;
+		default: goto yy163;
+	}
+yy173:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy173;
+		default: goto yy174;
+	}
+yy174:
+	p = yyt1;
+#line 757 "espurna/scheduler_time.re"
+	{
+        value.type = relative::Type::Calendar;
+
+        tmp = StringView(p, YYCURSOR - p);
+        out = update_relative_id(value, tmp);
+
+        goto return_out;
+      }
+#line 1843 "espurna/scheduler_time.re.ipp"
+yy175:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'D':
+		case 'd': goto yy178;
+		default: goto yy163;
+	}
+yy176:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'S':
+		case 's': goto yy179;
+		default: goto yy163;
+	}
+yy177:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'T':
+		case 't': goto yy180;
+		default: goto yy163;
+	}
+yy178:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'A':
+		case 'a': goto yy181;
+		default: goto yy163;
+	}
+yy179:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'E':
+		case 'e': goto yy182;
+		default: goto yy163;
+	}
+yy180:
+	++YYCURSOR;
+#line 785 "espurna/scheduler_time.re"
+	{
+        value.type = relative::Type::Sunset;
+        out = true;
+
+        goto return_out;
+      }
+#line 1888 "espurna/scheduler_time.re.ipp"
+yy181:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'R':
+		case 'r': goto yy183;
+		default: goto yy163;
+	}
+yy182:
+	++YYCURSOR;
+#line 778 "espurna/scheduler_time.re"
+	{
+        value.type = relative::Type::Sunrise;
+        out = true;
+
+        goto return_out;
+      }
+#line 1905 "espurna/scheduler_time.re.ipp"
+yy183:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '#': goto yy169;
+		default: goto yy163;
+	}
+yy184:
+#line 797 "espurna/scheduler_time.re"
+	{
+        goto return_out;
+      }
+#line 1917 "espurna/scheduler_time.re.ipp"
+}
+#line 800 "espurna/scheduler_time.re"
+
+
+return_out:
+    return out && (YYCURSOR == YYLIMIT);
+}
+
+// 2024-08-24T19:18:25+00:00
+// 2024-08-24T19:18:25Z
+// 2024-08-25T07:18:25
+// 2024-08-25T07:18:25+12:00
+
+namespace iso8601 {
+
+constexpr StringView year(StringView view) {
+    return StringView(&view[0], 4);
+}
+
+constexpr StringView month(StringView view) {
+    return StringView(&view[5], 2);
+}
+
+constexpr StringView day(StringView view) {
+    return StringView(&view[8], 2);
+}
+
+constexpr StringView hour(StringView view) {
+    return StringView(&view[11], 2);
+}
+
+constexpr StringView minute(StringView view) {
+    return StringView(&view[14], 2);
+}
+
+constexpr StringView second(StringView view) {
+    return StringView(&view[17], 2);
+}
+
+constexpr StringView tz(StringView view) {
+    return (view.length() == 19)
+        ? StringView{}
+        : StringView(&view[20], &view[view.length()]);
+}
+
+constexpr int from_one_digit(char value) {
+    return ((value >= '0') && (value <= '9'))
+        ? (value - '0')
+        : 0;
+}
+
+constexpr int from_two_digits(StringView view) {
+    return (from_one_digit(view.data()[0]) * 10)
+         + from_one_digit(view.data()[1]);
+}
+
+constexpr int from_four_digits(StringView view) {
+    return (from_one_digit(view.data()[0]) * 1000)
+         + (from_one_digit(view.data()[1]) * 100)
+         + (from_one_digit(view.data()[2]) * 10)
+         + from_one_digit(view.data()[3]);
+}
+
+constexpr bool is_valid(const datetime::DateHhMmSs& datetime) {
+    return (datetime.month < 13) && (datetime.month > 0)
+        && (datetime.day < 32) && (datetime.day > 0)
+        && (datetime.hours < 24)
+        && (datetime.minutes < 60)
+        && (datetime.seconds < 60);
+}
+
+constexpr datetime::DateHhMmSs make_datetime(StringView view) {
+    return datetime::DateHhMmSs{
+        .year = from_four_digits(year(view)),
+        .month = from_two_digits(month(view)),
+        .day = from_two_digits(day(view)),
+        .hours = from_two_digits(hour(view)),
+        .minutes = from_two_digits(minute(view)),
+        .seconds = from_two_digits(second(view)),
+    };
+}
+
+} // namespace iso8601
+
+bool parse_simple_iso8601(datetime::DateHhMmSs& datetime, bool& utc, StringView view) {
+    const char* YYCURSOR { view.begin() };
+    const char* YYLIMIT { view.end() };
+    const char* YYMARKER;
+
+    StringView tmp;
+    bool out { false };
+
+    const char *p;
+
+    
+#line 2013 "espurna/scheduler_time.re.ipp"
+enum YYCONDTYPE {
+	yycinit,
+	yyctz
+};
+#line 892 "espurna/scheduler_time.re"
+
+    int c = yycinit;
+
+    
+#line 2023 "espurna/scheduler_time.re.ipp"
+#line 895 "espurna/scheduler_time.re"
+
+
+loop:
+    
+#line 2029 "espurna/scheduler_time.re.ipp"
+{
+	char yych;
+	switch (c) {
+		case yycinit: goto yyc_init;
+		case yyctz: goto yyc_tz;
+	}
+/* *********************************** */
+yyc_init:
+	yych = *YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy188;
+		default:
+			if (YYLIMIT <= YYCURSOR) goto yy208;
+			goto yy186;
+	}
+yy186:
+	++YYCURSOR;
+yy187:
+#line 943 "espurna/scheduler_time.re"
+	{
+        out = false;
+        goto return_out;
+      }
+#line 2053 "espurna/scheduler_time.re.ipp"
+yy188:
+	yych = *(YYMARKER = ++YYCURSOR);
+	switch (yych) {
+		case '0' ... '9': goto yy189;
+		default: goto yy187;
+	}
+yy189:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy191;
+		default: goto yy190;
+	}
+yy190:
+	YYCURSOR = YYMARKER;
+	goto yy187;
+yy191:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy192;
+		default: goto yy190;
+	}
+yy192:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '-': goto yy193;
+		default: goto yy190;
+	}
+yy193:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy194;
+		default: goto yy190;
+	}
+yy194:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy195;
+		default: goto yy190;
+	}
+yy195:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '-': goto yy196;
+		default: goto yy190;
+	}
+yy196:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy197;
+		default: goto yy190;
+	}
+yy197:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy198;
+		default: goto yy190;
+	}
+yy198:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case 'T': goto yy199;
+		default: goto yy190;
+	}
+yy199:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy200;
+		default: goto yy190;
+	}
+yy200:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy201;
+		default: goto yy190;
+	}
+yy201:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case ':': goto yy202;
+		default: goto yy190;
+	}
+yy202:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy203;
+		default: goto yy190;
+	}
+yy203:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy204;
+		default: goto yy190;
+	}
+yy204:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case ':': goto yy205;
+		default: goto yy190;
+	}
+yy205:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy206;
+		default: goto yy190;
+	}
+yy206:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0' ... '9': goto yy207;
+		default: goto yy190;
+	}
+yy207:
+	++YYCURSOR;
+	p = YYCURSOR - 19;
+	c = yyctz;
+#line 920 "espurna/scheduler_time.re"
+	{
+        tmp = StringView{p, YYCURSOR};
+
+        datetime = iso8601::make_datetime(tmp);
+        if (!iso8601::is_valid(datetime)) {
+          goto return_out;
+        }
+
+        goto loop;
+      }
+#line 2180 "espurna/scheduler_time.re.ipp"
+yy208:
+#line 948 "espurna/scheduler_time.re"
+	{
+        out = false;
+        goto return_out;
+      }
+#line 2187 "espurna/scheduler_time.re.ipp"
+/* *********************************** */
+yyc_tz:
+	yych = *YYCURSOR;
+	switch (yych) {
+		case '+': goto yy212;
+		case 'Z': goto yy213;
+		default:
+			if (YYLIMIT <= YYCURSOR) goto yy219;
+			goto yy210;
+	}
+yy210:
+	++YYCURSOR;
+yy211:
+#line 943 "espurna/scheduler_time.re"
+	{
+        out = false;
+        goto return_out;
+      }
+#line 2206 "espurna/scheduler_time.re.ipp"
+yy212:
+	yych = *(YYMARKER = ++YYCURSOR);
+	switch (yych) {
+		case '0': goto yy214;
+		default: goto yy211;
+	}
+yy213:
+	++YYCURSOR;
+#line 931 "espurna/scheduler_time.re"
+	{
+        out = true;
+        utc = true;
+        goto return_out;
+      }
+#line 2221 "espurna/scheduler_time.re.ipp"
+yy214:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0': goto yy216;
+		default: goto yy215;
+	}
+yy215:
+	YYCURSOR = YYMARKER;
+	goto yy211;
+yy216:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case ':': goto yy217;
+		default: goto yy215;
+	}
+yy217:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0': goto yy218;
+		default: goto yy215;
+	}
+yy218:
+	yych = *++YYCURSOR;
+	switch (yych) {
+		case '0': goto yy213;
+		default: goto yy215;
+	}
+yy219:
+#line 937 "espurna/scheduler_time.re"
+	{
+        out = true;
+        utc = false;
+        goto return_out;
+      }
+#line 2256 "espurna/scheduler_time.re.ipp"
+}
+#line 952 "espurna/scheduler_time.re"
+
+
+return_out:
+    return out && (YYCURSOR == YYLIMIT);
+
+}
+
 } // namespace parse
 
 using parse::parse_date;
 using parse::parse_weekdays;
 using parse::parse_time;
 using parse::parse_time_keyword;
+using parse::parse_relative_keyword;
+using parse::parse_relative_offset;
+using parse::parse_relative_target;
+using parse::parse_simple_iso8601;
 
 Schedule parse_schedule(StringView view) {
     Schedule out;
@@ -1695,6 +2337,51 @@ Schedule parse_schedule(StringView view) {
     if (out.ok && !parsed_time && !want_sunrise_sunset(out.time)) {
         out.time.hour = 0b1;
         out.time.minute = 0b1;
+    }
+
+    return out;
+}
+
+Relative parse_relative(StringView view) {
+    Relative out;
+
+    // OFFSET " " KEYWORD " " TARGET
+    const auto spaces = std::count(view.begin(), view.end(), ' ');
+    if (spaces > 2) {
+        return out;
+    }
+
+    auto split = SplitStringView(view);
+
+    bool parsed_offset { false };
+    bool parsed_keyword { false };
+    bool parsed_target { false };
+
+    int found { 0 };
+
+    while ((found < 3) && split.next()) {
+        auto elem = split.current();
+        ++found;
+
+        if (!parsed_offset && (parsed_offset = parse_relative_offset(out.offset, elem))) {
+            continue;
+        }
+
+        if (!parsed_keyword && (parsed_keyword = parse_relative_keyword(out, elem))) {
+            continue;
+        }
+
+        if (!parsed_target && (parsed_target = parse_relative_target(out, elem))) {
+            continue;
+        }
+    }
+
+    if (!parsed_keyword || !parsed_target) {
+        out.type = relative::Type::None;
+    }
+
+    if (!parsed_offset && out.type != relative::Type::None) {
+        out.offset = datetime::Minutes{ 1 };
     }
 
     return out;

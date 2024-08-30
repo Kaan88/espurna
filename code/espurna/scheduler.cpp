@@ -47,11 +47,11 @@ Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 namespace espurna {
 namespace scheduler {
 
-// TODO recurrent in addition to calendar?
 enum class Type : int {
     Unknown = 0,
     Disabled,
     Calendar,
+    Relative,
 };
 
 namespace v1 {
@@ -69,28 +69,152 @@ namespace {
 
 bool initial { true };
 
+constexpr auto EventTtl = datetime::Days{ 1 };
+constexpr auto EventsMax = size_t{ 4 };
+
+struct NamedEvent {
+    String name;
+    datetime::Minutes minutes;
+};
+
+std::forward_list<NamedEvent> named_events;
+
+NamedEvent* find_named(StringView name) {
+    const auto it = std::find_if(
+        named_events.begin(),
+        named_events.end(),
+        [&](const NamedEvent& entry) {
+            return entry.name == name;
+        });
+
+    if (it != named_events.end()) {
+        return &(*it);
+    }
+
+    return nullptr;
+}
+
+bool named_event(String name, datetime::Seconds seconds) {
+    auto it = find_named(name);
+    if (it) {
+        it->minutes = to_minutes(seconds);
+        return true;
+    }
+
+    size_t size { 0 };
+
+    auto last = named_events.begin();
+    while (last != named_events.end()) {
+        ++size;
+        ++last;
+    }
+
+    if (size < EventsMax) {
+        named_events.push_front(
+            NamedEvent{
+                .name = std::move(name),
+                .minutes = to_minutes(seconds),
+            });
+
+        return true;
+    }
+
+    return false;
+}
+
+bool named_event(String name, StringView value) {
+    datetime::DateHhMmSs datetime;
+    bool utc { false };
+
+    const auto result = parse_simple_iso8601(datetime, utc, value);
+    if (!result) {
+        return false;
+    }
+
+    return named_event(std::move(name), to_seconds(datetime, utc));
+}
+
+String format_named_event(datetime::Minutes minutes) {
+    const auto seconds = datetime::Seconds(minutes);
+    return datetime::format_local_tz(seconds.count());
+}
+
+template <typename Container>
+void cleanup_entries_impl(const datetime::Context& ctx, Container& container, datetime::Minutes ttl) {
+    const auto minutes = to_minutes(ctx);
+    container.remove_if(
+        [&](const typename Container::value_type& entry) {
+            return !event::is_valid(entry.minutes)
+                || (minutes - entry.minutes) > ttl;
+        });
+}
+
+void cleanup_named_events(const datetime::Context& ctx) {
+    cleanup_entries_impl(ctx, named_events, EventTtl);
+}
+
+constexpr auto LastTtl = datetime::Days{ 1 };
+
+struct Last {
+    size_t index;
+    datetime::Minutes minutes;
+};
+
+std::forward_list<Last> last_minutes;
+
+Last* find_last(size_t index) {
+    auto it = std::find_if(
+        last_minutes.begin(),
+        last_minutes.end(),
+        [&](const Last& entry) {
+            return entry.index == index;
+        });
+
+    if (it != last_minutes.end()) {
+        return &(*it);
+    }
+
+    return nullptr;
+}
+
+void action_timestamp(size_t index, datetime::Minutes minutes) {
+    auto* it = find_last(index);
+    if (it) {
+        it->minutes = minutes;
+        return;
+    }
+
+    last_minutes.push_front(
+        Last{
+            .index = index,
+            .minutes = minutes,
+        });
+}
+
+void action_timestamp(const datetime::Context& ctx, size_t index) {
+    action_timestamp(
+        index, to_minutes(datetime::Seconds(ctx.timestamp)));
+}
+
+datetime::Minutes action_timestamp(size_t index) {
+    auto it = find_last(index);
+    if (it) {
+        return it->minutes;
+    }
+
+    return datetime::Minutes{ -1 };
+}
+
+void cleanup_action_timestamps(const datetime::Context& ctx) {
+    cleanup_entries_impl(ctx, last_minutes, LastTtl);
+}
+
 #if SCHEDULER_SUN_SUPPORT
 namespace sun {
 
-// scheduler itself has minutes precision, while seconds are used in debug and calculations
-struct Event {
-    datetime::Minutes minutes{ -1 };
-    datetime::Seconds seconds{ -1 };
-};
-
-datetime::Seconds event_seconds(const Event& event) {
-    return std::chrono::duration_cast<datetime::Seconds>(event.minutes) + event.seconds;
-}
-
-bool event_valid(const Event& event) {
-    return (event.minutes > datetime::Minutes::zero())
-        && (event.seconds > datetime::Seconds::zero());
-}
-
-struct EventMatch {
+struct EventMatch : public Event {
     datetime::Date date;
     TimeMatch time;
-    Event last;
 };
 
 struct Match {
@@ -153,11 +277,13 @@ using espurna::settings::options::Enumeration;
 STRING_VIEW_INLINE(Unknown, "unknown");
 STRING_VIEW_INLINE(Disabled, "disabled");
 STRING_VIEW_INLINE(Calendar, "calendar");
+STRING_VIEW_INLINE(Relative, "relative");
 
-static constexpr std::array<Enumeration<Type>, 3> Types PROGMEM {
-    {{Type::Unknown, Unknown},
-     {Type::Disabled, Disabled},
-     {Type::Calendar, Calendar}}
+static constexpr std::array<Enumeration<Type>, 4> Types PROGMEM {
+   {{Type::Unknown, Unknown},
+    {Type::Disabled, Disabled},
+    {Type::Calendar, Calendar},
+    {Type::Relative, Relative}}
 };
 
 namespace v1 {
@@ -324,17 +450,40 @@ Schedule schedule(size_t index) {
     return parse_schedule(settings::time(index));
 }
 
-size_t count() {
-    size_t out { 0 };
+Relative relative(size_t index) {
+    return parse_relative(settings::time(index));
+}
 
+template <typename T>
+void foreach_type(T&& callback) {
     for (size_t index = 0; index < build::max(); ++index) {
         const auto type = settings::type(index);
         if (type == Type::Unknown) {
             break;
         }
 
-        ++out;
+        callback(type);
     }
+}
+
+using Types = std::vector<Type>;
+
+Types types() {
+    Types out;
+
+    foreach_type([&](Type type) {
+        out.push_back(type);
+    });
+
+    return out;
+}
+
+size_t count() {
+    size_t out { 0 };
+
+    foreach_type([&](Type type) {
+        ++out;
+    });
 
     return out;
 }
@@ -589,49 +738,30 @@ EventMatch* find_event_match(const Schedule& schedule) {
     return find_event_match(schedule.time);
 }
 
-tm time_point_from_seconds(datetime::Seconds seconds) {
+tm make_utc_date_time(datetime::Seconds seconds) {
     tm out{};
+
     time_t timestamp{ seconds.count() };
     gmtime_r(&timestamp, &out);
 
     return out;
 }
 
-Event make_invalid_event() {
-    Event out;
-
-    out.seconds = datetime::Seconds{ -1 };
-    out.minutes = datetime::Minutes{ -1 };
-
-    return out;
-}
-
-Event make_event(datetime::Seconds seconds) {
-    Event out;
-
-    out.seconds = seconds;
-    out.minutes =
-        std::chrono::duration_cast<datetime::Minutes>(out.seconds);
-    out.seconds -= out.minutes;
-
-    return out;
-}
-
-datetime::Date date_point(const tm& time_point) {
+datetime::Date make_date(const tm& date_time) {
     datetime::Date out;
 
-    out.year = time_point.tm_year + 1900;
-    out.month = time_point.tm_mon + 1;
-    out.day = time_point.tm_mday;
+    out.year = date_time.tm_year + 1900;
+    out.month = date_time.tm_mon + 1;
+    out.day = date_time.tm_mday;
 
     return out;
 }
 
-TimeMatch time_match(const tm& time_point) {
+TimeMatch make_time_match(const tm& date_time) {
     TimeMatch out;
 
-    out.hour[time_point.tm_hour] = true;
-    out.minute[time_point.tm_min] = true;
+    out.hour[date_time.tm_hour] = true;
+    out.minute[date_time.tm_min] = true;
     out.flags = FlagUtc;
 
     return out;
@@ -639,15 +769,20 @@ TimeMatch time_match(const tm& time_point) {
 
 void update_event_match(EventMatch& match, datetime::Seconds seconds) {
     if (seconds <= datetime::Seconds::zero()) {
-        match.last = make_invalid_event();
+        if (event::is_valid(match.next)) {
+            match.last = match.next;
+        }
+
+        match.next = TimePoint{};
         return;
     }
 
-    const auto time_point = time_point_from_seconds(seconds);
-    match.date = date_point(time_point);
-    match.time = time_match(time_point);
+    const auto date_time = make_utc_date_time(seconds);
+    match.date = make_date(date_time);
+    match.time = make_time_match(date_time);
 
-    match.last = make_event(seconds);
+    match.last = match.next;
+    match.next = make_time_point(seconds);
 }
 
 void update_schedule_from(Schedule& schedule, const EventMatch& match) {
@@ -661,11 +796,11 @@ bool update_schedule(Schedule& schedule) {
     // if not sun{rise,set} schedule, keep it as-is
     const auto* selected = sun::find_event_match(schedule);
     if (nullptr == selected) {
-        return false;
+        return true;
     }
 
     // in case calculation failed, no use here
-    if (!event_valid((*selected).last)) {
+    if (!event::is_valid((*selected).next)) {
         return false;
     }
 
@@ -679,8 +814,8 @@ bool update_schedule(Schedule& schedule) {
 }
 
 bool needs_update(datetime::Minutes minutes) {
-    return ((match.rising.last.minutes < minutes)
-         || (match.setting.last.minutes < minutes));
+    return (match.rising.next.minutes < minutes)
+        || (match.setting.next.minutes < minutes);
 }
 
 template <typename T>
@@ -729,7 +864,7 @@ void update(time_t timestamp, const tm& today, T&& compare) {
 
 String format_match(const EventMatch& match) {
     return datetime::format_local_tz(
-        datetime::make_context(event_seconds(match.last)));
+        datetime::make_context(event::to_seconds(match.next)));
 }
 
 // check() needs current or future events, discard timestamps in the past
@@ -758,12 +893,12 @@ void update_after(const datetime::Context& ctx) {
 
     update(minutes, ctx.utc, CheckCompare{});
 
-    if (match.rising.last.minutes.count() > 0) {
+    if (match.rising.next.minutes.count() > 0) {
         DEBUG_MSG_P(PSTR("[SCH] Sunrise at %s\n"),
             format_match(match.rising).c_str());
     }
 
-    if (match.setting.last.minutes.count() > 0) {
+    if (match.setting.next.minutes.count() > 0) {
         DEBUG_MSG_P(PSTR("[SCH] Sunset at %s\n"),
             format_match(match.setting).c_str());
     }
@@ -781,7 +916,7 @@ namespace terminal {
 namespace internal {
 
 String sunrise_sunset(const sun::EventMatch& match) {
-    if (match.last.minutes > datetime::Minutes::zero()) {
+    if (match.next.minutes > datetime::Minutes::zero()) {
         return sun::format_match(match);
     }
 
@@ -789,7 +924,7 @@ String sunrise_sunset(const sun::EventMatch& match) {
 }
 
 void format_output(::terminal::CommandContext& ctx, const String& prefix, const String& value) {
-    ctx.output.printf_P(PSTR("%s%s%s\n"),
+    ctx.output.printf_P(PSTR("- %s%s%s\n"),
         prefix.c_str(),
         value.length()
             ? PSTR(" at ")
@@ -809,13 +944,11 @@ void dump_sunrise_sunset(::terminal::CommandContext& ctx) {
 } // namespace internal
 #endif
 
+// SCHEDULE [<ID>]
 PROGMEM_STRING(Dump, "SCHEDULE");
 
 void dump(::terminal::CommandContext&& ctx) {
     if (ctx.argv.size() != 2) {
-#if SCHEDULER_SUN_SUPPORT
-        internal::dump_sunrise_sunset(ctx);
-#endif
         settingsDump(ctx, settings::Settings);
         return;
     }
@@ -826,12 +959,73 @@ void dump(::terminal::CommandContext&& ctx) {
         return;
     }
 
+    const auto last = find_last(id);
+    if (last) {
+        ctx.output.printf_P(PSTR("last action: %s\n"),
+            datetime::format_local(datetime::Seconds((*last).minutes).count()).c_str());
+    }
+
     settingsDump(ctx, settings::IndexedSettings, id);
     terminalOK(ctx);
 }
 
+PROGMEM_STRING(Event, "EVENT");
+
+// EVENT [<NAME>] [<DATETIME>]
+void event(::terminal::CommandContext&& ctx) {
+    String name;
+
+    if (ctx.argv.size() == 2) {
+        name = std::move(ctx.argv[1]);
+    }
+
+    if (ctx.argv.size() != 3) {
+        bool once { true };
+        for (auto& entry : named_events) {
+            if (name.length() && entry.name != name) {
+                continue;
+            }
+
+            if (once) {
+                ctx.output.print(PSTR("Named events:\n"));
+                once = false;
+            }
+
+            ctx.output.printf_P(PSTR("- \"%s\" at %s\n"),
+                entry.name.c_str(),
+                format_named_event(entry.minutes).c_str());
+
+            if (name.length()) {
+                terminalOK(ctx);
+                return;
+            }
+        }
+
+        if (name.length()) {
+            terminalError(ctx, STRING_VIEW("Invalid name"));
+            return;
+        }
+
+#if SCHEDULER_SUN_SUPPORT
+        ctx.output.print(PSTR("Sun events:\n"));
+        internal::dump_sunrise_sunset(ctx);
+#endif
+
+        terminalOK(ctx);
+        return;
+    }
+
+    if (named_event(std::move(ctx.argv[1]), ctx.argv[2])) {
+        terminalOK(ctx);
+        return;
+    }
+
+    terminalError(ctx, STRING_VIEW("Cannot set event"));
+}
+
 static constexpr ::terminal::Command Commands[] PROGMEM {
     {Dump, dump},
+    {Event, event},
 };
 
 void setup() {
@@ -1020,15 +1214,99 @@ bool set(ApiRequest& req, JsonObject& root) {
     return false;
 }
 
-} // namespace schedule
+} // namespace schedules
+
+constexpr char Events[] = "events";
+constexpr char Name[] = "name";
+constexpr char Datetime[] = "datetime";
+
+namespace events {
+
+bool get(ApiRequest& req, JsonObject& root) {
+    const auto param = req.wildcard(0);
+
+    auto& events = root.createNestedArray(Events);
+    for (auto& event : named_events) {
+        auto& entry = events.createNestedObject();
+        entry[Name] = event.name.c_str();
+        entry[Datetime] = format_named_event(event.minutes);
+    }
+
+    return true;
+}
+
+} // namespace events
+
+namespace event {
+
+bool get(ApiRequest& req, JsonObject& root) {
+    const auto param = req.wildcard(0);
+
+    const auto it = find_named(param);
+    if (it) {
+        root[Datetime] = format_named_event((*it).minutes);
+        return true;
+    }
+
+    return false;
+}
+
+bool set(ApiRequest& req, JsonObject& root) {
+    const auto datetime = root[Datetime];
+    if (!datetime.success() || !datetime.is<String>()) {
+        return false;
+    }
+
+    return named_event(
+        req.wildcard(0), datetime.as<String>());
+}
+
+} // namespace event
 
 void setup() {
     apiRegister(F(MQTT_TOPIC_SCHEDULE), schedules::get, schedules::set);
     apiRegister(F(MQTT_TOPIC_SCHEDULE "/+"), schedule::get, schedule::set);
+
+    apiRegister(F(MQTT_TOPIC_NAMED_EVENT), events::get, nullptr);
+    apiRegister(F(MQTT_TOPIC_NAMED_EVENT "/+"), event::get, event::set);
 }
 
 } // namespace api
 #endif  // API_SUPPORT
+
+// -----------------------------------------------------------------------------
+#if MQTT_SUPPORT
+namespace mqtt {
+
+void callback(unsigned int type, StringView topic, StringView payload) {
+    if (type == MQTT_CONNECT_EVENT) {
+        mqttSubscribe(MQTT_TOPIC_NAMED_EVENT "/+");
+        return;
+    }
+
+    STRING_VIEW_INLINE(Topic, MQTT_TOPIC_NAMED_EVENT);
+    if (type == MQTT_MESSAGE_EVENT) {
+        const auto t = mqttMagnitude(topic);
+        if (!t.startsWith(Topic)) {
+            return;
+        }
+
+        const auto name = t.slice(Topic.length() + 1);
+        if (!name.length()) {
+            return;
+        }
+
+        named_event(name.toString(), payload);
+        return;
+    }
+}
+
+void setup() {
+    ::mqttRegister(callback);
+}
+
+} // namespace mqtt
+#endif
 
 // -----------------------------------------------------------------------------
 
@@ -1204,10 +1482,48 @@ void parse_action(String action) {
 
     if (!espurna::terminal::api_find_and_call(action, output, error)) {
         DEBUG_MSG_P(PSTR("[SCH] %s\n"), error.c_str());
+        return;
     }
 }
 
 #endif
+
+Schedule load_schedule(size_t index) {
+    auto out = settings::schedule(index);
+    if (!out.ok) {
+        return out;
+    }
+
+#if SCHEDULER_SUN_SUPPORT
+    if (want_sunrise_sunset(out.time) && !sun::update_schedule(out)) {
+        out.ok = false;
+    }
+#else
+    if (want_sunrise_sunset(out.time)) {
+        out.ok = false;
+    }
+#endif
+
+    return out;
+}
+
+bool match_schedule(const Schedule& schedule, const tm& time_point) {
+    if (!match(schedule.date, time_point)) {
+        return false;
+    }
+
+    if (!match(schedule.weekdays, time_point)) {
+        return false;
+    }
+
+    return match(schedule.time, time_point);
+}
+
+bool check_calendar(const datetime::Context& ctx, size_t index) {
+    const auto schedule = load_schedule(index);
+    return schedule.ok
+        && match_schedule(schedule, select_time(ctx, schedule));
+}
 
 namespace restore {
 
@@ -1255,7 +1571,7 @@ void run_delta(Context& ctx) {
         }
 
         for (auto it = ctx.pending.begin(); it != ctx.pending.end();) {
-            if (handle_delta(ctx, *it)) {
+            if (handle_pending(ctx, *it)) {
                 it = ctx.pending.erase(it);
             } else {
                 it = std::next(it);
@@ -1272,6 +1588,7 @@ void run_today(Context& ctx) {
             return;
 
         case Type::Disabled:
+        case Type::Relative:
             continue;
 
         case Type::Calendar:
@@ -1289,7 +1606,7 @@ void run_today(Context& ctx) {
 
 #if SCHEDULER_SUN_SUPPORT
         if (!sun::update_schedule(schedule)) {
-            context_pending(ctx, index, schedule);
+            ctx.push_pending(index, schedule);
             continue;
         }
 #else
@@ -1302,21 +1619,13 @@ void run_today(Context& ctx) {
     }
 }
 
-void sort(Context& ctx) {
-    std::sort(
-        ctx.results.begin(),
-        ctx.results.end(),
-        [](const Result& lhs, const Result& rhs) {
-            return lhs.offset < rhs.offset;
-        });
-}
-
 void run(const datetime::Context& base) {
     Context ctx{ base };
 
     run_today(ctx);
     run_delta(ctx);
-    sort(ctx);
+
+    ctx.sort();
 
     for (auto& result : ctx.results) {
         const auto action = settings::action(result.index);
@@ -1329,59 +1638,400 @@ void run(const datetime::Context& base) {
 
 } // namespace restore
 
-void check(const datetime::Context& ctx) {
-    for (size_t index = 0; index < build::max(); ++index) {
-        switch (settings::type(index)) {
+namespace expect {
+
+} // namespace expect
+
+namespace relative {
+
+struct Source {
+    constexpr static datetime::Minutes DefaultMinutes{ -1 };
+
+    virtual ~Source();
+
+    virtual const datetime::Minutes& minutes() const = 0;
+    virtual bool before(const datetime::Context&) = 0;
+    virtual bool after(const datetime::Context&) = 0;
+};
+
+constexpr datetime::Minutes Source::DefaultMinutes;
+
+Source::~Source() = default;
+
+struct Calendar : public Source {
+    Calendar(size_t index, std::shared_ptr<expect::Context> expect) :
+        _expect(expect),
+        _index(index)
+    {}
+
+    const datetime::Minutes& minutes() const override {
+        return _minutes;
+    }
+
+    bool before(const datetime::Context&) override;
+    bool after(const datetime::Context&) override;
+
+private:
+    void _reset_minutes(const datetime::Context& ctx, datetime::Minutes offset) {
+        _minutes = to_minutes(ctx) + offset;
+    }
+
+    void _reset_minutes(const datetime::Context& ctx, const expect::Context& expect) {
+        _reset_minutes(ctx, expect.results.back().offset);
+    }
+
+    std::shared_ptr<expect::Context> _expect;
+    size_t _index;
+
+    datetime::Minutes _minutes{ DefaultMinutes };
+};
+
+bool Calendar::before(const datetime::Context& ctx) {
+    if (event::is_valid(_minutes)) {
+        return true;
+    }
+
+    const auto it = std::find_if(
+        _expect->results.begin(),
+        _expect->results.end(),
+        [&](const Offset& offset) {
+            return offset.index == _index;
+        });
+
+    if (it != _expect->results.end()) {
+        _reset_minutes(ctx, (*it).offset);
+        return true;
+    }
+
+    const auto schedule = load_schedule(_index);
+    if (!schedule.ok) {
+        return false;
+    }
+
+    if ((_expect->days == _expect->days.zero()) && handle_today(*_expect, _index, schedule)) {
+        _reset_minutes(ctx, *_expect);
+        return true;
+    }
+
+    const auto pending = std::find_if(
+        _expect->pending.begin(),
+        _expect->pending.end(),
+        [&](const Pending& pending) {
+            return pending.index == _index;
+        });
+
+    if (pending == _expect->pending.end()) {
+        return false;
+    }
+
+    if (handle_pending(*_expect, *pending)) {
+        _reset_minutes(ctx, *_expect);
+        return true;
+    }
+
+    // assuming this only happen once, after +1day shift
+    _expect->pending.erase(pending);
+
+    return false;
+}
+
+bool Calendar::after(const datetime::Context& ctx) {
+    _minutes = action_timestamp(_index);
+    return event::is_valid(_minutes);
+}
+
+struct Named : public Source {
+    explicit Named(String&& name) :
+        _name(std::move(name))
+    {}
+
+    const datetime::Minutes& minutes() const override {
+        return _minutes;
+    }
+
+    bool before(const datetime::Context&) override;
+    bool after(const datetime::Context&) override;
+
+private:
+    bool _reset_minutes(StringView name) {
+        const auto it = find_named(name);
+        if (it) {
+            _minutes = it->minutes;
+        }
+
+        return event::is_valid(_minutes);
+    }
+
+    String _name;
+    datetime::Minutes _minutes{ -1 };
+};
+
+bool Named::before(const datetime::Context&) {
+    return event::is_valid(_minutes) || _reset_minutes(_name);
+}
+
+bool Named::after(const datetime::Context&) {
+    return event::is_valid(_minutes) || _reset_minutes(_name);
+}
+
+#if SCHEDULER_SUN_SUPPORT
+struct Sun : public Source {
+    explicit Sun(const Event* event) :
+        _event(event)
+    {}
+
+    bool before(const datetime::Context&) override {
+        return _reset_minutes(_event->next);
+    }
+
+    bool after(const datetime::Context&) override {
+        return _reset_minutes(_event->last);
+    }
+
+    const datetime::Minutes& minutes() const override {
+        return *_minutes;
+    }
+
+private:
+    bool _reset_minutes(const TimePoint& time_point) {
+        if (event::is_valid(time_point)) {
+            _minutes = &(time_point.minutes);
+        } else {
+            _minutes = &DefaultMinutes;
+        }
+
+        return event::is_valid(*_minutes);
+    }
+
+    const Event* _event;
+    const datetime::Minutes* _minutes { &DefaultMinutes };
+};
+
+struct Sunset : public Sun {
+    Sunset() :
+        Sun(&sun::match.setting)
+    {}
+};
+
+struct Sunrise : public Sun {
+    Sunrise() :
+        Sun(&sun::match.rising)
+    {}
+};
+#endif
+
+struct EventOffset : public Offset {
+    std::unique_ptr<Source> source;
+    relative::Order order;
+};
+
+using EventOffsets = std::vector<EventOffset>;
+
+void process_valid_event_offsets(const datetime::Context& ctx, EventOffsets& pending, relative::Order order) {
+    std::vector<size_t> matched;
+
+    auto it = pending.begin();
+    while (it != pending.end()) {
+        if ((*it).order != order) {
+            goto next;
+        }
+
+        // expect required event time point ('next' or 'last') to exist for the requested 'order'
+        {
+            const auto& minutes = (*it).source->minutes();
+            if (!event::is_valid(minutes)) {
+                goto next;
+            }
+
+            const auto diff = event::difference(ctx, minutes);
+            if (diff == (*it).offset) {
+                matched.push_back((*it).index);
+            }
+        }
+
+        // always fall-through and erase
+        it = pending.erase(it);
+        continue;
+
+        // only move where when explicitly told to
+next:
+        it = std::next(it);
+        continue;
+    }
+
+    for (const auto& match : matched) {
+        parse_action(settings::action(match));
+    }
+}
+
+struct Prepared {
+    Span<scheduler::Type> types;
+    EventOffsets event_offsets;
+    std::shared_ptr<expect::Context> expect;
+
+    explicit operator bool() const {
+        return event_offsets.size() > 0;
+    }
+
+    bool next() {
+        return expect.get() != nullptr
+            && expect.use_count() > 1
+            && expect->pending.size()
+            && expect->next();
+    }
+};
+
+Prepared prepare_event_offsets(const datetime::Context& ctx, Span<scheduler::Type> types) {
+    Prepared out{
+        .types = types,
+        .event_offsets = {},
+        .expect = {},
+    };
+
+    for (size_t index = 0; index < types.size(); ++index) {
+        if (scheduler::Type::Relative != types[index]) {
+            continue;
+        }
+
+        auto relative = settings::relative(index);
+        if (Type::None == relative.type) {
+            continue;
+        }
+
+        if (Order::None == relative.order) {
+            continue;
+        }
+
+        EventOffset tmp;
+        tmp.index = index;
+        tmp.order = relative.order;
+        tmp.offset = relative.offset;
+
+        if (Order::Before == relative.order) {
+            tmp.offset = -tmp.offset;
+        }
+
+        switch (relative.type) {
+        case Type::None:
+            continue;
+
+        case Type::Calendar:
+            if (!out.expect) {
+                out.expect = std::make_unique<expect::Context>(ctx);
+            }
+            tmp.source =
+                std::make_unique<Calendar>(relative.data, out.expect);
+            break;
+
+        case Type::Named:
+            tmp.source =
+                std::make_unique<Named>(std::move(relative.name));
+            break;
+
+        case Type::Sunrise:
+#if SCHEDULER_SUN_SUPPORT
+            tmp.source = std::make_unique<Sunrise>();
+            break;
+#else
+            continue;
+#endif
+
+        case Type::Sunset:
+#if SCHEDULER_SUN_SUPPORT
+            tmp.source = std::make_unique<Sunrise>();
+            break;
+#else
+            continue;
+#endif
+        }
+
+        if (tmp.source) {
+            out.event_offsets.push_back(std::move(tmp));
+        }
+    }
+
+    return out;
+}
+
+void handle_ordered(const datetime::Context& ctx, Prepared& prepared, Order order) {
+    auto it = prepared.event_offsets.begin();
+    while (it != prepared.event_offsets.end()) {
+        if ((*it).order != order) {
+            goto next;
+        }
+
+        switch (order) {
+        case Order::None:
+            goto next;
+
+        case Order::Before:
+            if (!(*it).source->before(ctx)) {
+                goto erase;
+            }
+            goto next;
+
+        case Order::After:
+            if (!(*it).source->after(ctx)) {
+                goto erase;
+            }
+            goto next;
+
+        }
+
+erase:
+        it = prepared.event_offsets.erase(it);
+        continue;
+
+next:
+        it = std::next(it);
+        continue;
+    }
+}
+
+void handle_before(const datetime::Context& ctx, Prepared& prepared) {
+    handle_ordered(ctx, prepared, Order::Before);
+    if (prepared.next()) {
+        handle_ordered(ctx, prepared, Order::Before);
+    }
+}
+
+void handle_after(const datetime::Context& ctx, Prepared& prepared) {
+    handle_ordered(ctx, prepared, Order::After);
+}
+
+} // namespace relative
+
+void handle_calendar(const datetime::Context& ctx, Span<Type> types) {
+    for (size_t index = 0; index < types.size(); ++index) {
+        bool ok = false;
+
+        switch (types[index]) {
         case Type::Unknown:
             return;
 
         case Type::Disabled:
+        case Type::Relative:
             continue;
 
         case Type::Calendar:
+            ok = check_calendar(ctx, index);
             break;
         }
 
-        auto schedule = settings::schedule(index);
-        if (!schedule.ok) {
-            continue;
+        if (ok) {
+            action_timestamp(ctx, index);
+            parse_action(settings::action(index));
         }
-
-#if SCHEDULER_SUN_SUPPORT
-        if (!sun::update_schedule(schedule)) {
-            continue;
-        }
-#else
-        if (want_sunrise_sunset(schedule.time)) {
-            continue;
-        }
-#endif
-
-        const auto& time = select_time(ctx, schedule);
-
-        if (!match(schedule.date, time)) {
-            continue;
-        }
-
-        if (!match(schedule.weekdays, time)) {
-            continue;
-        }
-
-        if (!match(schedule.time, time)) {
-            continue;
-        }
-
-        DEBUG_MSG_P(PSTR("[SCH] Action #%zu triggered\n"), index);
-        parse_action(settings::action(index));
     }
 }
 
 void tick(NtpTick tick) {
-    if (tick != NtpTick::EveryMinute) {
+    auto ctx = datetime::make_context(now());
+    if (tick == NtpTick::EveryHour) {
+        cleanup_action_timestamps(ctx);
+        cleanup_named_events(ctx);
         return;
     }
-
-    auto ctx = datetime::make_context(now());
 
     if (initial) {
         initial = false;
@@ -1393,7 +2043,23 @@ void tick(NtpTick tick) {
     sun::update_after(ctx);
 #endif
 
-    check(ctx);
+    const auto types = settings::types();
+    auto prepared =
+        relative::prepare_event_offsets(ctx, make_span(types));
+
+    if (prepared) {
+        relative::handle_before(ctx, prepared);
+        relative::process_valid_event_offsets(
+            ctx, prepared.event_offsets, relative::Order::Before);
+    }
+
+    handle_calendar(ctx, prepared.types);
+
+    if (prepared) {
+        relative::handle_after(ctx, prepared);
+        relative::process_valid_event_offsets(
+            ctx, prepared.event_offsets, relative::Order::After);
+    }
 }
 
 void setup() {
@@ -1411,6 +2077,9 @@ void setup() {
 #endif
 #if API_SUPPORT
     api::setup();
+#endif
+#if MQTT_SUPPORT
+    mqtt::setup();
 #endif
 
     ntpOnTick(tick);

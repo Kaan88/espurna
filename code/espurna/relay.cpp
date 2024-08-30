@@ -412,12 +412,12 @@ PROGMEM_STRING(Mode, "relayPulse");
 
 namespace {
 
-using DurationPair = espurna::settings::internal::duration_convert::Pair;
-using ParseResult = espurna::settings::internal::duration_convert::Result;
+using DurationPair = espurna::duration::Pair;
+using ParseResult = espurna::duration::PairResult;
 
 Duration native_duration(DurationPair pair) {
-    using namespace espurna::settings::internal;
-    return duration_convert::to_chrono_duration<Duration>(pair);
+    using namespace espurna::duration;
+    return to_chrono<Duration>(pair);
 }
 
 Duration native_duration(ParseResult result) {
@@ -427,8 +427,8 @@ Duration native_duration(ParseResult result) {
 }
 
 ParseResult parse_time(StringView view) {
-    using namespace espurna::settings::internal;
-    return duration_convert::parse(view, Seconds::period{});
+    using namespace espurna::duration;
+    return parse(view, Seconds::period{});
 }
 
 Duration native_duration(StringView view) {
@@ -1730,7 +1730,22 @@ void _relayProcessPulse(const Relay& relay, size_t id, bool status) {
 // duration equal to 0 would cancel existing timer
 // duration greater than 0 would toggle relay and schedule a timer
 [[gnu::unused]]
-void _relayHandlePulseResult(size_t id, espurna::settings::internal::duration_convert::Result result) {
+void _relayHandleTimerNative(size_t id, espurna::relay::pulse::Duration duration, bool toggle) {
+    const auto status = relayStatus(id);
+    const auto target = toggle ? status : !status;
+
+    auto timer =
+        espurna::relay::pulse::schedule(duration, id, target);
+
+    if (toggle) {
+        relayToggle(id, true, false);
+    } else {
+        (*timer).start();
+    }
+}
+
+[[gnu::unused]]
+void _relayHandleTimerResult(size_t id, espurna::duration::PairResult result, bool toggle) {
     using namespace espurna::relay;
 
     const auto native = pulse::settings::native_duration(result);
@@ -1738,23 +1753,32 @@ void _relayHandlePulseResult(size_t id, espurna::settings::internal::duration_co
         pulse::reset(id);
     }
 
-    pulse::schedule(native, id, relayStatus(id));
-    relayToggle(id, true, false);
+    _relayHandleTimerNative(id, native, toggle);
 }
 
 // expects generic time input which is converted to float first
 [[gnu::unused]]
-bool _relayHandlePulsePayload(size_t id, espurna::StringView payload) {
+bool _relayHandleTimerPayloadImpl(size_t id, espurna::StringView payload, bool toggle) {
 
     using namespace espurna::relay;
     const auto result = pulse::settings::parse_time(payload);
 
     if (result.ok) {
-        _relayHandlePulseResult(id, result);
+        _relayHandleTimerResult(id, result, toggle);
         return true;
     }
 
     return false;
+}
+
+[[gnu::unused]]
+bool _relayHandlePulsePayload(size_t id, espurna::StringView payload) {
+    return _relayHandleTimerPayloadImpl(id, payload, true);
+}
+
+[[gnu::unused]]
+bool _relayHandleTimerPayload(size_t id, espurna::StringView payload) {
+    return _relayHandleTimerPayloadImpl(id, payload, false);
 }
 
 // Make sure expired pulse timers are removed, so any API calls don't try to re-use those
@@ -2462,6 +2486,14 @@ bool _relayApiTryHandle(ApiRequest& request, T&& callback) {
     return callback(id);
 }
 
+bool _relayApiTimerGet(ApiRequest& request, size_t id) {
+    using namespace espurna::relay::pulse;
+    const auto duration = findDuration(id);
+    const auto seconds = std::chrono::duration_cast<Seconds>(duration);
+    request.send(String(seconds.count(), 10));
+    return true;
+}
+
 } // namespace
 
 void relaySetupAPI() {
@@ -2498,16 +2530,25 @@ void relaySetupAPI() {
     apiRegister(F(MQTT_TOPIC_PULSE "/+"),
         [](ApiRequest& request) {
             return _relayApiTryHandle(request, [&](size_t id) {
-                using namespace espurna::relay::pulse;
-                const auto duration = findDuration(id);
-                const auto seconds = std::chrono::duration_cast<Seconds>(duration);
-                request.send(String(seconds.count(), 10));
-                return true;
+                return _relayApiTimerGet(request, id);
             });
         },
         [](ApiRequest& request) {
             return _relayApiTryHandle(request, [&](size_t id) {
                 return _relayHandlePulsePayload(id, request.param(F("value")));
+            });
+        }
+    );
+
+    apiRegister(F(MQTT_TOPIC_TIMER "/+"),
+        [](ApiRequest& request) {
+            return _relayApiTryHandle(request, [&](size_t id) {
+                return _relayApiTimerGet(request, id);
+            });
+        },
+        [](ApiRequest& request) {
+            return _relayApiTryHandle(request, [&](size_t id) {
+                return _relayHandleTimerPayload(id, request.param(F("value")));
             });
         }
     );
@@ -2635,6 +2676,7 @@ private:
 void _relayMqttSubscribeBaseTopics() {
     mqttSubscribe(MQTT_TOPIC_RELAY "/+");
     mqttSubscribe(MQTT_TOPIC_PULSE "/+");
+    mqttSubscribe(MQTT_TOPIC_TIMER "/+");
     mqttSubscribe(MQTT_TOPIC_LOCK "/+");
 }
 
@@ -2817,11 +2859,13 @@ struct RelayMqttTopicHandler {
 
 PROGMEM_STRING(MqttTopicRelay, MQTT_TOPIC_RELAY);
 PROGMEM_STRING(MqttTopicPulse, MQTT_TOPIC_PULSE);
+PROGMEM_STRING(MqttTopicTimer, MQTT_TOPIC_TIMER);
 PROGMEM_STRING(MqttTopicLock, MQTT_TOPIC_LOCK);
 
 static constexpr RelayMqttTopicHandler RelayMqttTopicHandlers[] PROGMEM {
     {MqttTopicRelay, _relayHandlePayload},
     {MqttTopicPulse, _relayHandlePulsePayload},
+    {MqttTopicTimer, _relayHandleTimerPayload},
     {MqttTopicLock, _relayHandleLockPayload},
 };
 
@@ -2945,65 +2989,11 @@ static void _relayCommand(::terminal::CommandContext&& ctx) {
 
 PROGMEM_STRING(PulseCommand, "PULSE");
 
-static void _relayCommandPulse(::terminal::CommandContext&& ctx) {
-    if (ctx.argv.size() < 2) {
-        terminalError(ctx, F("PULSE <ID> [<TIME>] [<TOGGLE>]"));
-        return;
-    }
-
-    size_t id;
-    if (!_relayTryParseId(ctx.argv[1], id)) {
-        terminalError(ctx, F("Invalid relayID"));
-        return;
-    }
-
+static void _relayCommandDumpTimers(::terminal::CommandContext&& ctx) {
     using namespace espurna::relay;
-    auto duration = pulse::Duration{ 0 };
 
-    if (ctx.argv.size() >= 3) {
-        const auto parsed = pulse::settings::parse_time(ctx.argv[2]);
-        if (!parsed.ok) {
-            terminalError(ctx, F("Invalid pulse time"));
-            return;
-        }
-
-        duration = pulse::settings::native_duration(parsed);
-    }
-
-    if (duration.count() == 0) {
-        pulse::reset(id);
-        terminalOK(ctx);
-        return;
-    }
-
-    bool toggle = true;
-    if (ctx.argv.size() >= 4) {
-        auto* convert = espurna::settings::internal::convert<bool>;
-        toggle = convert(ctx.argv[3]);
-    }
-
-    const auto status = relayStatus(id);
-    auto timer = pulse::schedule(
-        duration, id,
-        toggle
-            ? status
-            : !status);
-
-    if (toggle) {
-        relayToggle(id, true, false);
-    } else {
-        (*timer).start();
-    }
-
-    terminalOK(ctx);
-}
-
-PROGMEM_STRING(PulseTimersCommand, "PULSE.TIMERS");
-
-static void _relayCommandPulseTimers(::terminal::CommandContext&& ctx) {
-    using namespace espurna::relay;
     if (pulse::internal::timers.empty()) {
-        terminalError(ctx, STRING_VIEW("no pulse timers").toString());
+        terminalError(ctx, STRING_VIEW("no active timers").toString());
         return;
     }
 
@@ -3018,7 +3008,7 @@ static void _relayCommandPulseTimers(::terminal::CommandContext&& ctx) {
         }
 
         ctx.output.printf_P(
-            PSTR("pulse%zu\t{%.*s Duration=%u Status=%s}\n"),
+            PSTR("timer%zu\t{%.*s Duration=%u Status=%s}\n"),
             timer.id(),
             type.length(), type.data(),
             timer.duration().count(),
@@ -3026,6 +3016,62 @@ static void _relayCommandPulseTimers(::terminal::CommandContext&& ctx) {
     }
 
     terminalOK(ctx);
+}
+
+static void _relayCommandPulseImpl(::terminal::CommandContext&& ctx, bool toggle) {
+    if (ctx.argv.size() > 3) {
+        String name = ctx.argv[0];
+        name.toUpperCase();
+
+        const auto error = name + STRING_VIEW("[<ID>] [<TIME>]").toString();
+        terminalError(ctx, error);
+
+        return;
+    }
+
+    using namespace espurna::relay;
+
+    if (ctx.argv.size() == 1) {
+        _relayCommandDumpTimers(std::move(ctx));
+        return;
+    }
+
+    size_t id;
+    if (!_relayTryParseId(ctx.argv[1], id)) {
+        terminalError(ctx, F("Invalid relayID"));
+        return;
+    }
+
+    auto duration = pulse::Duration{ 0 };
+
+    if (ctx.argv.size() == 3) {
+        const auto parsed = pulse::settings::parse_time(ctx.argv[2]);
+        if (!parsed.ok) {
+            terminalError(ctx, F("Invalid time"));
+            return;
+        }
+
+        duration = pulse::settings::native_duration(parsed);
+    }
+
+    if (duration.count() == 0) {
+        pulse::reset(id);
+        terminalOK(ctx);
+        return;
+    }
+
+    _relayHandleTimerNative(id, duration, toggle);
+    terminalOK(ctx);
+}
+
+static void _relayCommandPulse(::terminal::CommandContext&& ctx) {
+    _relayCommandPulseImpl(std::move(ctx), true);
+}
+
+PROGMEM_STRING(TimerCommand, "TIMER");
+
+static void _relayCommandTimer(::terminal::CommandContext&& ctx) {
+    _relayCommandPulseImpl(std::move(ctx), false);
 }
 
 PROGMEM_STRING(LockCommand, "LOCK");
@@ -3098,7 +3144,7 @@ static void _relayCommandUnlock(::terminal::CommandContext&& ctx) {
 static constexpr ::terminal::Command RelayCommands[] PROGMEM {
     {RelayCommand, _relayCommand},
     {PulseCommand, _relayCommandPulse},
-    {PulseTimersCommand, _relayCommandPulseTimers},
+    {TimerCommand, _relayCommandTimer},
     {LockCommand, _relayCommandLock},
     {UnlockCommand, _relayCommandUnlock},
 };

@@ -5,6 +5,7 @@
 import {
     listenEnumerable,
     onGroupSettingsDel,
+    setGroupElement,
     setInputValue,
     setOriginalsFromValuesForNode,
     setSelectValue,
@@ -50,7 +51,7 @@ export function loadTemplate(name) {
 export function loadConfigTemplate(name) {
     const template = loadTemplate(name);
     for (let elem of /** @type {NodeListOf<InputOrSelect>} */(template.querySelectorAll("input,select"))) {
-        elem.dataset["settingsGroupElement"] = "true";
+        setGroupElement(elem);
     }
 
     for (let elem of template.querySelectorAll("button.button-del-settings-group")) {

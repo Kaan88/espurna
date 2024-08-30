@@ -1,4 +1,6 @@
-import { assert, expect, test, beforeAll } from 'vitest';
+import { assert, afterAll, expect, test } from 'vitest';
+
+import { randomString } from '../src/core.mjs';
 import { addFromTemplate } from '../src/template.mjs';
 import {
     checkAndSetElementChanged,
@@ -6,56 +8,18 @@ import {
     getData,
     groupSettingsAdd,
     groupSettingsDel,
-    initInputKeyValueElement,
+    setInputOrSelectValueByKey,
+    setSpanValueByKey,
     isChangedElement,
     setInputValue,
+    setGroupElement,
     countChangedElements,
 } from '../src/settings.mjs';
 
-beforeAll(() => {
-    document.body.innerHTML += `
-    <form id="gather">
-        <fieldset id="gather-plain">
-            <legend>Plain kvs</legend>
-            <input name="plainText" type="text"></input>
-            <input name="plainNumber" type="number"></input>
-            <input name="plainRange" type="range"></input>
-            <input name="plainBox" type="checkbox"></input>
-        </fieldset>
-        <div id="gather-group">
-        </div>
-    </form>
-    <template id="template-gather-group">
-        <fieldset>
-            <legend>Group <span data-key="template-id" data-pre="#"></span></legend>
-            <input name="groupName" type="text"></input>
-            <input name="groupValue" type="number"></input>
-        </fieldset>
-    </template>`;
-
-    for (let name of ['modify', 'append', 'remove']) {
-        document.body.innerHTML += `
-        <form id="${name}">
-            <div id="${name}-group" class="settings-group" data-settings-schema="foo bar">
-            </div>
-        </form>`;
-    }
-
-    document.body.innerHTML += `
-    <form id="schema-del">
-        <div id="schema-del-group" class="settings-group" data-settings-schema-del="foo" data-settings-schema="foo bar">
-        </div>
-    </form>`;
-
-    document.body.innerHTML +=`
-        <template id="template-group">
-            <fieldset>
-                <legend>Foo <span data-key="template-id" data-pre="#"></span></legend>
-                <input name="foo" type="text" required></input>
-                <legend>Bar #<span data-key="template-id"></span></legend>
-                <input name="bar" type="text" ></input>
-            </fieldset>
-        </template>`;
+afterAll(() => {
+  document.body.innerHTML = '';
+  expect(document.body.childElementCount)
+    .toEqual(0);
 });
 
 /**
@@ -87,11 +51,31 @@ test('processed data can be gathered back', () => {
         {groupName: 'one-hundred', groupValue: 100},
     ];
 
+    document.body.innerHTML += `
+    <form id="gather">
+        <fieldset id="gather-plain">
+            <legend>Plain kvs</legend>
+            <input name="plainText" type="text"></input>
+            <input name="plainNumber" type="number"></input>
+            <input name="plainRange" type="range"></input>
+            <input name="plainBox" type="checkbox"></input>
+        </fieldset>
+        <div id="gather-group">
+        </div>
+    </form>
+    <template id="template-gather-group">
+        <fieldset>
+            <legend>Group <span data-key="template-id" data-pre="#"></span></legend>
+            <input name="groupName" type="text"></input>
+            <input name="groupValue" type="number"></input>
+        </fieldset>
+    </template>`;
+
     const plain = document.getElementById('gather-plain');
     assert(plain instanceof HTMLFieldSetElement);
 
     for (let [key, value] of Object.entries(PLAIN)) {
-        initInputKeyValueElement(key, value);
+        setInputOrSelectValueByKey(plain, key, value);
     }
 
     const group = document.getElementById('gather-group');
@@ -131,7 +115,32 @@ test('processed data can be gathered back', () => {
     })
 });
 
+/**
+ * @param {string} name
+ * @returns {string}
+ */
+function makeFormGroup(name) {
+    return `
+    <form id="${name}">
+        <div id="${name}-group" class="settings-group" data-settings-schema="foo bar">
+        </div>
+    </form>`;
+}
+
+const TEMPLATE_GROUP = `
+    <template id="template-group">
+        <fieldset>
+            <legend>Foo <span data-key="template-id" data-pre="#"></span></legend>
+            <input name="foo" type="text" required></input>
+            <legend>Bar #<span data-key="template-id"></span></legend>
+            <input name="bar" type="text" ></input>
+        </fieldset>
+    </template>`;
+
 test('settings group modify', () => {
+    document.body.innerHTML += makeFormGroup('modify');
+    document.body.innerHTML += TEMPLATE_GROUP;
+
     const modify = /** @type {HTMLDivElement | null} */
         (document.getElementById('modify-group'));
     assert(modify);
@@ -171,6 +180,9 @@ test('settings group modify', () => {
 });
 
 test('settings group append', () => {
+    document.body.innerHTML += makeFormGroup('append');
+    document.body.innerHTML += TEMPLATE_GROUP;
+
     const append = /** @type {HTMLDivElement | null} */
         (document.getElementById('append-group'));
     assert(append);
@@ -221,6 +233,9 @@ test('settings group append', () => {
 });
 
 test('settings group remove', () => {
+    document.body.innerHTML += makeFormGroup('remove');
+    document.body.innerHTML += TEMPLATE_GROUP;
+
     const remove = /** @type {HTMLDivElement | null} */
         (document.getElementById('remove-group'));
     assert(remove);
@@ -259,8 +274,8 @@ test('settings group remove', () => {
         .toEqual({
             bar1: 'barfoobar',
             bar2: '',
-            foo1: '3333333',
-            foo2: '4444444',
+            foo1: 3333333,
+            foo2: 4444444,
         });
 
     // extra row is always at the end. because add event was triggered,
@@ -278,9 +293,9 @@ test('settings group remove', () => {
         .toEqual({
             bar1: 'barfoobar',
             bar2: '',
-            foo1: '3333333',
-            foo2: '4444444',
-            foo3: '5555555',
+            foo1: 3333333,
+            foo2: 4444444,
+            foo3: 5555555,
         });
 
     addFromTemplate(remove, 'group', {foo: '6666666', bar: 'yyyyyyy'});
@@ -320,10 +335,10 @@ test('settings group remove', () => {
             bar1: '',
             bar2: 'ttttttt',
             bar3: 'yyyyyyy',
-            foo0: '3333333',
-            foo1: '4444444',
-            foo2: '5555555',
-            foo3: '6666666',
+            foo0: 3333333,
+            foo1: 4444444,
+            foo2: 5555555,
+            foo3: 6666666,
         });
 
     while (remove.firstElementChild instanceof HTMLFieldSetElement) {
@@ -347,6 +362,13 @@ test('settings group remove', () => {
 });
 
 test('settings group schema remove', () => {
+    document.body.innerHTML += `
+    <form id="schema-del">
+        <div id="schema-del-group" class="settings-group" data-settings-schema-del="foo" data-settings-schema="foo bar">
+        </div>
+    </form>`;
+    document.body.innerHTML += TEMPLATE_GROUP;
+
     const group = document.getElementById('schema-del-group');
     assert(group instanceof HTMLDivElement);
 
@@ -380,4 +402,119 @@ test('settings group schema remove', () => {
         ]));
     expect(data.set)
         .toEqual({});
+});
+
+test('number inputs without data consistently serialize as nan string', () => {
+    document.body.innerHTML += `
+    <form id="numbers-and-nan-strings">
+        <input name="number:a" type="number">
+        <input name="number:b" type="number">
+        <input name="number:c" type="number">
+        <input name="number:d" type="number">
+    </form>
+    `;
+
+    const form = document.forms.namedItem("numbers-and-nan-strings");
+    assert(form instanceof HTMLFormElement);
+
+    setInputOrSelectValueByKey(form, "number:a", 12345);
+    setInputOrSelectValueByKey(form, "number:d", 56789);
+
+    const data = getData([form], {assumeChanged: true});
+    expect(data.del.length)
+        .toEqual(0);
+    expect(Object.keys(data.set))
+        .toEqual(expect.arrayContaining(
+            ['number:a', 'number:b', 'number:c', 'number:d']));
+
+    expect(data.set["number:a"]).toEqual(12345);
+    expect(data.set["number:b"]).toEqual("nan");
+    expect(data.set["number:c"]).toEqual("nan");
+expect(data.set["number:d"]).toEqual(56789);
+});
+
+test('mixed plain and group element names should not conflict with each other', () => {
+    document.body.innerHTML += `
+    <form id="mixed-plain-and-group">
+        <fieldset id="plain-value-1">
+            <input name="foo">
+            <input name="bar">
+            <input name="baz" readonly>
+        </fieldset>
+        <fieldset id="group-value-1">
+            <input name="foo">
+            <input name="foo">
+            <input name="foo">
+            <input name="foo">
+            <input name="foo">
+        </fieldset>
+        <fieldset id="group-value-2">
+            <input name="bar">
+            <input name="bar">
+            <input name="bar">
+        </fieldset>
+        <fieldset id="plain-value-2">
+            <span data-key="foo">
+            </span>
+        </fieldset>
+        <fieldset id="plain-value-2">
+            <span data-key="bar">
+            </span>
+        </fieldset>
+    </form>
+    `;
+
+    const form = document.forms.namedItem("mixed-plain-and-group");
+    assert(form instanceof HTMLFormElement);
+
+    /** @type {{[k: string]: string}} */
+    const values = {};
+
+    /**
+     * @param {HTMLInputElement} elem
+     * @param {number} index
+     */
+    function updateInput(elem, index) {
+        setGroupElement(elem);
+        setInputValue(elem, randomString(16));
+        values[`${elem.name}${index}`] = elem.value;
+    }
+
+    /** @type {NodeListOf<HTMLInputElement>} */
+    (form.querySelectorAll('#group-value-1 > input'))
+        .forEach(updateInput);
+
+    /** @type {NodeListOf<HTMLInputElement>} */
+    (form.querySelectorAll('#group-value-2 > input'))
+        .forEach(updateInput);
+
+    const plain = [
+        ['foo', 'plain value'],
+        ['bar', 'set only once'],
+    ];
+
+    for (const [name, value] of plain) {
+        setInputOrSelectValueByKey(form, name, value);
+        setSpanValueByKey(form, name, value);
+        values[name] = value;
+    }
+
+    setInputOrSelectValueByKey(form, 'baz', 'for plain elements');
+
+    const data = getData([form], {assumeChanged: true});
+    expect(data.del.length).toBe(0);
+    expect(data.set).toEqual(values);
+
+    form.querySelectorAll('span')
+        .forEach((elem) => {
+            const key = elem.dataset["key"];
+            assert(key !== undefined);
+            assert(values[key] !== undefined);
+            expect(elem.textContent)
+                .toEqual(values[key]);
+        });
+
+    const baz = form.querySelector('input[name="baz"]');
+    assert(baz instanceof HTMLInputElement);
+    expect(baz.value).toEqual('for plain elements');
 });

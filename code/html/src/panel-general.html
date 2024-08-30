@@ -36,11 +36,14 @@
                     <label>Click repeat delay</label>
                     <input name="btnRepDel" type="number" data-action="reboot" min="0" step="100" max="1000" required >
                     <span class="pure-form-message-inline">
+                        ms (milliseconds)
+                    </span>
+                    <span class="pure-form-message">
                         Delay in milliseconds to detect a double or triple click (from 0 to 1000ms).<br>
                         The lower this number the faster the device will respond to button clicks but the harder it will be to get the expected event.
                         Increase this number if you are having trouble triggering the event.
                         Set this value to 0 to disable repeat detection, device will respond immediately to a single button click. When using default configuration, consider that this will disable the SoftAP button action.<br>
-                        You will have to <strong>reboot the device</strong> to apply this setting.
+                        You will have to <code>Reboot</code> to apply this setting.
                     </span>
                 </div>
             </fieldset>
@@ -80,13 +83,13 @@
                     <label>Message interval</label>
                     <input name="hbInterval" type="number" min="1" required >
                     <span class="pure-form-message-inline">
-                        How often the heartbeat messages should be sent (number of <strong>seconds</strong>).
+                        s (seconds)
                     </span>
                 </div>
 
                 <div class="pure-control-group">
                     <label>Message types</label>
-                    <select multiple name="hbReport">
+                    <select multiple name="hbReport" size="21">
                         <option value="1">Device status</option>
                         <option value="2">SSID</option>
                         <option value="21">BSSID</option>
@@ -109,9 +112,6 @@
                         <option data-module="thermostat" value="19">Temperature range</option>
                         <option data-module="thermostat" value="20">Remote temperature</option>
                     </select>
-                    <span class="pure-form-message-inline">
-                        Select which message types will be sent out with the periodic report.
-                    </span>
                 </div>
             </fieldset>
 

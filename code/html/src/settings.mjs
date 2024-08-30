@@ -54,7 +54,7 @@ export function resetChangedElement(elem) {
  * @param {HTMLElement} elem
  */
 function resetGroupPending(elem) {
-    elem.dataset["settingsGroupPending"] = "";
+    delete elem.dataset["settingsGroupPending"];
 }
 
 // Right now, group additions happen from:
@@ -119,18 +119,52 @@ function getGroupPending(elem) {
     return raw.split(" ");
 }
 
+const SETTINGS_GROUP_ELEMENT = "settingsGroupElement";
+
 /**
  * @param {HTMLElement} elem
  */
-function isGroupElement(elem) {
-    return elem.dataset["settingsGroupElement"] !== undefined;
+export function setGroupElement(elem) {
+    elem.dataset[SETTINGS_GROUP_ELEMENT] = "true";
 }
 
 /**
  * @param {HTMLElement} elem
  */
-function isIgnoredElement(elem) {
-    return elem.dataset["settingsIgnore"] !== undefined;
+export function resetGroupElement(elem) {
+    delete elem.dataset[SETTINGS_GROUP_ELEMENT];
+}
+
+/**
+ * @param {HTMLElement} elem
+ * @returns {boolean}
+ */
+export function isGroupElement(elem) {
+    return elem.dataset[SETTINGS_GROUP_ELEMENT] !== undefined;
+}
+
+const SETTINGS_IGNORED_ELEMENT = "settingsIgnore";
+
+/**
+ * @param {HTMLElement} elem
+ */
+export function setIgnoredElement(elem) {
+    elem.dataset[SETTINGS_IGNORED_ELEMENT] = "true";
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+export function resetIgnoredElement(elem) {
+    delete elem.dataset[SETTINGS_IGNORED_ELEMENT];
+}
+
+/**
+ * @param {HTMLElement} elem
+ * @returns {boolean}
+ */
+export function isIgnoredElement(elem) {
+    return elem.dataset[SETTINGS_IGNORED_ELEMENT] !== undefined;
 }
 
 /**
@@ -417,6 +451,29 @@ function groupSettingsCleanup(container, keys) {
  */
 
 /**
+ * @param {string | number |boolean} value
+ * @returns {DataValue}
+ */
+function maybeAdjustDataValue(value) {
+    if (typeof value === "boolean") {
+        return value ? 1 : 0;
+    }
+
+    if (typeof value === "string" && (value.length > 0)) {
+        const number = Number(value);
+        if (!Number.isNaN(number)) {
+            return number;
+        }
+    }
+
+    if (typeof value === "number" && isNaN(value)) {
+        return "nan";
+    }
+
+    return value;
+}
+
+/**
  * specific 'key' string to remove from the device settings storage
  * @typedef {string} DelRequest
  */
@@ -462,6 +519,10 @@ export function getData(forms, {cleanup = true, assumeChanged = false} = {}) {
                 continue;
             }
 
+            if (elem instanceof HTMLInputElement && elem.readOnly) {
+                continue;
+            }
+
             const name = elem.dataset["settingsRealName"] || elem.name;
             if (!name) {
                 continue;
@@ -490,11 +551,8 @@ export function getData(forms, {cleanup = true, assumeChanged = false} = {}) {
                 const data_name = group_element
                     ? group_name : name;
 
-                // TODO small value optimization, so booleans always take 1 byte in the resulting json
-                const data_value = (typeof value === "boolean")
-                    ? (value ? 1 : 0) : value;
-
-                data[data_name] = data_value;
+                // fixing outgoing data, when it is necessary
+                data[data_name] = maybeAdjustDataValue(value);
             }
         }
     }
@@ -1130,12 +1188,16 @@ class SettingsBase {
 
 /**
  * read-only kv pairs. currently, this is span with a data-key=$key
+ * @param {Document | Element} node
  * @param {string} key
  * @param {DisplayValue} value
  */
-export function initDisplayKeyValueElement(key, value) {
-    const spans = /** @type {NodeListOf<HTMLSpanElement>} */(document.querySelectorAll(`span[data-key='${key}']`));
-    for (const span of spans) {
+export function setSpanValueByKey(node, key, value) {
+    for (const span of node.querySelectorAll(`span[data-key='${key}']`)) {
+        if (!(span instanceof HTMLSpanElement)) {
+            continue;
+        }
+
         setSpanValue(span, value);
     }
 }
@@ -1154,16 +1216,21 @@ function setInputOrSelect(elem, value) {
 
 /**
  * handle plain kv pairs when they are already on the page, and don't need special template handlers
+ * @param {Document | Element} node
  * @param {string} key
  * @param {ElementValue} value
  */
-export function initInputKeyValueElement(key, value) {
+export function setInputOrSelectValueByKey(node, key, value) {
     const inputs = [];
 
-    for (const elem of document.querySelectorAll(`[name='${key}'`)) {
+    for (const elem of node.querySelectorAll(`[name='${key}'`)) {
         if ((elem instanceof HTMLInputElement)
          || (elem instanceof HTMLSelectElement))
         {
+            if (isGroupElement(elem)) {
+                continue;
+            }
+
             setInputOrSelect(elem, value);
             inputs.push(elem);
         }
@@ -1296,8 +1363,8 @@ export function updateKeyValue(key, value) {
         return;
     }
 
-    initDisplayKeyValueElement(key, value);
-    initInputKeyValueElement(key, value);
+    setSpanValueByKey(document, key, value);
+    setInputOrSelectValueByKey(document, key, value);
 }
 
 function resetOriginals() {
