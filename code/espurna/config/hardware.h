@@ -1915,9 +1915,10 @@
     #define OTA_ARDUINOOTA_SUPPORT   0
     #define OTA_CLIENT               OTA_CLIENT_NONE
 
-    // Web UI blob & MDNS are pretty large
-    #define WEB_EMBEDDED             0
+    // Some options result in a pretty large image
+    #define ALEXA_SUPPORT            0
     #define MDNS_SERVER_SUPPORT      0
+    #define WEB_SUPPORT              0
 
 // -----------------------------------------------------------------------------
 // ESPLive

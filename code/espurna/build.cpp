@@ -223,6 +223,7 @@ alignas(4) static constexpr char Modules[] PROGMEM_STRING_ATTR =
     "UART_MQTT "
 #endif
 #if WEB_SUPPORT
+#if WEB_EMBEDDED
 #if WEBUI_IMAGE == WEBUI_IMAGE_SMALL
     "WEB_SMALL "
 #elif WEBUI_IMAGE == WEBUI_IMAGE_LIGHT
@@ -243,6 +244,9 @@ alignas(4) static constexpr char Modules[] PROGMEM_STRING_ATTR =
     "WEB_CURTAIN "
 #elif WEBUI_IMAGE == WEBUI_IMAGE_FULL
     "WEB_FULL "
+#endif
+#else
+    "WEB "
 #endif
 #endif
     "";

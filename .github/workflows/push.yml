@@ -43,6 +43,19 @@ jobs:
       run: |
         ./ci_install.sh webui
         ./ci_script.sh webui
+    - name: Archive blobs
+      run: |
+        pushd code/html/
+        time zip \
+          --quiet \
+          --recurse-paths \
+          WebUI-${{ github.sha }}.zip build/
+        mv WebUI-${{ github.sha }}.zip ../../
+        popd
+    - uses: actions/upload-artifact@v4
+      with:
+        name: WebUI-${{ github.sha }}
+        path: WebUI-${{ github.sha }}.zip
 
   build:
     runs-on: ubuntu-latest

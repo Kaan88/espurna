@@ -3,7 +3,11 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.18.0] ???
+## Pending changes
+
+???
+
+## [1.18.0] Snapshot build 2024-08-30
 
 ### Added
 - Scheduler [relative time spec](https://github.com/xoseperez/espurna/wiki/Scheduler#relative-time) [8edb7b63](https://github.com/xoseperez/espurna/commit/8edb7b633369cd04151525066ab0f8b512da7702)

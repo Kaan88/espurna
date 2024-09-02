@@ -15,6 +15,10 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include "api.h"
 #endif
 
+#if MQTT_SUPPORT
+#include "api_path.h"
+#endif
+
 #if WEB_SUPPORT
 #include "ws.h"
 #endif

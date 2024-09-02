@@ -116,15 +116,19 @@ def ensure_platform_updated():
 # using env instead of ini to avoid platformio ini changing hash on every change
 env.Append(
     ESPURNA_BOARD=os.environ.get("ESPURNA_BOARD", ""),
-    ESPURNA_AUTH=os.environ.get("ESPURNA_AUTH", ""),
     ESPURNA_FLAGS=os.environ.get("ESPURNA_FLAGS", ""),
 )
 
 ESPURNA_OTA_PORT = os.environ.get("ESPURNA_IP")
 if ESPURNA_OTA_PORT:
-    env.Replace(UPLOAD_PROTOCOL="espota")
-    env.Replace(UPLOAD_PORT=ESPURNA_OTA_PORT)
-    env.Replace(UPLOAD_FLAGS="--auth=$ESPURNA_AUTH")
+    env.Replace(
+        ESPURNA_AUTH=env.Literal(os.environ.get("ESPURNA_AUTH", "")),
+    )
+    env.Replace(
+        UPLOAD_PROTOCOL="espota",
+        UPLOAD_PORT=ESPURNA_OTA_PORT,
+        UPLOAD_FLAGS="--auth=$ESPURNA_AUTH",
+    )
 else:
     env.Replace(UPLOAD_PROTOCOL="esptool")
 

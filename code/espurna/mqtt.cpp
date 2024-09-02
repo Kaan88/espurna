@@ -1640,7 +1640,7 @@ const char* mqttPayloadStatus(bool status) {
 }
 
 void mqttSendStatus() {
-    mqttSendRaw(_mqtt_settings.will.c_str(), _mqtt_payload_online.c_str(), true);
+    mqttSendRaw(_mqtt_settings.will.c_str(), _mqtt_payload_online.c_str(), _mqtt_settings.retain);
 }
 
 // -----------------------------------------------------------------------------
