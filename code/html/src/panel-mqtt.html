@@ -107,11 +107,47 @@
             </fieldset>
 
             <fieldset>
+                <legend>Status &amp; Will</legend>
+
+                <div class="pure-control-group">
+                    <label>Topic</label>
+                    <input name="mqttWill" type="text">
+                    <span class="pure-form-message">
+                        Status payload will be sent to this topic. When empty, defaults to <strong>&lt;root&gt;/&lt;status&gt;</strong>
+                    </span>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Retain flag</label>
+                    <input class="checkbox-toggle" type="checkbox" name="mqttWillRetain">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>QoS</label>
+                    <select class="pure-input-2-3" name="mqttWillQoS">
+                        <option value="0">0: At most once</option>
+                        <option value="1">1: At least once</option>
+                        <option value="2">2: Exactly once</option>
+                    </select>
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Online payload</label>
+                    <input name="mqttPayloadOnline" type="text">
+                </div>
+
+                <div class="pure-control-group">
+                    <label>Offline payload</label>
+                    <input name="mqttPayloadOffline" type="text">
+                </div>
+            </fieldset>
+
+            <fieldset>
                 <legend>JSON</legend>
 
                 <div class="pure-control-group">
                     <label>Enabled</label>
-                    <input class="checkbox-toggle" type="checkbox" name="mqttUseJson">
+                    <input class="checkbox-toggle" type="checkbox" name="mqttJsonEnabled">
                     <span class="pure-form-message">
                         Causes all single <strong>&lt;topic&gt;</strong> messages published by the device, except the device status, to be sent in a JSON payload. For example:<br>
                         <code>{"relay/0": 1, "hostname": "ESPURNA-123456", "timestamp": "..."}</code><br>
@@ -120,14 +156,12 @@
                 </div>
 
                 <div class="pure-control-group">
-                    <label>Topic name</label>
-                    <input type="text" name="mqttJson" required >
+                    <label>Topic</label>
+                    <input type="text" name="mqttJson" >
                     <span class="pure-form-message">
-                        JSON message will be sent to <strong>&lt;root&gt;/&lt;name&gt;</strong> topic (<strong>data</strong> by default).
+                        JSON message will be sent to this topic. When empty, defaults to <strong>&lt;root&gt;/&lt;data&gt;</strong>
                     </span>
                 </div>
-
-
             </fieldset>
         </div>
 

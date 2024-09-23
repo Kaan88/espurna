@@ -284,6 +284,49 @@ private:
     timer::SystemTimer _timer;
 };
 
+struct PolledReadyFlag {
+    bool wait(duration::Milliseconds);
+    void stop();
+
+    bool stop_wait(duration::Milliseconds duration) {
+        stop();
+        return wait(duration);
+    }
+
+    bool ready();
+
+    explicit operator bool() {
+        return ready();
+    }
+
+private:
+    bool _ready { true };
+    time::SystemClock::time_point _until{};
+};
+
+template <typename T>
+struct PolledFlag {
+    bool wait(typename T::duration);
+
+    void reset() {
+        _last = T::now();
+    }
+
+protected:
+    typename T::time_point _last { T::now() };
+};
+
+template <typename T>
+bool PolledFlag<T>::wait(typename T::duration interval) {
+    const auto now = T::now();
+    if (now - _last > interval) {
+        _last = now;
+        return true;
+    }
+
+    return false;
+}
+
 namespace heartbeat {
 
 using Mask = int32_t;

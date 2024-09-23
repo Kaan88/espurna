@@ -93,6 +93,7 @@ private:
 
 #include <espurna/utils.h>
 #include <espurna/scheduler_common.ipp>
+#include <espurna/scheduler_sun.ipp>
 #include <espurna/scheduler_time.re.ipp>
 
 #include <ctime>
@@ -792,26 +793,28 @@ void test_restore_sdt_dst() {
 
 void test_event_impl() {
     static_assert(std::is_same_v<datetime::Clock::duration, datetime::Seconds>, "");
+    static_assert(std::is_same_v<event::time_point, datetime::Clock::time_point>, "");
     const auto now = datetime::Clock::now();
+    TEST_ASSERT(event::is_valid(now));
 
-    static_assert(std::is_same_v<decltype(event::TimePoint::minutes), datetime::Minutes>, "");
-    static_assert(std::is_same_v<decltype(event::TimePoint::seconds), datetime::Seconds>, "");
-    event::TimePoint foo = event::make_time_point(now.time_since_epoch());
+    const auto ctx = datetime::make_context(now);
+    const auto time_point =
+        event::make_time_point(ctx);
+    TEST_ASSERT(event::is_valid(time_point));
 
-    TEST_ASSERT(event::is_valid(foo));
-    TEST_ASSERT_GREATER_OR_EQUAL(0, foo.minutes.count());
-    TEST_ASSERT_GREATER_OR_EQUAL(0, foo.seconds.count());
-
-    const auto minutes =
-        std::chrono::duration_cast<datetime::Minutes>(now.time_since_epoch());
+    const auto minutes = to_minutes(time_point);
     static_assert(std::is_same_v<decltype(minutes), const datetime::Minutes>, "");
 
-    const auto seconds =
-        now.time_since_epoch() - minutes;
+    const auto seconds = (time_point - minutes).time_since_epoch();
     static_assert(std::is_same_v<decltype(seconds), const datetime::Seconds>, "");
 
-    TEST_ASSERT_EQUAL(minutes.count(), foo.minutes.count());
-    TEST_ASSERT_EQUAL(seconds.count(), foo.seconds.count());
+    TEST_ASSERT_EQUAL(0, event::difference((time_point - seconds), time_point).count());
+
+    const auto one = time_point + datetime::Minutes(55);
+    TEST_ASSERT_EQUAL(55, event::difference(one, time_point).count());
+
+    const auto two = time_point - datetime::Minutes(55);
+    TEST_ASSERT_EQUAL(-55, event::difference(two, time_point).count());
 }
 
 void test_event_parsing() {
@@ -957,7 +960,8 @@ void test_expect_today() {
     constexpr auto thirty_m = datetime::Minutes(30);
     sch.time.minute.set(ctx.utc.tm_min);
 
-    const auto next = datetime::Seconds(ReferenceTimestamp) - nine_h + thirty_m;
+    const auto next = datetime::make_time_point(
+        datetime::Seconds(ReferenceTimestamp) - nine_h + thirty_m);
     ctx = datetime::make_context(next);
 
     TEST_ASSERT(handle_today(expect, 791, sch));
@@ -1413,6 +1417,38 @@ void test_search_bits() {
     TEST_ASSERT_FALSE(future.test(11));
 }
 
+void test_sun() {
+    // 1970-01-01 - prime meridian
+    sun::Location location;
+    location.latitude = 0.0;
+    location.longitude = 0.0;
+    location.altitude = 0.0;
+
+    constexpr auto date = datetime::Date{
+        .year = 1970, .month = 1, .day = 1,
+    };
+
+    const auto ctx = datetime::make_context(0);
+    const auto result =
+        sun::sunrise_sunset(location, ctx.utc);
+
+    auto expected = datetime::DateHhMmSs{
+        .year = date.year, .month = date.month, .day = date.day,
+        .hours = 5, .minutes = 59, .seconds = 54};
+    TEST_ASSERT(event::is_valid(result.sunrise));
+    TEST_ASSERT_EQUAL(
+        datetime::to_seconds(expected, true).count(),
+        result.sunrise.time_since_epoch().count());
+
+    expected = datetime::DateHhMmSs{
+        .year = date.year, .month = date.month, .day = date.day,
+        .hours = 18, .minutes = 7, .seconds = 8};
+    TEST_ASSERT(event::is_valid(result.sunset));
+    TEST_ASSERT_EQUAL(
+        datetime::to_seconds(expected, true).count(),
+        result.sunset.time_since_epoch().count());
+}
+
 void test_datetime_parsing() {
     datetime::DateHhMmSs parsed{};
     bool utc { false };
@@ -1506,6 +1542,7 @@ int main(int, char**) {
     RUN_TEST(test_schedule_parsing_weekdays);
     RUN_TEST(test_schedule_parsing_weekdays_range);
     RUN_TEST(test_search_bits);
+    RUN_TEST(test_sun);
     RUN_TEST(test_time_impl);
     RUN_TEST(test_time_invalid_parsing);
     RUN_TEST(test_time_parsing);

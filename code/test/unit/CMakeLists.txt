@@ -41,7 +41,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # so sharing these between a normal builder might not be an option. (...big TODO though)
 # for right now, just fetch these as raw repos. plus, there's no need for any extra params
 
-set(unity_version v2.5.2)
+set(unity_version v2.6.0)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -210,6 +210,7 @@ build_tests(
     basic
     embedis
     filters
+    mqtt
     scheduler
     settings
     terminal

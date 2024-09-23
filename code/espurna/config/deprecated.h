@@ -185,6 +185,16 @@
 #define SCHEDULER_RESTORE SCHEDULER_RESTORE_LAST_SCHEDULE
 #endif
 
+#ifdef MQTT_USE_JSON
+#warning "MQTT_USE_JSON is deprecated! Please use MQTT_JSON"
+#define MQTT_JSON MQTT_USE_JSON
+#endif
+
+#ifdef MQTT_USE_JSON_DELAY
+#warning "MQTT_USE_JSON_DELAY is deprecated! Please use MQTT_JSON_DELAY"
+#define MQTT_JSON_DELAY MQTT_USE_JSON_DELAY
+#endif
+
 #if ( defined(PZEM004TV30_HW_PORT) || \
     defined(PZEM004TV30_USE_SOFT) || \
     defined(PZEM004T_HW_PORT) || \

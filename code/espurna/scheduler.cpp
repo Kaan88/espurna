@@ -74,7 +74,7 @@ constexpr auto EventsMax = size_t{ 4 };
 
 struct NamedEvent {
     String name;
-    datetime::Minutes minutes;
+    event::time_point time_point;
 };
 
 std::forward_list<NamedEvent> named_events;
@@ -94,10 +94,10 @@ NamedEvent* find_named(StringView name) {
     return nullptr;
 }
 
-bool named_event(String name, datetime::Seconds seconds) {
+bool named_event(String name, datetime::Clock::time_point time_point) {
     auto it = find_named(name);
     if (it) {
-        it->minutes = to_minutes(seconds);
+        it->time_point = time_point;
         return true;
     }
 
@@ -113,7 +113,7 @@ bool named_event(String name, datetime::Seconds seconds) {
         named_events.push_front(
             NamedEvent{
                 .name = std::move(name),
-                .minutes = to_minutes(seconds),
+                .time_point = time_point,
             });
 
         return true;
@@ -131,12 +131,17 @@ bool named_event(String name, StringView value) {
         return false;
     }
 
-    return named_event(std::move(name), to_seconds(datetime, utc));
+    return named_event(
+        std::move(name),
+        datetime::make_time_point(datetime, utc));
 }
 
-String format_named_event(datetime::Minutes minutes) {
-    const auto seconds = datetime::Seconds(minutes);
-    return datetime::format_local_tz(seconds.count());
+String format_time_point(datetime::Clock::time_point time_point) {
+    return datetime::format_local_tz(time_point);
+}
+
+String format_named_event(const NamedEvent& event) {
+    return format_time_point(event.time_point);
 }
 
 template <typename Container>
@@ -144,8 +149,8 @@ void cleanup_entries_impl(const datetime::Context& ctx, Container& container, da
     const auto minutes = to_minutes(ctx);
     container.remove_if(
         [&](const typename Container::value_type& entry) {
-            return !event::is_valid(entry.minutes)
-                || (minutes - entry.minutes) > ttl;
+            return !event::is_valid(entry.time_point)
+                || event::difference(minutes, entry.time_point) > ttl;
         });
 }
 
@@ -157,56 +162,60 @@ constexpr auto LastTtl = datetime::Days{ 1 };
 
 struct Last {
     size_t index;
-    datetime::Minutes minutes;
+    datetime::Clock::time_point time_point;
 };
 
-std::forward_list<Last> last_minutes;
+String format_last_action(const Last& last) {
+    return format_time_point(last.time_point);
+}
+
+std::forward_list<Last> last_actions;
 
 Last* find_last(size_t index) {
     auto it = std::find_if(
-        last_minutes.begin(),
-        last_minutes.end(),
+        last_actions.begin(),
+        last_actions.end(),
         [&](const Last& entry) {
             return entry.index == index;
         });
 
-    if (it != last_minutes.end()) {
+    if (it != last_actions.end()) {
         return &(*it);
     }
 
     return nullptr;
 }
 
-void action_timestamp(size_t index, datetime::Minutes minutes) {
+void last_action(size_t index, datetime::Clock::time_point time_point) {
     auto* it = find_last(index);
     if (it) {
-        it->minutes = minutes;
+        it->time_point = time_point;
         return;
     }
 
-    last_minutes.push_front(
+    last_actions.push_front(
         Last{
             .index = index,
-            .minutes = minutes,
+            .time_point = time_point,
         });
 }
 
-void action_timestamp(const datetime::Context& ctx, size_t index) {
-    action_timestamp(
-        index, to_minutes(datetime::Seconds(ctx.timestamp)));
+void last_action(const datetime::Context& ctx, size_t index) {
+    last_action(
+        index, datetime::make_time_point(ctx));
 }
 
-datetime::Minutes action_timestamp(size_t index) {
+datetime::Clock::time_point last_action(size_t index) {
     auto it = find_last(index);
     if (it) {
-        return it->minutes;
+        return it->time_point;
     }
 
-    return datetime::Minutes{ -1 };
+    return datetime::Clock::time_point(datetime::Seconds{ -1 });
 }
 
-void cleanup_action_timestamps(const datetime::Context& ctx) {
-    cleanup_entries_impl(ctx, last_minutes, LastTtl);
+void cleanup_last_actions(const datetime::Context& ctx) {
+    cleanup_entries_impl(ctx, last_actions, LastTtl);
 }
 
 #if SCHEDULER_SUN_SUPPORT
@@ -224,6 +233,8 @@ struct Match {
 
 Location location;
 Match match;
+
+auto next_update = event::DefaultTimePoint;
 
 void setup();
 
@@ -767,22 +778,24 @@ TimeMatch make_time_match(const tm& date_time) {
     return out;
 }
 
-void update_event_match(EventMatch& match, datetime::Seconds seconds) {
-    if (seconds <= datetime::Seconds::zero()) {
+void update_event_match(EventMatch& match, datetime::Clock::time_point time_point) {
+    if (!event::is_valid(time_point)) {
         if (event::is_valid(match.next)) {
             match.last = match.next;
         }
 
-        match.next = TimePoint{};
+        match.next = event::DefaultTimePoint;
         return;
     }
 
-    const auto date_time = make_utc_date_time(seconds);
+    const auto duration = time_point.time_since_epoch();
+
+    const auto date_time = make_utc_date_time(duration);
     match.date = make_date(date_time);
     match.time = make_time_match(date_time);
 
     match.last = match.next;
-    match.next = make_time_point(seconds);
+    match.next = time_point;
 }
 
 void update_schedule_from(Schedule& schedule, const EventMatch& match) {
@@ -813,42 +826,48 @@ bool update_schedule(Schedule& schedule) {
     return false;
 }
 
-bool needs_update(datetime::Minutes minutes) {
-    return (match.rising.next.minutes < minutes)
-        || (match.setting.next.minutes < minutes);
+bool needs_update(datetime::Clock::time_point time_point) {
+    const auto next = event::is_valid(next_update);
+    if (next) {
+        return event::less(next_update, time_point);
+    }
+
+    return event::less(match.rising.next, time_point)
+        || event::less(match.setting.next, time_point);
 }
 
 template <typename T>
-void delta_compare(tm& out, datetime::Minutes, T);
+datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point, T);
 
-void update(datetime::Minutes minutes, const tm& today) {
+void update(datetime::Clock::time_point, const tm& today) {
     const auto result = sun::sunrise_sunset(location, today);
     update_event_match(match.rising, result.sunrise);
     update_event_match(match.setting, result.sunset);
 }
 
 template <typename T>
-void update(datetime::Minutes minutes, const tm& today, T compare) {
+void update(datetime::Clock::time_point time_point, const tm& today, T compare) {
     auto result = sun::sunrise_sunset(location, today);
-    if ((result.sunrise.count() < 0) || (result.sunset.count() < 0)) {
-        return;
-    }
 
-    if (compare(minutes, result.sunrise) || compare(minutes, result.sunset)) {
-        tm tmp;
+    const auto reset_sunrise =
+        !event::is_valid(result.sunrise) || compare(time_point, result.sunrise);
+
+    const auto reset_sunset =
+        !event::is_valid(result.sunset) || compare(time_point, result.sunset);
+
+    next_update = event::DefaultTimePoint;
+
+    tm tmp;
+    if (reset_sunrise || reset_sunset) {
         std::memcpy(&tmp, &today, sizeof(tmp));
-        delta_compare(tmp, minutes, compare);
+        next_update = delta_compare(tmp, time_point, compare);
 
         const auto other = sun::sunrise_sunset(location, tmp);
-        if ((other.sunrise.count() < 0) || (other.sunset.count() < 0)) {
-            return;
-        }
-
-        if (compare(minutes, result.sunrise)) {
+        if (reset_sunrise && event::is_valid(other.sunrise)) {
             result.sunrise = other.sunrise;
         }
 
-        if (compare(minutes, result.sunset)) {
+        if (reset_sunset && event::is_valid(other.sunset)) {
             result.sunset = other.sunset;
         }
     }
@@ -859,46 +878,43 @@ void update(datetime::Minutes minutes, const tm& today, T compare) {
 
 template <typename T>
 void update(time_t timestamp, const tm& today, T&& compare) {
-    update(datetime::Seconds{ timestamp }, today, std::forward<T>(compare));
+    update(datetime::make_time_point(timestamp), today, std::forward<T>(compare));
 }
 
 String format_match(const EventMatch& match) {
-    return datetime::format_local_tz(
-        datetime::make_context(event::to_seconds(match.next)));
+    return datetime::format_local_tz(match.next);
 }
 
 // check() needs current or future events, discard timestamps in the past
-// std::greater is type-fixed, make sure minutes vs. seconds actually works
+// round to minutes when doing so as well, since std::greater<> would compare seconds
 struct CheckCompare {
-    bool operator()(const datetime::Minutes& lhs, const datetime::Seconds& rhs) {
-        return lhs > rhs;
+    bool operator()(const event::time_point& lhs, const event::time_point& rhs) {
+        return event::greater(lhs, rhs);
     }
 };
 
 template <>
-void delta_compare(tm& out, datetime::Minutes minutes, CheckCompare) {
-    datetime::delta_utc(
-        out, datetime::Seconds{ minutes },
-        datetime::Days{ 1 });
+datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CheckCompare) {
+    return datetime::make_time_point(
+        datetime::delta_utc(
+            out, time_point.time_since_epoch(),
+            datetime::Days{ 1 }));
 }
 
 void update_after(const datetime::Context& ctx) {
-    const auto seconds = datetime::Seconds{ ctx.timestamp };
-    const auto minutes =
-        std::chrono::duration_cast<datetime::Minutes>(seconds);
-
-    if (!needs_update(minutes)) {
+    const auto time_point = event::make_time_point(ctx);
+    if (!needs_update(time_point)) {
         return;
     }
 
-    update(minutes, ctx.utc, CheckCompare{});
+    update(time_point, ctx.utc, CheckCompare{});
 
-    if (match.rising.next.minutes.count() > 0) {
+    if (event::is_valid(match.rising.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunrise at %s\n"),
             format_match(match.rising).c_str());
     }
 
-    if (match.setting.next.minutes.count() > 0) {
+    if (event::is_valid(match.setting.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunset at %s\n"),
             format_match(match.setting).c_str());
     }
@@ -916,7 +932,7 @@ namespace terminal {
 namespace internal {
 
 String sunrise_sunset(const sun::EventMatch& match) {
-    if (match.next.minutes > datetime::Minutes::zero()) {
+    if (match.next.time_since_epoch() > datetime::Clock::duration::zero()) {
         return sun::format_match(match);
     }
 
@@ -962,7 +978,7 @@ void dump(::terminal::CommandContext&& ctx) {
     const auto last = find_last(id);
     if (last) {
         ctx.output.printf_P(PSTR("last action: %s\n"),
-            datetime::format_local(datetime::Seconds((*last).minutes).count()).c_str());
+            format_time_point((*last).time_point).c_str());
     }
 
     settingsDump(ctx, settings::IndexedSettings, id);
@@ -993,7 +1009,7 @@ void event(::terminal::CommandContext&& ctx) {
 
             ctx.output.printf_P(PSTR("- \"%s\" at %s\n"),
                 entry.name.c_str(),
-                format_named_event(entry.minutes).c_str());
+                format_named_event(entry).c_str());
 
             if (name.length()) {
                 terminalOK(ctx);
@@ -1004,6 +1020,15 @@ void event(::terminal::CommandContext&& ctx) {
         if (name.length()) {
             terminalError(ctx, STRING_VIEW("Invalid name"));
             return;
+        }
+
+        if (!last_actions.empty()) {
+            ctx.output.print(PSTR("Calendar events:\n"));
+            for (auto& entry : last_actions) {
+                ctx.output.printf_P(PSTR("- cal#%zu at %s\n"),
+                    entry.index,
+                    format_last_action(entry).c_str());
+            }
         }
 
 #if SCHEDULER_SUN_SUPPORT
@@ -1229,7 +1254,7 @@ bool get(ApiRequest& req, JsonObject& root) {
     for (auto& event : named_events) {
         auto& entry = events.createNestedObject();
         entry[Name] = event.name.c_str();
-        entry[Datetime] = format_named_event(event.minutes);
+        entry[Datetime] = format_named_event(event);
     }
 
     return true;
@@ -1244,7 +1269,7 @@ bool get(ApiRequest& req, JsonObject& root) {
 
     const auto it = find_named(param);
     if (it) {
-        root[Datetime] = format_named_event((*it).minutes);
+        root[Datetime] = format_named_event(*it);
         return true;
     }
 
@@ -1534,7 +1559,10 @@ void Context::init() {
     const auto minutes =
         std::chrono::duration_cast<datetime::Minutes>(seconds);
 
-    sun::update(minutes, this->current.utc);
+    const auto time_point =
+        datetime::Clock::time_point(minutes);
+
+    sun::update(time_point, this->current.utc);
 #endif
 }
 
@@ -1638,23 +1666,15 @@ void run(const datetime::Context& base) {
 
 } // namespace restore
 
-namespace expect {
-
-} // namespace expect
-
 namespace relative {
 
 struct Source {
-    constexpr static datetime::Minutes DefaultMinutes{ -1 };
-
     virtual ~Source();
 
-    virtual const datetime::Minutes& minutes() const = 0;
+    virtual const event::time_point& time_point() const = 0;
     virtual bool before(const datetime::Context&) = 0;
     virtual bool after(const datetime::Context&) = 0;
 };
-
-constexpr datetime::Minutes Source::DefaultMinutes;
 
 Source::~Source() = default;
 
@@ -1664,30 +1684,30 @@ struct Calendar : public Source {
         _index(index)
     {}
 
-    const datetime::Minutes& minutes() const override {
-        return _minutes;
+    const event::time_point& time_point() const override {
+        return _time_point;
     }
 
     bool before(const datetime::Context&) override;
     bool after(const datetime::Context&) override;
 
 private:
-    void _reset_minutes(const datetime::Context& ctx, datetime::Minutes offset) {
-        _minutes = to_minutes(ctx) + offset;
+    void _reset_expected(const datetime::Context& ctx, datetime::Minutes offset) {
+        _time_point = datetime::make_time_point(to_minutes(ctx) + offset);
     }
 
-    void _reset_minutes(const datetime::Context& ctx, const expect::Context& expect) {
-        _reset_minutes(ctx, expect.results.back().offset);
+    void _reset_expected(const datetime::Context& ctx, const expect::Context& expect) {
+        _reset_expected(ctx, expect.results.back().offset);
     }
 
     std::shared_ptr<expect::Context> _expect;
     size_t _index;
 
-    datetime::Minutes _minutes{ DefaultMinutes };
+    event::time_point _time_point{ event::DefaultTimePoint };
 };
 
 bool Calendar::before(const datetime::Context& ctx) {
-    if (event::is_valid(_minutes)) {
+    if (event::is_valid(_time_point)) {
         return true;
     }
 
@@ -1699,7 +1719,7 @@ bool Calendar::before(const datetime::Context& ctx) {
         });
 
     if (it != _expect->results.end()) {
-        _reset_minutes(ctx, (*it).offset);
+        _reset_expected(ctx, (*it).offset);
         return true;
     }
 
@@ -1709,7 +1729,7 @@ bool Calendar::before(const datetime::Context& ctx) {
     }
 
     if ((_expect->days == _expect->days.zero()) && handle_today(*_expect, _index, schedule)) {
-        _reset_minutes(ctx, *_expect);
+        _reset_expected(ctx, *_expect);
         return true;
     }
 
@@ -1725,7 +1745,7 @@ bool Calendar::before(const datetime::Context& ctx) {
     }
 
     if (handle_pending(*_expect, *pending)) {
-        _reset_minutes(ctx, *_expect);
+        _reset_expected(ctx, *_expect);
         return true;
     }
 
@@ -1736,8 +1756,8 @@ bool Calendar::before(const datetime::Context& ctx) {
 }
 
 bool Calendar::after(const datetime::Context& ctx) {
-    _minutes = action_timestamp(_index);
-    return event::is_valid(_minutes);
+    _time_point = last_action(_index);
+    return event::is_valid(_time_point);
 }
 
 struct Named : public Source {
@@ -1745,33 +1765,33 @@ struct Named : public Source {
         _name(std::move(name))
     {}
 
-    const datetime::Minutes& minutes() const override {
-        return _minutes;
+    const datetime::Clock::time_point& time_point() const override {
+        return _time_point;
     }
 
     bool before(const datetime::Context&) override;
     bool after(const datetime::Context&) override;
 
 private:
-    bool _reset_minutes(StringView name) {
+    bool _reset_named(StringView name) {
         const auto it = find_named(name);
         if (it) {
-            _minutes = it->minutes;
+            _time_point = it->time_point;
         }
 
-        return event::is_valid(_minutes);
+        return event::is_valid(_time_point);
     }
 
     String _name;
-    datetime::Minutes _minutes{ -1 };
+    datetime::Clock::time_point _time_point{ event::DefaultTimePoint };
 };
 
 bool Named::before(const datetime::Context&) {
-    return event::is_valid(_minutes) || _reset_minutes(_name);
+    return event::is_valid(_time_point) || _reset_named(_name);
 }
 
 bool Named::after(const datetime::Context&) {
-    return event::is_valid(_minutes) || _reset_minutes(_name);
+    return event::is_valid(_time_point) || _reset_named(_name);
 }
 
 #if SCHEDULER_SUN_SUPPORT
@@ -1781,30 +1801,28 @@ struct Sun : public Source {
     {}
 
     bool before(const datetime::Context&) override {
-        return _reset_minutes(_event->next);
+        return _reset_time_point(_event->next);
     }
 
     bool after(const datetime::Context&) override {
-        return _reset_minutes(_event->last);
+        return _reset_time_point(_event->last);
     }
 
-    const datetime::Minutes& minutes() const override {
-        return *_minutes;
+    const datetime::Clock::time_point& time_point() const override {
+        return *_time_point;
     }
 
 private:
-    bool _reset_minutes(const TimePoint& time_point) {
-        if (event::is_valid(time_point)) {
-            _minutes = &(time_point.minutes);
-        } else {
-            _minutes = &DefaultMinutes;
-        }
+    bool _reset_time_point(const datetime::Clock::time_point& time_point) {
+        _time_point = event::is_valid(time_point)
+            ? &time_point
+            : &event::DefaultTimePoint;
 
-        return event::is_valid(*_minutes);
+        return event::is_valid(*_time_point);
     }
 
     const Event* _event;
-    const datetime::Minutes* _minutes { &DefaultMinutes };
+    const event::time_point* _time_point{ &event::DefaultTimePoint };
 };
 
 struct Sunset : public Sun {
@@ -1838,12 +1856,12 @@ void process_valid_event_offsets(const datetime::Context& ctx, EventOffsets& pen
 
         // expect required event time point ('next' or 'last') to exist for the requested 'order'
         {
-            const auto& minutes = (*it).source->minutes();
-            if (!event::is_valid(minutes)) {
+            const auto& time_point = (*it).source->time_point();
+            if (!event::is_valid(time_point)) {
                 goto next;
             }
 
-            const auto diff = event::difference(ctx, minutes);
+            const auto diff = event::difference(ctx, time_point);
             if (diff == (*it).offset) {
                 matched.push_back((*it).index);
             }
@@ -2019,7 +2037,7 @@ void handle_calendar(const datetime::Context& ctx, Span<Type> types) {
         }
 
         if (ok) {
-            action_timestamp(ctx, index);
+            last_action(ctx, index);
             parse_action(settings::action(index));
         }
     }
@@ -2028,7 +2046,7 @@ void handle_calendar(const datetime::Context& ctx, Span<Type> types) {
 void tick(NtpTick tick) {
     auto ctx = datetime::make_context(now());
     if (tick == NtpTick::EveryHour) {
-        cleanup_action_timestamps(ctx);
+        cleanup_last_actions(ctx);
         cleanup_named_events(ctx);
         return;
     }

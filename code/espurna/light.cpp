@@ -1204,26 +1204,6 @@ void _lightFromHexPayload(espurna::StringView payload) {
     }
 }
 
-template <typename T>
-const char* _lightForEachToken(espurna::StringView payload, char sep, T&& callback) {
-    const auto begin = payload.begin();
-    const auto end = payload.end();
-
-    auto it = begin;
-    for (auto last = it; it != end; ++it) {
-        last = it;
-        it = std::find(it, payload.end(), ',');
-        if (!callback(espurna::StringView(last, it))) {
-            break;
-        }
-        if (it == end) {
-            break;
-        }
-    }
-
-    return it;
-}
-
 void _lightFromCommaSeparatedPayload(espurna::StringView payload, decltype(_light_channels.end()) end) {
     auto it = _light_channels.begin();
     if (it == end) {
@@ -1231,19 +1211,20 @@ void _lightFromCommaSeparatedPayload(espurna::StringView payload, decltype(_ligh
     }
 
     // every channel value is separated by a comma
-    _lightForEachToken(payload, ',',
-        [&](espurna::StringView token) {
-            if (it != end) {
-                const auto result = parseUnsigned(token, 10);
-                if (result.ok) {
-                    (*it) = result.value;
-                    ++it;
-                    return true;
-                }
-            }
+    auto split = espurna::SplitStringView(payload, ',');
+    while (split.next()) {
+        if (it == end) {
+            break;
+        }
 
-            return false;
-        });
+        const auto result = parseUnsigned(split.current(), 10);
+        if (!result.ok) {
+            break;
+        }
+
+        (*it) = result.value;
+        ++it;
+    }
 
     // fill the rest with zeroes
     while (it != end) {
@@ -1288,23 +1269,25 @@ espurna::light::Hsv _lightHsvFromPayload(espurna::StringView payload) {
     // - S [0...100]
     // - V [0...100]
     const auto end = std::end(values);
-    const auto parsed = _lightForEachToken(payload, ',',
-        [&](espurna::StringView token) {
-            if (it != end) {
-                const auto result = parseUnsigned(token, 10);
-                if (result.ok) {
-                    (*it) = result.value;
-                    ++it;
-                    return true;
-                }
-            }
 
-            return false;
-        });
+    auto split = espurna::SplitStringView(payload, ',');
+    while (split.next()) {
+        if (it == end) {
+            break;
+        }
+
+        const auto result = parseUnsigned(split.current(), 10);
+        if (!result.ok) {
+            break;
+        }
+
+        (*it) = result.value;
+        ++it;
+    }
 
     // discard partial or uneven payloads
     espurna::light::Hsv out;
-    if ((parsed != payload.end()) || (it != end)) {
+    if (split.remaining().length() || (it != end)) {
         return out;
     }
 

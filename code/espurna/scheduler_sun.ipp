@@ -58,6 +58,14 @@ is preserved.
 #include <ctime>
 #include <limits>
 
+#include "scheduler_common.ipp"
+
+#if defined(ESP8266) && !defined(HOST_MOCK)
+#ifndef SCHEDULER_SUN_EMBEDDED_CMATH
+#define SCHEDULER_SUN_EMBEDDED_CMATH 1
+#endif
+#endif
+
 namespace espurna {
 namespace scheduler {
 namespace {
@@ -74,7 +82,7 @@ constexpr double NegativeNaN { -NaN };
 
 namespace math {
 
-#if 1
+#if SCHEDULER_SUN_EMBEDDED_CMATH
 // ref. https://dsp.stackexchange.com/a/17276 by Robert Bristow-Johnson
 // effectively a float algorithm, but more than good enough for this case
 float atan(float x) {
@@ -166,8 +174,8 @@ double sqrt(double x) {
     return std::sqrt(x);
 }
 
-double fmod(double x) {
-    return std::fmod(x);
+double fmod(double x, double y) {
+    return std::fmod(x, y);
 }
 
 #endif
@@ -279,6 +287,10 @@ constexpr datetime::Seconds julianDayToDatetimeSeconds(double d) {
     return datetime::Seconds{ julianDayToPosix(d) };
 }
 
+constexpr datetime::Clock::time_point julianDayToTimePoint(double d) {
+    return datetime::Clock::time_point(julianDayToDatetimeSeconds(d));
+}
+
 // Argument of periapsis for the earth on the given Julian day
 constexpr double argument_of_perihelion(double d) {
 	return 102.93005 + 0.3179526 * (d - JD2000) / Y;
@@ -380,8 +392,8 @@ double mean_solar_noon(double longitude, const datetime::Date& date) {
 
 // Result is unset by default, should check if it is >0
 struct SunriseSunset {
-    datetime::Seconds sunrise { -1 };
-    datetime::Seconds sunset { -1 };
+    datetime::Clock::time_point sunrise { event::DefaultSeconds };
+    datetime::Clock::time_point sunset { event::DefaultSeconds };
 };
 
 // Details provided by the user
@@ -414,8 +426,8 @@ SunriseSunset sunrise_sunset(const Location& location, const datetime::Date& dat
 	const auto sunrise = solarTransit - frac;
 	const auto sunset = solarTransit + frac;
 
-    out.sunrise = julianDayToDatetimeSeconds(sunrise);
-    out.sunset = julianDayToDatetimeSeconds(sunset);
+    out.sunrise = julianDayToTimePoint(sunrise);
+    out.sunset = julianDayToTimePoint(sunset);
 
     return out;
 }

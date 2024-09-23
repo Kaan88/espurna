@@ -731,10 +731,6 @@ void settingsDump(const ::terminal::CommandContext& ctx,
     espurna::settings::terminal::dump(ctx, begin, end, index);
 }
 
-namespace {
-
-
-} // namespace
 #endif
 
 void settingsSetup() {

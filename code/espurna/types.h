@@ -537,6 +537,10 @@ struct SplitStringView {
         return _current;
     }
 
+    StringView remaining() const {
+        return _view;
+    }
+
     bool next();
 
 private:

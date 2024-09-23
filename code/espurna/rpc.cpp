@@ -18,27 +18,44 @@ namespace espurna {
 namespace rpc {
 namespace {
 
-PROGMEM_STRING(Reboot, "reboot");
-PROGMEM_STRING(Heartbeat, "heartbeat");
+STRING_VIEW_INLINE(Heartbeat, "heartbeat");
+STRING_VIEW_INLINE(Reboot, "reboot");
+STRING_VIEW_INLINE(Reload, "reload");
 
-PROGMEM_STRING(On, "on");
-PROGMEM_STRING(Off, "off");
-PROGMEM_STRING(Toggle, "toggle");
+STRING_VIEW_INLINE(On, "on");
+STRING_VIEW_INLINE(Off, "off");
+STRING_VIEW_INLINE(Toggle, "toggle");
 
-void rpcPrepareReset() {
-    prepareReset(CustomResetReason::Rpc);
+void prepareReset() {
+    ::prepareReset(CustomResetReason::Rpc);
 }
 
-bool handle_action(StringView action) {
-    bool result = false;
-    if (action.equals(Reboot)) {
-        result = true;
-        espurnaRegisterOnce(rpcPrepareReset);
-    } else if (action.equals(Heartbeat)) {
-        result = true;
-        systemScheduleHeartbeat();
+void prepareResetOnce() {
+    espurnaRegisterOnce(espurna::rpc::prepareReset);
+}
+
+using Callback = void (*)();
+
+struct Action {
+    StringView name;
+    Callback callback;
+};
+
+constexpr const Action Actions[] PROGMEM {
+    {Heartbeat, systemScheduleHeartbeat},
+    {Reboot, prepareResetOnce},
+    {Reload, espurnaReload},
+};
+
+bool handle_action(StringView other) {
+    for (const auto& action : Actions) {
+        if (action.name.equals(other)) {
+            action.callback();
+            return true;
+        }
     }
-    return result;
+
+    return false;
 }
 
 PayloadStatus parse(StringView payload, RpcPayloadCheck check) {

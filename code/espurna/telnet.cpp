@@ -300,13 +300,18 @@ struct ExhaustingPrint : public Print {
         return write(&c, 1);
     }
 
-    // ... but, we still dont want to block forever, wait for 3sec
-    // but make it wake up every 10ms to try to flush things
+    // while in the main loop, attempt to flush everything gathered so far as soon as possible
+    // currently, neither client state or flush result are checked by the caller
     void flush() override {
-        while (_client->connected() && !_client->writeable()) {
+        auto flag = PolledFlag<time::CoreClock>();
+
+        while (!flag.wait(duration::Seconds(3))
+            && _client->connected()
+            && !_client->writeable())
+        {
             _client->flush();
-            espurna::time::blockingDelay(
-                espurna::duration::Milliseconds(10));
+            time::blockingDelay(
+                duration::Milliseconds(10));
         }
     }
 

@@ -55,6 +55,7 @@ Updated secure client support by Niek van der Maas < mail at niekvandermaas dot 
 #define MQTT_TOPIC_CURTAIN          "curtain"
 #define MQTT_TOPIC_CMD              "cmd"
 #define MQTT_TOPIC_SCHEDULE         "schedule"
+#define MQTT_TOPIC_SETTINGS         "settings"
 #define MQTT_TOPIC_NAMED_EVENT      "named_event"
 
 void mqttHeartbeat(espurna::heartbeat::Callback);

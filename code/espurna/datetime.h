@@ -213,17 +213,45 @@ Seconds to_seconds(const Date&, const HhMmSs&) noexcept;
 Seconds to_seconds(const tm&) noexcept;
 
 // Either local or UTC conversion
-Seconds to_seconds(const DateHhMmSs&, bool) noexcept;
+Seconds to_seconds(const DateHhMmSs&, bool utc) noexcept;
+Clock::time_point make_time_point(const DateHhMmSs&, bool utc) noexcept;
 
-// main use-case is scheduler, and it needs both tm results
+// datetime <-> chrono conversions
+constexpr Clock::time_point make_time_point(datetime::Seconds seconds) noexcept {
+    return Clock::time_point(seconds);
+}
+
+constexpr Clock::time_point make_time_point(datetime::Minutes minutes) noexcept {
+    return make_time_point(datetime::Seconds(minutes));
+}
+
+constexpr Clock::time_point make_time_point(time_t seconds) noexcept {
+    return make_time_point(Seconds(seconds));
+}
+
+// Generic time point conversion
+constexpr Seconds to_seconds(Clock::time_point time_point) noexcept {
+    return time_point.time_since_epoch();
+}
+
+// Generalize timestamp & tm tuple, where it is necessary to have access to both
+// Current main use-case is scheduler, where all 3 have to be present
 struct Context {
     time_t timestamp;
     tm local;
     tm utc;
 };
 
+constexpr Clock::time_point make_time_point(const datetime::Context& ctx) noexcept {
+    return make_time_point(ctx.timestamp);
+}
+
+constexpr datetime::Seconds to_seconds(const datetime::Context& ctx) noexcept {
+    return datetime::Seconds(ctx.timestamp);
+}
+
 // generates local and utc tm context for the given timestamp
-Context make_context(Seconds);
+Context make_context(Clock::time_point);
 Context make_context(time_t);
 
 // set target tm to 00:00 and offset N days in the future or past
@@ -250,8 +278,13 @@ String format(const tm&);
 String format_local(time_t);
 String format_utc(time_t);
 
+// prepare 'time_point' for the formatter
+String format_local(Clock::time_point);
+String format_utc(Clock::time_point);
+
 // generic iso8601 format w/ timezone offset
 String format_local_tz(const Context&);
+String format_local_tz(Clock::time_point);
 String format_local_tz(time_t);
 
 String format_utc_tz(const Context&);

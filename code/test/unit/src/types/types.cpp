@@ -73,10 +73,11 @@ void test_view_slice() {
     TEST_ASSERT_EQUAL_STRING(base.toString().c_str(), tmp.c_str());
 
     tmp = base.slice(0, base.length() + 2).toString();
-    TEST_ASSERT_EQUAL(0, tmp.length());
+    TEST_ASSERT_EQUAL(base.length(), tmp.length());
 
     tmp = base.slice(base.length() - 1, base.length()).toString();
-    TEST_ASSERT_EQUAL(0, tmp.length());
+    TEST_ASSERT_EQUAL(1, tmp.length());
+    TEST_ASSERT_EQUAL('1', tmp[tmp.length() - 1]);
 
     tmp = base.slice(5, 5).toString();
     TEST_ASSERT_EQUAL_STRING("55555", tmp.c_str());

@@ -359,6 +359,10 @@ constexpr datetime::Minutes to_minutes(datetime::Seconds seconds) {
     return std::chrono::duration_cast<datetime::Minutes>(seconds);
 }
 
+constexpr datetime::Minutes to_minutes(datetime::Clock::time_point time_point) {
+    return to_minutes(time_point.time_since_epoch());
+}
+
 constexpr datetime::Minutes to_minutes(const datetime::Context& ctx) {
     return to_minutes(datetime::Seconds(ctx.timestamp));
 }
@@ -906,39 +910,31 @@ using relative::Relative;
 
 namespace event {
 
-struct TimePoint {
-    datetime::Minutes minutes{ -1 };
-    datetime::Seconds seconds{ -1 };
-};
+// Prefer this to initializing time_point with a default ctor
+constexpr auto DefaultSeconds = datetime::Seconds{ -1 };
 
-[[gnu::unused]]
-TimePoint make_time_point(datetime::Seconds seconds) {
-    TimePoint out;
+using time_point = datetime::Clock::time_point;
+constexpr auto DefaultTimePoint = time_point{ DefaultSeconds };
 
-    out.seconds = seconds;
-    out.minutes =
-        std::chrono::duration_cast<datetime::Minutes>(out.seconds);
-    out.seconds -= out.minutes;
-
-    return out;
+time_point make_time_point(const datetime::Context& ctx) {
+    return time_point(to_minutes(ctx));
 }
 
 struct Event {
-    TimePoint next;
-    TimePoint last;
+    time_point next{ DefaultTimePoint };
+    time_point last{ DefaultTimePoint };
 };
 
-constexpr bool is_valid(const datetime::Minutes& minutes) {
-    return minutes >= datetime::Minutes::zero();
+constexpr bool is_valid(datetime::Minutes minutes) {
+    return minutes >= minutes.zero();
 }
 
-constexpr bool is_valid(const datetime::Seconds& seconds) {
-    return seconds >= datetime::Seconds::zero();
+constexpr bool is_valid(datetime::Seconds seconds) {
+    return seconds >= seconds.zero();
 }
 
-constexpr bool is_valid(const TimePoint& time_point) {
-    return is_valid(time_point.minutes)
-        && is_valid(time_point.seconds);
+constexpr bool is_valid(time_point time_point) {
+    return time_point.time_since_epoch() >= time_point::duration::zero();
 }
 
 constexpr bool is_valid(const Event& event) {
@@ -949,25 +945,53 @@ constexpr bool maybe_valid(const Event& event) {
     return is_valid(event.next) || is_valid(event.last);
 }
 
-constexpr datetime::Seconds to_seconds(const TimePoint& time_point) {
-    return std::chrono::duration_cast<datetime::Seconds>(time_point.minutes)
-        + time_point.seconds;
+constexpr datetime::Seconds to_seconds(time_point time_point) {
+    return time_point.time_since_epoch();
 }
 
-constexpr datetime::Minutes difference(const datetime::Minutes& lhs, const datetime::Minutes& rhs) {
+constexpr datetime::Minutes to_minutes(datetime::Seconds seconds) {
+    return std::chrono::duration_cast<datetime::Minutes>(seconds);
+}
+
+constexpr datetime::Minutes to_minutes(time_point time_point) {
+    return to_minutes(time_point.time_since_epoch());
+}
+
+constexpr datetime::Minutes to_minutes(const datetime::Context& ctx) {
+    return to_minutes(datetime::to_seconds(ctx));
+}
+
+constexpr datetime::Minutes difference(datetime::Minutes lhs, datetime::Minutes rhs) {
     return lhs - rhs;
 }
 
-constexpr datetime::Minutes difference(const datetime::Context& ctx, const datetime::Minutes& rhs) {
+constexpr datetime::Minutes difference(time_point lhs, time_point rhs) {
+    return to_minutes(lhs) - to_minutes(rhs);
+}
+
+constexpr datetime::Minutes difference(datetime::Minutes lhs, time_point rhs) {
+    return lhs - to_minutes(rhs);
+}
+
+constexpr datetime::Minutes difference(const datetime::Context& ctx, datetime::Minutes rhs) {
     return difference(to_minutes(ctx), rhs);
+}
+
+constexpr datetime::Minutes difference(const datetime::Context& ctx, time_point rhs) {
+    return difference(ctx, to_minutes(rhs));
+}
+
+constexpr bool greater(datetime::Clock::time_point lhs, datetime::Clock::time_point rhs) {
+    return to_minutes(lhs) > to_minutes(rhs);
+}
+
+constexpr bool less(datetime::Clock::time_point lhs, datetime::Clock::time_point rhs) {
+    return to_minutes(lhs) < to_minutes(rhs);
 }
 
 } // namespace event
 
-using event::TimePoint;
 using event::to_seconds;
-using event::make_time_point;
-
 using event::Event;
 
 } // namespace

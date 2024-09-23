@@ -1026,7 +1026,7 @@
 #endif
 
 #ifndef MQTT_RETAIN
-#define MQTT_RETAIN                 true            // MQTT retain flag
+#define MQTT_RETAIN                 1               // MQTT retain flag
 #endif
 
 #ifndef MQTT_QOS
@@ -1036,36 +1036,35 @@
 #endif
 
 #ifndef MQTT_KEEPALIVE
-#define MQTT_KEEPALIVE              120             // MQTT keepalive value
+#define MQTT_KEEPALIVE              120             // MQTT Keep Alive time, in seconds.
+                                                    // Maximum amount of time without any communication between the server and the client before closing the connection.
+                                                    // From client side, handled internally by counting amount of time between control packets and / or PINGREQ & PINGRESP.
+                                                    // From server side, depends on the implementation (usually, also adds +50% of the original value)
+                                                    // 2 minutes by default. Can be zero. Small values 1..5 *may* not be handled properly.
 #endif
 
-#ifndef MQTT_RECONNECT_DELAY_MIN
-#define MQTT_RECONNECT_DELAY_MIN    5000            // Try to reconnect in 5 seconds upon disconnection
+#ifndef MQTT_CLEAN_SESSION
+#define MQTT_CLEAN_SESSION          0               // MQTT Clean Session flag.
+                                                    // When disabled, server is expected to persist subscriptions and not-yet-delivered messages w/ QoS > 0 for the specified Client Id.
+                                                    // (and *may* also store messages w/ QoS == 0, depends on the implementation)
+                                                    // When enabled, any previously stored session data is discarded.
+                                                    // Disabled by default.
 #endif
-
-#ifndef MQTT_RECONNECT_DELAY_STEP
-#define MQTT_RECONNECT_DELAY_STEP   5000            // Increase the reconnect delay in 5 seconds after each failed attempt
-#endif
-
-#ifndef MQTT_RECONNECT_DELAY_MAX
-#define MQTT_RECONNECT_DELAY_MAX    120000          // Set reconnect time to 2 minutes at most
-#endif
-
 
 #ifndef MQTT_SKIP_TIME
 #define MQTT_SKIP_TIME              0               // Skip messages for N ms after connection. Disabled by default
 #endif
 
-#ifndef MQTT_USE_JSON
-#define MQTT_USE_JSON               0               // Don't group messages in a JSON body by default
+#ifndef MQTT_JSON
+#define MQTT_JSON                   0               // Don't group messages in a JSON body by default
 #endif
 
-#ifndef MQTT_USE_JSON_DELAY
-#define MQTT_USE_JSON_DELAY         100             // Wait this many ms before grouping messages
+#ifndef MQTT_JSON_DELAY
+#define MQTT_JSON_DELAY             100             // Wait this many ms before grouping messages
 #endif
 
 #ifndef MQTT_QUEUE_MAX_SIZE
-#define MQTT_QUEUE_MAX_SIZE         20              // Size of the MQTT queue when MQTT_USE_JSON is enabled
+#define MQTT_QUEUE_MAX_SIZE         20              // Size of the MQTT queue when MQTT_JSON is enabled
 #endif
 
 #ifndef MQTT_BUFFER_MAX_SIZE
@@ -1073,7 +1072,7 @@
                                                     // Note: When using MQTT_LIBRARY_PUBSUBCLIENT, MQTT_MAX_PACKET_SIZE should not be more than this value.
 #endif
 
-// These are the properties that will be sent when useJson is true
+// These are the properties that will be sent when MQTT_JSON is enabled
 #ifndef MQTT_ENQUEUE_IP
 #define MQTT_ENQUEUE_IP             1
 #endif
@@ -1095,24 +1094,36 @@
 #endif
 
 #ifndef MQTT_STATUS_ONLINE
-#define MQTT_STATUS_ONLINE          "1"         // Value for the device ON message
+#define MQTT_STATUS_ONLINE          "1"         // Publish this value to the 'status' topic (aka Will topic) when device is ONLINE.
+                                                // Device publishes this value when connected to the broker, and with a periodic heartbeat messages.
 #endif
 
 #ifndef MQTT_STATUS_OFFLINE
-#define MQTT_STATUS_OFFLINE         "0"         // Value for the device OFF message (will)
+#define MQTT_STATUS_OFFLINE         "0"         // Publish this value to the 'status' topic (aka Will topic) when device is OFFLINE
+                                                // Broker would publish this message when device disconnects from it.
 #endif
 
-#define MQTT_ACTION_RESET           "reboot"    // RESET MQTT topic particle
+#ifndef MQTT_STATUS_RETAIN
+#define MQTT_STATUS_RETAIN          MQTT_RETAIN // Sets 'status' (aka Will) message RETAIN flag.
+#endif
 
-// Custom get and set postfixes
-// Use something like "/status" or "/set", with leading slash
-// Since 1.9.0 the default value is "" for getter and "/set" for setter
+#ifndef MQTT_STATUS_QOS
+#define MQTT_STATUS_QOS             MQTT_QOS    // Sets 'status' (aka Will) message QoS.
+#endif
+
 #ifndef MQTT_GETTER
-#define MQTT_GETTER                 ""
+#define MQTT_GETTER                 ""          // Use this string postfix when publishing messages from the device
+                                                // When not empty, **MUST** start with a slash.
 #endif
 
 #ifndef MQTT_SETTER
-#define MQTT_SETTER                 "/set"
+#define MQTT_SETTER                 "/set"      // Use this string postfix when subscribing to topics
+                                                // When not empty, **MUST** start with a slash.
+#endif
+
+#ifndef MQTT_SETTINGS
+#define MQTT_SETTINGS               0           // Subscribe to a topic that would be able to update
+                                                // the internal settigns storage kv pairs
 #endif
 
 // -----------------------------------------------------------------------------

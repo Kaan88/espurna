@@ -153,15 +153,7 @@ bool StringView::endsWith(StringView other) const {
 }
 
 StringView StringView::slice(size_t index, size_t len) const {
-    if (index >= _len) {
-        return StringView();
-    }
-
-    if ((index + len) > _len) {
-        return StringView();
-    }
-
-    return StringView(_ptr + index, len);
+    return StringView(_ptr + std::min(index, _len), std::min(len, _len - index));
 }
 
 StringView StringView::slice(size_t index) const {
