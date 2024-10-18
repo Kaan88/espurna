@@ -8,7 +8,7 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #pragma once
 
-#include "settings.h"
+#include "types.h"
 #include "libs/BasePin.h"
 
 #include <cstddef>

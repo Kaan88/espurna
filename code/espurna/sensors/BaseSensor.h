@@ -6,8 +6,9 @@
 #pragma once
 
 #include <Arduino.h>
-#include "../espurna.h"
+#include "../config/types.h"
 #include "../sensor.h"
+#include "../gpio.h"
 
 #include <cstddef>
 #include <cstdint>
