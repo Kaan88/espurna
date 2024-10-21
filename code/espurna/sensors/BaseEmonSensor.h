@@ -138,7 +138,7 @@ public:
     static constexpr double DefaultRatio { 1.0 };
 
     // Default ratio value for the magnitude slot
-    virtual double defaultRatio(unsigned char index) const {
+    virtual double defaultRatio(unsigned char) const {
         return DefaultRatio;
     }
 
@@ -148,7 +148,7 @@ public:
     }
 
     // Update ratio value for the magnitude slot
-    virtual void setRatio(unsigned char index, double value) {
+    virtual void setRatio(unsigned char, double) {
         // pass by default, no point updating ratios when they
         // are not supported (or cannot be supported)
     }

@@ -16,6 +16,9 @@
 #include "BaseSensor.h"
 #include "BaseEmonSensor.h"
 
+#include "../system_time.h"
+#include "../libs/fs_math.h"
+
 class CSE7766Sensor : public BaseEmonSensor {
 
     public:
@@ -263,10 +266,10 @@ class CSE7766Sensor : public BaseEmonSensor {
                 difference = cf_pulses - cf_pulses_last;
             }
 
-            _energy[0] += espurna::sensor::WattSeconds {
-                .value = static_cast<uint32_t>(difference * (float) _coefP / 1000000.0) };
-            cf_pulses_last = cf_pulses;
+            const uint32_t value = static_cast<uint32_t>(difference * (float) _coefP / 1000000.0);
+            _energy[0] += espurna::sensor::WattSeconds(value);
 
+            cf_pulses_last = cf_pulses;
         }
 
         void _read() {

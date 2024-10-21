@@ -167,6 +167,7 @@ target_link_libraries(esp8266 PUBLIC common)
 
 # our library source (maybe some day this will be a simple glob)
 add_library(espurna STATIC
+    ${ESPURNA_PATH}/code/espurna/fs_math.c
     ${ESPURNA_PATH}/code/espurna/settings_convert.cpp
     ${ESPURNA_PATH}/code/espurna/terminal_commands.cpp
     ${ESPURNA_PATH}/code/espurna/terminal_parsing.cpp
@@ -210,6 +211,7 @@ build_tests(
     basic
     embedis
     filters
+    sensor
     mqtt
     scheduler
     settings
