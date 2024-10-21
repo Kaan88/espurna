@@ -7,12 +7,12 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 
 */
 
+#pragma once
+
 #include <Arduino.h>
 #include <core_version.h>
 
 #include <memory>
-
-#pragma once
 
 template <typename T>
 struct StreamAdapter final : public Stream {
