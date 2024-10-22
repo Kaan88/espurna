@@ -195,7 +195,7 @@ class CSE7766Sensor : public BaseEmonSensor {
             }
 
             if ((_data[0] & 0xFC) > 0xF0) {
-                _error = SENSOR_ERROR_OTHER;
+                _error = SENSOR_ERROR_VALUE;
 #if SENSOR_DEBUG
                 if (0xF1 == (_data[0] & 0xF1)) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Abnormal coefficient storage area\n"));
                 if (0xF2 == (_data[0] & 0xF2)) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Power cycle exceeded range\n"));
@@ -288,9 +288,12 @@ class CSE7766Sensor : public BaseEmonSensor {
 
                 uint8_t byte = _serial->read();
 
-                // first byte must be 0x55 or 0xF?
+                // first byte is one one of
+                // - 0xAA - NOT calibrated
+                // - 0x55 - calibrated
+                // - 0xF? - abnormal state
                 if (0 == _data_index) {
-                    if ((0x55 != byte) && (byte < 0xF0)) {
+                    if ((0xAA != byte) && (0x55 != byte) && (byte < 0xF0)) {
                         continue;
                     }
 
