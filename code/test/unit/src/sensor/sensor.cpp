@@ -17,9 +17,11 @@
 
 #define SENSOR_SUPPORT 1
 #define CSE7766_SUPPORT 1
+#define A02YYU_SUPPORT 1
 
 #include <espurna/config/sensors.h>
 #include <espurna/sensors/CSE7766Sensor.h>
+#include <espurna/sensors/A02YYUSensor.h>
 
 #include <memory>
 #include <vector>
@@ -158,6 +160,39 @@ void test_cse7766_data() {
     TEST_ASSERT_EQUAL(0, port.available());
 }
 
+void test_a02yyu_data() {
+    StreamEcho port;
+
+    auto ptr = std::make_unique<A02YYUSensor>();
+    ptr->setPort(&port);
+
+    TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, ptr->value(0));
+
+    constexpr uint8_t one[] {0xff, 0x07};
+    port.write(&one[0], std::size(one));
+
+    ptr->tick();
+
+    TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, ptr->value(0));
+
+    port.write(&one[0], std::size(one));
+
+    ptr->tick();
+
+    TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, ptr->value(0));
+
+    constexpr uint8_t two[] {0xa1, 0xa7};
+    port.write(&two[0], std::size(two));
+
+    ptr->tick();
+
+    TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
+    TEST_ASSERT_EQUAL_DOUBLE(1.953, ptr->value(0));
+}
+
 } // namespace
 } // namespace test
 } // namespace espurna
@@ -166,5 +201,6 @@ int main(int, char**) {
     UNITY_BEGIN();
     using namespace espurna::test;
     RUN_TEST(test_cse7766_data);
+    RUN_TEST(test_a02yyu_data);
     return UNITY_END();
 }
