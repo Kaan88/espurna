@@ -190,10 +190,9 @@ public:
     }
 
     // Address of the sensor (it could be the GPIO or I2C address)
-    virtual String address(unsigned char index) const = 0;
-
-    // Type for slot # index
-    virtual unsigned char type(unsigned char index) const = 0;
+    virtual String address(unsigned char index) const {
+        return String();
+    }
 
     // Unit of the slot # index
     virtual espurna::sensor::Unit units(unsigned char index) const {
@@ -254,6 +253,9 @@ public:
 
         return Unit::None;
     }
+
+    // Type of slot # index
+    virtual unsigned char type(unsigned char index) const = 0;
 
     // Current value for slot # index
     virtual double value(unsigned char index) = 0;

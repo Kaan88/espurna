@@ -44,11 +44,6 @@ class PM1006Sensor : public BaseSensor {
             return F("PM1006");
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char index) const override {
-            return String(PM1006_PORT, 10);
-        }
-
         // Type for slot # index
         unsigned char type(unsigned char index) const override {
             if (index == 0) return MAGNITUDE_PM2DOT5;

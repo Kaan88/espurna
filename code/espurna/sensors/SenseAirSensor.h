@@ -158,7 +158,7 @@ class SenseAirSensor : public BaseSensor, SenseAir {
 
         // Address of the sensor (it could be the GPIO or I2C address)
         String address(unsigned char) const override {
-            return String(SENSEAIR_PORT, 10);
+            return STRING_VIEW("0xFE").toString();
         }
 
         // Type for slot # index

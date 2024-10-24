@@ -114,11 +114,6 @@ class CSE7766Sensor : public BaseEmonSensor {
             return F("CSE7766");
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char) const override {
-            return String(CSE7766_PORT, 10);
-        }
-
         // Loop-like method, call it in your main loop
         void tick() override {
             _read();

@@ -60,11 +60,6 @@ class T6613Sensor : public BaseSensor {
             return F("T6613");
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char) const override {
-            return String(T6613_PORT, 10);
-        }
-
         // Type for slot # index
         unsigned char type(unsigned char index) const override {
             if (index == 0) return MAGNITUDE_CO2;

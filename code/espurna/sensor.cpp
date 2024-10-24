@@ -3671,13 +3671,16 @@ void report(const Value& report, const Magnitude& magnitude) {
 #if SENSOR_PUBLISH_ADDRESSES
     STRING_VIEW_INLINE(AddressTopic, SENSOR_ADDRESS_TOPIC);
 
-    String address_topic;
-    address_topic.reserve(1 + report.topic.length() + AddressTopic.length());
-    address_topic.concat(AddressTopic.data(), AddressTopic.length());
-    address_topic += '/';
-    address_topic += report.topic;
+    const auto address = magnitude.sensor->address(magnitude.slot);
+    if (address.length()) {
+        String address_topic;
+        address_topic.reserve(1 + report.topic.length() + AddressTopic.length());
+        address_topic.concat(AddressTopic.data(), AddressTopic.length());
+        address_topic += '/';
+        address_topic += report.topic;
 
-    mqttSend(address_topic.c_str(), magnitude.sensor->address(magnitude.slot).c_str());
+        mqttSend(address_topic.c_str(), address.c_str());
+    }
 #endif
 }
 

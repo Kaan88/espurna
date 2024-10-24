@@ -44,11 +44,6 @@ class SM300D2Sensor : public BaseSensor {
             return F("SM300D2");
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char index) const override {
-            return String(SM300D2_PORT, 10);
-        }
-
         // Type for slot # index
         unsigned char type(unsigned char index) const override {
             if (index == 0) return MAGNITUDE_CO2;

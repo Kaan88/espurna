@@ -43,11 +43,6 @@ class EZOPHSensor : public BaseSensor {
             return F("EZOPH");
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char index) const override {
-            return String(EZOPH_PORT, 10);
-        }
-
         // Type for slot # index
         unsigned char type(unsigned char index) const override {
             if (index == 0) return MAGNITUDE_PH;
