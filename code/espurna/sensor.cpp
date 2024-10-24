@@ -42,6 +42,9 @@ Copyright (C) 2020-2022 by Maxim Prokhorov <prokhorov dot max at outlook dot com
     #include "sensors/DummySensor.h"
 #endif
 
+#if A02YYU_SUPPORT
+    #include "sensors/A02YYUSensor.h"
+#endif
 #if AM2320_SUPPORT
     #include "sensors/AM2320Sensor.h"
 #endif
@@ -1939,6 +1942,20 @@ size_t count() {
 // - update config/custom.h or config/sensor.h, adding `#define DHT2_PIN ...` and `#define DHT2_TYPE ...`
 
 void load() {
+#if A02YYU_SUPPORT
+    {
+        const auto port = uartPort(A02YYU_PORT - 1);
+        
+        if (!port) {
+            return;
+        }
+        
+        auto* sensor = new A02YYUSensor();
+        sensor->setPort(port->stream);        
+
+        add(sensor);
+    }
+#endif
 #if AM2320_SUPPORT
     {
         auto* sensor = new AM2320Sensor();

@@ -90,6 +90,19 @@
 // =============================================================================
 
 //------------------------------------------------------------------------------
+// A02YYUx (DYP) Ultrasonic Sensor
+// Enable support by passing A02YYU_SUPPORT=1 build flag
+//------------------------------------------------------------------------------
+
+#ifndef A02YYU_SUPPORT
+#define A02YYU_SUPPORT                  0
+#endif
+
+#ifndef A02YYU_PORT
+#define A02YYU_PORT                     1   // By default, use the first port
+                                            // (needs `UART[1-3]_BAUDRATE 9600`)
+#endif
+
 // AM2320 Humidity & Temperature sensor over I2C
 // Enable support by passing AM2320_SUPPORT=1 build flag
 //------------------------------------------------------------------------------
@@ -1519,6 +1532,7 @@
 // Provide generic way to detect sensor presence
 #ifndef SENSOR_SUPPORT
 #define SENSOR_SUPPORT ( \
+    A02YYU_SUPPORT || \
     ADE7953_SUPPORT || \
     AM2320_SUPPORT || \
     ANALOG_SUPPORT || \

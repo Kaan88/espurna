@@ -332,6 +332,7 @@
 #define SENSOR_SM300D2_ID           43
 #define SENSOR_PM1006_ID            44
 #define SENSOR_INA219_ID            45
+#define SENSOR_A02YYU_ID            46
 
 //--------------------------------------------------------------------------------
 // Magnitudes
