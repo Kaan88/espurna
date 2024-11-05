@@ -160,8 +160,15 @@ class AnalogSensor : public BaseAnalogSensor {
         double _offset { 0.0 };
 };
 
-constexpr double AnalogSensor::RawMin;
+#ifndef __cpp_inline_variables
+constexpr int AnalogSensor::RawBits;
+
 constexpr double AnalogSensor::RawMax;
+constexpr double AnalogSensor::RawMin;
+
+constexpr size_t AnalogSensor::SamplesMin;
+constexpr size_t AnalogSensor::SamplesMax;
 
 constexpr AnalogSensor::Delay AnalogSensor::DelayMin;
 constexpr AnalogSensor::Delay AnalogSensor::DelayMax;
+#endif

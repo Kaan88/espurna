@@ -560,7 +560,7 @@ class BMX280Sensor : public I2CSensor<> {
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude BMX280Sensor::Bmp280Magnitudes[];
 constexpr BaseSensor::Magnitude BMX280Sensor::Bme280Magnitudes[];
 constexpr espurna::duration::Milliseconds BMX280Sensor::StatusDelay;

@@ -406,7 +406,7 @@ class V9261FSensor : public BaseEmonSensor {
         Stream* _serial { nullptr };
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude V9261FSensor::Magnitudes[];
 #endif
 

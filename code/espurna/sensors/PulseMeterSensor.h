@@ -194,7 +194,7 @@ class PulseMeterSensor : public BaseEmonSensor {
         int _interrupt_mode = FALLING;
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude PulseMeterSensor::Magnitudes[];
 #endif
 

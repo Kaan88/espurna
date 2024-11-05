@@ -324,7 +324,7 @@ class PMSX003Sensor : public BaseSensor, PMSX003 {
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr PMSX003Sensor::Spec PMSX003Sensor::Specs[];
 #endif
 

@@ -288,7 +288,7 @@ class ECH1560Sensor : public BaseEmonSensor {
         unsigned char _data[24] {0};
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseEmonSensor::Magnitude ECH1560Sensor::Magnitudes[];
 #endif
 

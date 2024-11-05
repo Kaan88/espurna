@@ -334,7 +334,7 @@ class CSE7766Sensor : public BaseEmonSensor {
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude CSE7766Sensor::Magnitudes[];
 #endif
 
