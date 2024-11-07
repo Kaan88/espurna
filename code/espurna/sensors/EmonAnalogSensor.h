@@ -29,6 +29,7 @@ public:
             BaseAnalogEmonSensor::sampleCurrent();
             _dirty = false;
         }
+        _last = TimeSource::now();
         _ready = true;
     }
 
@@ -55,8 +56,8 @@ public:
 
 private:
     using TimeSource = espurna::time::CpuClock;
-    TimeSource::duration _interval { espurna::duration::Milliseconds(200) };
-    TimeSource::time_point _last { TimeSource::now() };
+    TimeSource::duration _interval { espurna::duration::Microseconds(200) };
+    TimeSource::time_point _last{};
 
     unsigned int _value { 0 };
 };
