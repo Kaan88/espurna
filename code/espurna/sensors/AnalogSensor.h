@@ -124,6 +124,10 @@ class AnalogSensor : public BaseAnalogSensor {
         }
 
     protected:
+        double _sampledVoltageValue() const {
+            return _value / RawMax;
+        }
+
         double _sampledValue() const {
             return _value;
         }

@@ -99,7 +99,7 @@ class NTCSensor : public AnalogSensor {
             // In case it was useful, this should also support the scaling in calculations for T
             // Actual ADC voltage is 0.0...1.0, convert back from pre-scaled reading
             // Depending on where NTC is connected, get current resistance
-            const double voltage = _sampledValue() / AnalogSensor::RawMax;
+            const double voltage = _sampledVoltageValue();
 
             _error = SENSOR_ERROR_OK;
             if (_input_voltage < voltage) {

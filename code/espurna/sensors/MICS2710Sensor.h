@@ -90,7 +90,7 @@ class MICS2710Sensor : public AnalogSensor {
         double _getResistance() const {
 
             // get voltage (1 == reference) from analog pin
-            double voltage = _value / 1024.0;
+            const double voltage = _sampledVoltageValue();
 
             // schematic: 3v3 - Rs - P - Rl - GND
             // V(P) = 3v3 * Rl / (Rs + Rl)
