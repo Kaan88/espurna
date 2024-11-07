@@ -190,7 +190,7 @@ public:
     }
 
     // Address of the sensor (it could be the GPIO or I2C address)
-    virtual String address(unsigned char index) const {
+    virtual String address(unsigned char) const {
         return String();
     }
 
