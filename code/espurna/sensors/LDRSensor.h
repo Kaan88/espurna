@@ -135,30 +135,28 @@ class LDRSensor : public AnalogSensor {
             return MAGNITUDE_NONE;
         }
 
-        // Current value for slot # index
-        double value(unsigned char index) {
+        // Pre-read hook (usually to populate registers with up-to-date data)
+        void pre() override {
+            const auto read = _sampledValue();
+            float ratio = ((float)1024/(float)read) - 1;
 
-            double current_lux = 0;
-
-            if (index == 0) {
-
-                unsigned long photocell_resistor = 0;
-
-                // sampled reading
-                double read = AnalogSensor::analogRead();
-
-                float ratio = ((float)1024/(float)read) - 1;
-                if (_photocell_on_ground) {
-                    photocell_resistor = _resistor / ratio;
-                } else {
-                    photocell_resistor = _resistor * ratio;
-                }
-
-                current_lux = _mult_value / (float)pow(photocell_resistor, _pow_value);
+            unsigned long photocell_resistor = 0;
+            if (_photocell_on_ground) {
+                photocell_resistor = _resistor / ratio;
+            } else {
+                photocell_resistor = _resistor * ratio;
             }
 
-            return current_lux;
+            _lux = _mult_value / (float)pow(photocell_resistor, _pow_value);
+        }
 
+        // Current value for slot # index
+        double value(unsigned char index) override {
+            if (index == 0) {
+                return _lux;
+            }
+
+            return 0;
         }
 
     protected:
@@ -168,6 +166,8 @@ class LDRSensor : public AnalogSensor {
         unsigned long _resistor = 10000;
         float _mult_value = 0;
         float _pow_value = 0;
+
+        double _lux = 0;
 
 };
 

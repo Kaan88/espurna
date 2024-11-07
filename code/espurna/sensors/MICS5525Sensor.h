@@ -60,7 +60,7 @@ class MICS5525Sensor : public AnalogSensor {
         double _getResistance() const {
 
             // get voltage (1 == reference) from analog pin
-            double voltage = AnalogSensor::analogRead() / 1024.0;
+            double voltage = _value / 1024.0;
 
             // schematic: 3v3 - Rs - P - Rl - GND
             // V(P) = 3v3 * Rl / (Rs + Rl)
