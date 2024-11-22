@@ -779,8 +779,9 @@ TimeMatch make_time_match(const tm& date_time) {
 }
 
 void update_event_match(EventMatch& match, datetime::Clock::time_point time_point) {
+    const auto next_valid = event::is_valid(match.next);
     if (!event::is_valid(time_point)) {
-        if (event::is_valid(match.next)) {
+        if (next_valid) {
             match.last = match.next;
         }
 
@@ -794,7 +795,10 @@ void update_event_match(EventMatch& match, datetime::Clock::time_point time_poin
     match.date = make_date(date_time);
     match.time = make_time_match(date_time);
 
-    match.last = match.next;
+    if (next_valid) {
+        match.last = match.next;
+    }
+
     match.next = time_point;
 }
 
