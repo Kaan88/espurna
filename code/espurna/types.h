@@ -541,8 +541,8 @@ inline Span<T> make_span(std::vector<T>& data) {
 }
 
 template <typename T>
-inline Span<T> make_span(const std::vector<T>& data) {
-    return Span<T>(const_cast<T*>(data.data()), data.size());
+inline Span<const T> make_span(const std::vector<T>& data) {
+    return Span<const T>(data.data(), data.size());
 }
 
 struct SplitStringView {

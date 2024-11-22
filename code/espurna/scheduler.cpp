@@ -1883,7 +1883,7 @@ next:
 }
 
 struct Prepared {
-    Span<scheduler::Type> types;
+    Span<const scheduler::Type> types;
     EventOffsets event_offsets;
     std::shared_ptr<expect::Context> expect;
 
@@ -1899,7 +1899,7 @@ struct Prepared {
     }
 };
 
-Prepared prepare_event_offsets(const datetime::Context& ctx, Span<scheduler::Type> types) {
+Prepared prepare_event_offsets(const datetime::Context& ctx, Span<const scheduler::Type> types) {
     Prepared out{
         .types = types,
         .event_offsets = {},
@@ -2019,7 +2019,7 @@ void handle_after(const datetime::Context& ctx, Prepared& prepared) {
 
 } // namespace relative
 
-void handle_calendar(const datetime::Context& ctx, Span<Type> types) {
+void handle_calendar(const datetime::Context& ctx, Span<const Type> types) {
     for (size_t index = 0; index < types.size(); ++index) {
         bool ok = false;
 

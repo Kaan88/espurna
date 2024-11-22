@@ -885,7 +885,7 @@ private:
         return filtered;
     }
 
-    void _populate(PortPtr port, Span<const Device*> devices) {
+    void _populate(PortPtr port, Span<const Device* const> devices) {
         if (_sensors.size()) {
             return;
         }
