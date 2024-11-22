@@ -46,6 +46,11 @@ Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 
 namespace espurna {
 namespace scheduler {
+namespace error {
+
+STRING_VIEW_INLINE(InvalidTime, "Invalid time string");
+
+} // namespace error
 
 enum class Type : int {
     Unknown = 0,
@@ -521,6 +526,21 @@ void setup() {
         .check = checkSamePrefix,
         .get = findFrom,
     });
+}
+
+void validate() {
+#if DEBUG_SUPPORT
+    for (size_t index = 0; index < build::max(); ++index) {
+        const auto result = schedule(index);
+        if (!result.ok) {
+            DEBUG_MSG_P(PSTR("[SCH] ERROR: #%zu -> %.*s\n"),
+                index,
+                error::InvalidTime.length(),
+                error::InvalidTime.data());
+            break;
+        }
+    }
+#endif
 }
 
 } // namespace settings
@@ -1060,7 +1080,7 @@ void entrypoint(::terminal::CommandContext&& ctx) {
         if (result.ok) {
             terminalOK(ctx);
         } else {
-            terminalError(ctx, STRING_VIEW("Invalid schedule string"));
+            terminalError(ctx, error::InvalidTime);
         }
 
         return;
@@ -2159,6 +2179,7 @@ void tick(NtpTick tick) {
 #if SCHEDULER_SUN_SUPPORT
         sun::update_before(ctx);
 #endif
+        settings::validate();
     }
 
 #if SCHEDULER_SUN_SUPPORT
@@ -2187,6 +2208,8 @@ void tick(NtpTick tick) {
 void setup() {
     migrateVersion(scheduler::settings::migrate);
     settings::setup();
+
+    espurnaRegisterReload(settings::validate);
 
 #if SCHEDULER_SUN_SUPPORT
     sun::setup();
