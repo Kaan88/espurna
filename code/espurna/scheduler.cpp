@@ -1118,18 +1118,12 @@ void event(::terminal::CommandContext&& ctx) {
     }
 
     if (ctx.argv.size() != 3) {
-        bool once { true };
         for (auto& entry : named_events) {
             if (name.length() && entry.name != name) {
                 continue;
             }
 
-            if (once) {
-                ctx.output.print(PSTR("Named events:\n"));
-                once = false;
-            }
-
-            ctx.output.printf_P(PSTR("- \"%s\" at %s\n"),
+            ctx.output.printf_P(PSTR("- \"%s\"\n    at: %s\n"),
                 entry.name.c_str(),
                 format_named_event(entry).c_str());
 
@@ -1147,7 +1141,7 @@ void event(::terminal::CommandContext&& ctx) {
         if (!last_actions.empty()) {
             ctx.output.print(PSTR("Calendar events:\n"));
             for (auto& entry : last_actions) {
-                ctx.output.printf_P(PSTR("- cal#%zu at %s\n"),
+                ctx.output.printf_P(PSTR("- cal#%zu\n    at %s\n"),
                     entry.index,
                     format_last_action(entry).c_str());
             }
