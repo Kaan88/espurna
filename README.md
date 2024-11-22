@@ -36,8 +36,6 @@ Since November 2018, Max Prokhorov (**@mcspr**) is also actively working as a co
 [Using PlatformIO CLI](https://github.com/xoseperez/espurna/wiki/PlatformIO)  
 [Using Arduino IDE](https://github.com/xoseperez/espurna/wiki/ArduinoIDE)  
 
-> If you want to try out latest changes from **dev** branch without building the firmware yourself or if you are having problems with the stable release, please visit [**espurna-nightly-builder** releases page](https://github.com/mcspr/espurna-nightly-builder/releases).
-
 ## Features
 
 * *KRACK* vulnerability free (when built with Arduino Core >= 2.4.0)
