@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <StreamString.h>
 
+#include <espurna/libs/Delimiter.h>
 #include <espurna/libs/PrintString.h>
 #include <espurna/terminal_commands.h>
 
@@ -316,19 +317,19 @@ void test_line_view() {
     const char input[] = "one\r\ntwo\r\nthree\r\n";
     LineView view(input);
 
-    const auto one = view.line();
+    const auto one = view.next();
     TEST_ASSERT_EQUAL_STRING("one\r\n",
         one.toString().c_str());
 
-    const auto two = view.line();
+    const auto two = view.next();
     TEST_ASSERT_EQUAL_STRING("two\r\n",
         two.toString().c_str());
 
-    const auto three = view.line();
+    const auto three = view.next();
     TEST_ASSERT_EQUAL_STRING("three\r\n",
         three.toString().c_str());
 
-    TEST_ASSERT_EQUAL(0, view.line().length());
+    TEST_ASSERT_EQUAL(0, view.next().length());
 }
 
 // Ensure that we keep buffering when input is incomplete
@@ -343,11 +344,11 @@ void test_line_buffer() {
     buffer.append(input);
 
     TEST_ASSERT_EQUAL(buffer.size(), __builtin_strlen(input));
-    TEST_ASSERT_EQUAL(0, buffer.line().line.length());
+    TEST_ASSERT_EQUAL(0, buffer.next().value.length());
 
     buffer.append("\r\n");
     TEST_ASSERT_EQUAL(__builtin_strlen(input) + 2,
-        buffer.line().line.length());
+        buffer.next().value.length());
 }
 
 // Ensure that when buffer overflows, we set 'overflow' flags
@@ -368,14 +369,14 @@ void test_line_buffer_overflow() {
     buffer.append(data.data(), data.size());
     TEST_ASSERT(buffer.overflow());
 
-    const auto result = buffer.line();
+    const auto result = buffer.next();
     TEST_ASSERT(result.overflow);
 
     TEST_ASSERT(buffer.size() == 0);
     TEST_ASSERT(!buffer.overflow());
 
     // TODO: can't compare string_view directly, not null terminated
-    const auto line = result.line.toString();
+    const auto line = result.value.toString();
     TEST_ASSERT_EQUAL_STRING("d\n", line.c_str());
     TEST_ASSERT(line.length() > 0);
 }
@@ -398,18 +399,18 @@ void test_line_buffer_multiple() {
     // if we don't touch the buffer via another append().
     // (in theory, could also add refcount... right now seems like an overkill)
 
-    const auto first = buffer.line();
+    const auto first = buffer.next();
     TEST_ASSERT(buffer.size() > 0);
     TEST_ASSERT_EQUAL(First.length(),
-            first.line.length());
-    TEST_ASSERT(First == first.line);
+            first.value.length());
+    TEST_ASSERT(First == first.value);
 
     // second entry resets everything
-    const auto second = buffer.line();
+    const auto second = buffer.next();
     TEST_ASSERT_EQUAL(0, buffer.size());
     TEST_ASSERT_EQUAL(Second.length(),
-            second.line.length());
-    TEST_ASSERT(Second == second.line);
+            second.value.length());
+    TEST_ASSERT(Second == second.value);
 }
 
 void test_error_output() {

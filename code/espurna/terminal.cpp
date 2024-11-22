@@ -30,6 +30,7 @@ Copyright (C) 2020-2022 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include "wifi.h"
 
 #include "libs/PrintString.h"
+#include "libs/Delimiter.h"
 
 #include <algorithm>
 #include <utility>
@@ -454,27 +455,12 @@ void processing_loop() {
     static LineBuffer buffer;
 
     auto& port = *internal::stream;
-
-#if defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
-    || defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
-    || defined(ARDUINO_ESP8266_RELEASE_2_7_4)
-    // 'Stream::readBytes()' includes a deadline, so any
-    // call without using the actual value will result
-    // in a 1second wait (by default)
-    std::array<char, build::serialBufferSize()> tmp;
     const auto available = port.available();
-    port.readBytes(tmp.data(), available);
-    buffer.append(tmp.data(), available);
-#else
-    // Recent Core versions allow to access RX buffer directly
-    const auto available = port.peekAvailable();
     if (available <= 0) {
         return;
     }
 
-    buffer.append(port.peekBuffer(), available);
-    port.peekConsume(available);
-#endif
+    buffer.append(port, available);
 
     if (buffer.overflow()) {
         terminal::error(port, F("Serial buffer overflow"));
@@ -482,17 +468,17 @@ void processing_loop() {
     }
 
     for (;;) {
-        const auto result = buffer.line();
+        const auto result = buffer.next();
         if (result.overflow) {
             terminal::error(port, F("Command line buffer overflow"));
             continue;
         }
 
-        if (!result.line.length()) {
+        if (!result.value.length()) {
             break;
         }
 
-        find_and_call(result.line, port);
+        find_and_call(result.value, port);
     }
 }
 

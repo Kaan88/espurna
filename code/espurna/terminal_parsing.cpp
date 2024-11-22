@@ -11,6 +11,7 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 #include <cctype>
 
 #include "terminal_parsing.h"
+#include "libs/Delimiter.h"
 
 namespace espurna {
 namespace terminal {
@@ -502,4 +503,103 @@ CommandLine parse_line(StringView value) {
 }
 
 } // namespace terminal
+
+DelimiterBuffer::Result DelimiterBuffer::next() {
+    const auto begin = &_storage[_cursor];
+    const auto end = &_storage[_size];
+
+    if (begin != end) {
+        const auto eol = std::find(begin, end, _delimiter);
+        if (eol != end) {
+            const auto after = std::next(eol);
+            const auto out = Result{
+                .value = StringView{begin, after},
+                .overflow = _overflow };
+
+            if (after != end) {
+                _cursor = std::distance(&_storage[0], after);
+            } else {
+                reset();
+            }
+
+            return out;
+        }
+    }
+
+    return Result{
+        .value = StringView(),
+        .overflow = _overflow };
+}
+
+void DelimiterBuffer::append(const char* data, size_t length) {
+    // adjust pointer and length when they immediatelly cause overflow
+    auto output = &_storage[_size];
+
+    auto capacity = _capacity - _size;
+    while (length > capacity) {
+        data += capacity;
+        length -= capacity;
+        capacity = _capacity;
+        output = &_storage[0];
+        _size = 0;
+        _overflow = true;
+    }
+
+    if (length) {
+        std::memcpy(output, data, length);
+        _size += length;
+    }
+}
+
+void DelimiterBuffer::append(Stream& stream, size_t length) {
+    auto output = &_storage[_size];
+    auto capacity = _capacity - _size;
+
+    while (length > capacity) {
+        printf("%zu vs. %zu\n", length, capacity);
+        const auto chunk = std::min(_capacity - _size, length);
+
+#if defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
+|| defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
+|| defined(ARDUINO_ESP8266_RELEASE_2_7_4)
+        stream.readBytes(_storage, chunk);
+#else
+        stream.peekConsume(chunk);
+#endif
+
+        length -= capacity;
+        capacity = _capacity;
+        output = &_storage[0];
+
+        _size = 0;
+        _overflow = true;
+    }
+
+    if (length) {
+        stream.readBytes(output, length);
+        _size += length;
+    }
+}
+
+StringView DelimiterView::next() {
+    const auto Begin = begin();
+    const auto End = end();
+
+    if (Begin != End) {
+        const auto eol = std::find(Begin, End, _delimiter);
+        if (eol != End) {
+            const auto after = std::next(eol);
+            if (after != End) {
+                _cursor = std::distance(_view.begin(), after);
+            } else {
+                _cursor = _view.length();
+            }
+
+            return StringView{Begin, after};
+        }
+    }
+
+    return StringView();
+}
+
 } // namespace espurna

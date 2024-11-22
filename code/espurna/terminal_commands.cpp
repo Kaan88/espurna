@@ -13,6 +13,7 @@ Heavily inspired by the Embedis design:
 
 #include "terminal_parsing.h"
 #include "terminal_commands.h"
+#include "libs/Delimiter.h"
 
 #include <algorithm>
 #include <memory>
@@ -150,13 +151,13 @@ bool api_find_and_call(StringView cmd, Print& output, Print& error_output) {
 
     LineView lines(cmd);
     while (lines) {
-        const auto line = lines.line();
-        if (!line.length()) {
+        const auto next = lines.next();
+        if (!next.length()) {
             break;
         }
 
         // prefer to break early when commands are missing
-        if (!find_and_call(line, output, error_output)) {
+        if (!find_and_call(next, output, error_output)) {
             result = false;
             break;
         }

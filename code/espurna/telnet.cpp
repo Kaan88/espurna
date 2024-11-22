@@ -38,6 +38,7 @@ Updated to use WiFiServer and support reverse connections by Niek van der Maas <
 #include "wifi.h"
 
 #include "libs/URL.h"
+#include "libs/Delimiter.h"
 
 #include <forward_list>
 #include <list>
@@ -324,9 +325,10 @@ struct Address {
     uint16_t port;
 };
 
-::terminal::LineView line_view(pbuf* pb) {
+LineView line_view(pbuf* pb) {
     auto* payload = reinterpret_cast<const char*>(pb->payload);
-    return StringView{payload, payload + pb->len};
+    return LineView{
+        StringView{payload, payload + pb->len}};
 }
 
 Address address(tcp_pcb* pcb) {
@@ -653,7 +655,7 @@ private:
                 goto next;
             }
 
-            for (auto line = view.line(); line.length() > 0; line = view.line()) {
+            for (auto line = view.next(); line.length() > 0; line = view.next()) {
                 auto result = process_line(line);
                 if (result.message.length()) {
                     write_message(result.message);
@@ -676,17 +678,17 @@ next:
         }
 
         for (;;) {
-            const auto line_result = _line_buffer.line();
+            const auto line_result = _line_buffer.next();
             if (line_result.overflow) {
                 write_message(message::BufferOverflow);
                 return close();
             }
 
-            if (!line_result.line.length()) {
+            if (!line_result.value.length()) {
                 break;
             }
 
-            auto result = process_line(line_result.line);
+            auto result = process_line(line_result.value);
             if (result.message.length()) {
                 write_message(result.message);
             }
@@ -736,7 +738,7 @@ next:
     bool _request_auth { false };
 
 #if TERMINAL_SUPPORT
-    ::terminal::LineBuffer<build::LineBufferSize> _line_buffer;
+    LineBuffer<build::LineBufferSize> _line_buffer;
     std::list<String> _cmds;
 #endif
     ClientWriter _writer;
