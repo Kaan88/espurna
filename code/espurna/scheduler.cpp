@@ -850,7 +850,7 @@ void update(datetime::Clock::time_point, const tm& today) {
 }
 
 template <typename T>
-void update(datetime::Clock::time_point time_point, const tm& today, T compare) {
+datetime::Clock::time_point update(datetime::Clock::time_point time_point, const tm& today, T compare) {
     auto result = sun::sunrise_sunset(location, today);
 
     const auto reset_sunrise =
@@ -859,12 +859,13 @@ void update(datetime::Clock::time_point time_point, const tm& today, T compare) 
     const auto reset_sunset =
         !event::is_valid(result.sunset) || compare(time_point, result.sunset);
 
-    next_update = event::DefaultTimePoint;
+    auto out = event::DefaultTimePoint;
 
     tm tmp;
     if (reset_sunrise || reset_sunset) {
         std::memcpy(&tmp, &today, sizeof(tmp));
-        next_update = delta_compare(tmp, time_point, compare);
+
+        out = delta_compare(tmp, time_point, compare);
 
         const auto other = sun::sunrise_sunset(location, tmp);
         if (reset_sunrise && event::is_valid(other.sunrise)) {
@@ -878,6 +879,8 @@ void update(datetime::Clock::time_point time_point, const tm& today, T compare) 
 
     update_event_match(match.rising, result.sunrise);
     update_event_match(match.setting, result.sunset);
+
+    return out;
 }
 
 template <typename T>
@@ -885,24 +888,36 @@ void update(time_t timestamp, const tm& today, T&& compare) {
     update(datetime::make_time_point(timestamp), today, std::forward<T>(compare));
 }
 
-String format_match(const EventMatch& match) {
-    return datetime::format_local_tz(match.next);
+String format_time_point(const event::time_point& time_point) {
+    return (time_point.time_since_epoch() > datetime::Clock::duration::zero())
+        ? datetime::format_local_tz(time_point)
+        : STRING_VIEW("value not set").toString();
+}
+
+String format_next(const EventMatch& match) {
+    return format_time_point(match.next);
+}
+
+String format_last(const EventMatch& match) {
+    return format_time_point(match.last);
 }
 
 // check() needs current or future events, discard timestamps in the past
 // round to minutes when doing so as well, since std::greater<> would compare seconds
-struct CheckCompare {
+struct CompareAfter {
     bool operator()(const event::time_point& lhs, const event::time_point& rhs) {
         return event::greater(lhs, rhs);
     }
 };
 
-template <>
-datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CheckCompare) {
+datetime::Clock::time_point delta_compare_days(tm& out, datetime::Clock::time_point time_point, datetime::Days days) {
     return datetime::make_time_point(
-        datetime::delta_utc(
-            out, time_point.time_since_epoch(),
-            datetime::Days{ 1 }));
+        datetime::delta_utc(out, time_point.time_since_epoch(), days));
+}
+
+template <>
+datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CompareAfter) {
+    return delta_compare_days(out, time_point, datetime::Days{ 1 });
 }
 
 void update_after(const datetime::Context& ctx) {
@@ -911,17 +926,58 @@ void update_after(const datetime::Context& ctx) {
         return;
     }
 
-    update(time_point, ctx.utc, CheckCompare{});
+    auto next = update(time_point, ctx.utc, CompareAfter{});
 
     if (event::is_valid(match.rising.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunrise at %s\n"),
-            format_match(match.rising).c_str());
+            datetime::format_local_tz(match.rising.next).c_str());
     }
 
     if (event::is_valid(match.setting.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunset at %s\n"),
-            format_match(match.setting).c_str());
+            datetime::format_local_tz(match.setting.next).c_str());
     }
+
+    const event::time_point unordered[] {
+        next,
+        match.rising.next,
+        match.setting.next,
+    };
+
+    next_update = event::DefaultTimePoint;
+
+    for (const auto& value : unordered) {
+        if (!event::is_valid(value)) {
+            continue;
+        }
+
+        next_update = event::is_valid(next_update)
+            ? std::min(next_update, value)
+            : value;
+    }
+}
+
+// relative events need current or past time point
+struct CompareBefore {
+    bool operator()(const event::time_point& lhs, const event::time_point& rhs) {
+        return event::less(lhs, rhs);
+    }
+};
+
+template <>
+datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CompareBefore) {
+    return delta_compare_days(out, time_point, datetime::Days{ -1 });
+}
+
+void update_before(const datetime::Context& ctx) {
+    const auto time_point = event::make_time_point(ctx);
+    update(time_point, ctx.utc, CompareBefore{});
+
+    match.rising.last = match.rising.next;
+    match.rising.next = event::DefaultTimePoint;
+
+    match.setting.last = match.setting.next;
+    match.setting.next = event::DefaultTimePoint;
 }
 
 } // namespace sun
@@ -935,24 +991,31 @@ namespace terminal {
 #if SCHEDULER_SUN_SUPPORT
 namespace internal {
 
-String sunrise_sunset(const sun::EventMatch& match) {
-    if (match.next.time_since_epoch() > datetime::Clock::duration::zero()) {
-        return sun::format_match(match);
-    }
+struct Datetime {
+    String last;
+    String next;
+};
 
-    return STRING_VIEW("value not set").toString();
+Datetime sunrise_sunset(const sun::EventMatch& match) {
+    return Datetime{
+        .last = sun::format_last(match),
+        .next = sun::format_next(match),
+    };
 }
 
-void format_output(::terminal::CommandContext& ctx, const String& prefix, const String& value) {
-    ctx.output.printf_P(PSTR("- %s%s%s\n"),
+void format_output(::terminal::CommandContext& ctx, const String& prefix, const Datetime& datetime) {
+    ctx.output.printf_P(PSTR("- %s\n  last: %s\n  next: %s\n"),
         prefix.c_str(),
-        value.length()
-            ? PSTR(" at ")
-            : " ",
-        value.c_str());
+        datetime.last.c_str(),
+        datetime.next.c_str());
 }
 
 void dump_sunrise_sunset(::terminal::CommandContext& ctx) {
+    if (event::is_valid(sun::next_update)) {
+        ctx.output.printf_P(PSTR("- Next sunrise & sunset update at %s\n"),
+            datetime::format_local_tz(sun::next_update).c_str());
+    }
+
     format_output(ctx,
         STRING_VIEW("Sunrise").toString(),
         sunrise_sunset(sun::match.rising));
@@ -965,9 +1028,44 @@ void dump_sunrise_sunset(::terminal::CommandContext& ctx) {
 #endif
 
 // SCHEDULE [<ID>]
-PROGMEM_STRING(Dump, "SCHEDULE");
+// SCHEDULE CHECK [CHUNK(S)...]
+PROGMEM_STRING(Entrypoint, "SCHEDULE");
 
-void dump(::terminal::CommandContext&& ctx) {
+void entrypoint(::terminal::CommandContext&& ctx) {
+    if (ctx.argv.size() > 2 && (STRING_VIEW("CHECK").equalsIgnoreCase(ctx.argv[1]))) {
+        String spec;
+
+        size_t reserve = 0;
+        std::for_each(
+            ctx.argv.begin() + 2,
+            ctx.argv.end(),
+            [&](const String& arg) {
+                reserve += 1 + arg.length();
+            });
+        spec.reserve(reserve);
+
+        if (ctx.argv.size() > 3) {
+            for (size_t index = 2; index < ctx.argv.size(); ++index) {
+                if (index > 2) {
+                    spec += ' ';
+                }
+
+                spec += ctx.argv[index];
+            }
+        } else {
+            spec = std::move(ctx.argv[2]);
+        }
+
+        const auto result = parse_schedule(spec);
+        if (result.ok) {
+            terminalOK(ctx);
+        } else {
+            terminalError(ctx, STRING_VIEW("Invalid schedule string"));
+        }
+
+        return;
+    }
+
     if (ctx.argv.size() != 2) {
         settingsDump(ctx, settings::Settings);
         return;
@@ -1036,7 +1134,6 @@ void event(::terminal::CommandContext&& ctx) {
         }
 
 #if SCHEDULER_SUN_SUPPORT
-        ctx.output.print(PSTR("Sun events:\n"));
         internal::dump_sunrise_sunset(ctx);
 #endif
 
@@ -1053,7 +1150,7 @@ void event(::terminal::CommandContext&& ctx) {
 }
 
 static constexpr ::terminal::Command Commands[] PROGMEM {
-    {Dump, dump},
+    {Entrypoint, entrypoint},
     {Event, event},
 };
 
@@ -2059,6 +2156,9 @@ void tick(NtpTick tick) {
         initial = false;
         settings::gc(settings::count());
         restore::run(ctx);
+#if SCHEDULER_SUN_SUPPORT
+        sun::update_before(ctx);
+#endif
     }
 
 #if SCHEDULER_SUN_SUPPORT
