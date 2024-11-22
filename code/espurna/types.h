@@ -443,11 +443,13 @@ inline String operator+(String&& lhs, const __FlashStringHelper* rhs) {
 
 template <typename T>
 struct Span {
-    Span() = delete;
-
     constexpr explicit Span(std::nullptr_t) :
         _data(nullptr),
         _size(0)
+    {}
+
+    constexpr Span() noexcept :
+        Span(nullptr)
     {}
 
     constexpr Span(T* data, size_t size) :
@@ -462,6 +464,14 @@ struct Span {
 
     constexpr T* data() const {
         return _data;
+    }
+
+    constexpr bool is_null() const {
+        return _data == nullptr;
+    }
+
+    constexpr bool empty() const {
+        return is_null() || _size == 0;
     }
 
     constexpr size_t size() const {
@@ -486,6 +496,18 @@ struct Span {
 
     constexpr T& back() const {
         return _data[_size - 1];
+    }
+
+    constexpr Span<T> slice(size_t index, size_t size) const {
+        return Span<T>(_data + std::min(index, _size), std::min(size, _size - index));
+    }
+
+    constexpr Span<T> slice(size_t index) const {
+        return slice(index, _size - index);
+    }
+
+    Span<T>& advance(size_t index) {
+        return *this = slice(index);
     }
 
 private:
