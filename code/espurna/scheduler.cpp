@@ -223,6 +223,16 @@ void cleanup_last_actions(const datetime::Context& ctx) {
     cleanup_entries_impl(ctx, last_actions, LastTtl);
 }
 
+[[gnu::unused]]
+bool check_parsed(const Relative& relative) {
+    return relative.type != relative::Type::None;
+}
+
+[[gnu::unused]]
+bool check_parsed(const Schedule& schedule) {
+    return schedule.ok;
+}
+
 #if SCHEDULER_SUN_SUPPORT
 namespace sun {
 
@@ -528,15 +538,64 @@ void setup() {
     });
 }
 
+bool validate(Type type, StringView spec) {
+    switch (type) {
+    case Type::Unknown:
+        break;
+
+    case Type::Disabled:
+        return true;
+
+    case Type::Calendar:
+        return check_parsed(parse_schedule(spec));
+
+    case Type::Relative:
+        return check_parsed(parse_relative(spec));
+    }
+
+    return false;
+}
+
+bool validate(StringView spec) {
+    return validate(Type::Calendar, spec)
+        || validate(Type::Relative, spec);
+}
+
+#if DEBUG_SUPPORT || WEB_SUPPORT
+void report_validate(size_t index) {
+    DEBUG_MSG_P(PSTR("[SCH] ERROR: #%zu -> %.*s\n"),
+            index,
+            error::InvalidTime.length(),
+            error::InvalidTime.data());
+#if WEB_SUPPORT
+    wsPost([index](JsonObject& root) {
+        auto& info = root.createNestedArray(STRING_VIEW("schValidate"));
+        info.add(index);
+        info.add(keys::Time);
+        info.add(error::InvalidTime);
+    });
+#endif
+}
+#endif
+
 void validate() {
-#if DEBUG_SUPPORT
+#if DEBUG_SUPPORT || WEB_SUPPORT
     for (size_t index = 0; index < build::max(); ++index) {
-        const auto result = schedule(index);
-        if (!result.ok) {
-            DEBUG_MSG_P(PSTR("[SCH] ERROR: #%zu -> %.*s\n"),
-                index,
-                error::InvalidTime.length(),
-                error::InvalidTime.data());
+        const auto type = settings::type(index);
+
+        switch (type) {
+        case Type::Unknown:
+            return;
+
+        case Type::Disabled:
+            break;
+
+        case Type::Calendar:
+        case Type::Relative:
+            if (!validate(type, time(index))) {
+                report_validate(index);
+            }
+
             break;
         }
     }
@@ -1076,13 +1135,12 @@ void entrypoint(::terminal::CommandContext&& ctx) {
             spec = std::move(ctx.argv[2]);
         }
 
-        const auto result = parse_schedule(spec);
-        if (result.ok) {
+        if (settings::validate(spec)) {
             terminalOK(ctx);
-        } else {
-            terminalError(ctx, error::InvalidTime);
+            return;
         }
 
+        terminalError(ctx, error::InvalidTime);
         return;
     }
 
@@ -2027,7 +2085,7 @@ Prepared prepare_event_offsets(const datetime::Context& ctx, Span<const schedule
         }
 
         auto relative = settings::relative(index);
-        if (Type::None == relative.type) {
+        if (!check_parsed(relative)) {
             continue;
         }
 
