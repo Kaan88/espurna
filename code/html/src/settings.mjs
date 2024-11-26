@@ -11,7 +11,7 @@ import {
     listenAppConnected,
 } from './connection.mjs';
 
-import { validateForms } from './validate.mjs';
+import { validateForms, resetCustomValidity } from './validate.mjs';
 
 /**
  * @param {HTMLElement} elem
@@ -1307,6 +1307,8 @@ export function onElementChange(event) {
     if ("none" === action) {
         return;
     }
+
+    resetCustomValidity(target);
 
     if (!checkAndSetElementChanged(target)) {
         return;

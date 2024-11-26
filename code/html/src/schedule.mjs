@@ -1,6 +1,6 @@
-import { showPanelByName } from './core.mjs';
 import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
 import { addEnumerables, groupSettingsOnAddElem, variableListeners } from './settings.mjs';
+import { reportValidityForInputOrSelect } from './validate.mjs';
 
 /** @param {function(HTMLElement): void} callback */
 function withSchedules(callback) {
@@ -37,12 +37,7 @@ function onValidate(value) {
             (elem.querySelectorAll(`input[name=${key}]`));
 
         if (id < elems.length) {
-            showPanelByName("sch");
-
-            const target = elems[id];
-            target.focus();
-            target.setCustomValidity(message);
-            target.reportValidity();
+            reportValidityForInputOrSelect(elems[id], message);
         }
     });
 }
