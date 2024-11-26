@@ -2,6 +2,7 @@ import {
     addSimpleEnumerables,
     groupSettingsOnAddElem,
     variableListeners,
+    addEnumerables,
 } from './settings.mjs';
 
 import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
@@ -39,6 +40,9 @@ function listeners() {
     return {
         "ledConfig": (_, value) => {
             onConfig(value);
+        },
+        "ledModes": (_, value) => {
+            addEnumerables("ledMode", value);
         },
     };
 };

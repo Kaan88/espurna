@@ -1524,10 +1524,18 @@ void onVisible(JsonObject& root) {
     for (const auto& pair : settings::Settings) {
         root[pair.key()] = pair.value();
     }
+
+    espurna::web::ws::EnumerableTypes types{root, STRING_VIEW("schTypes")};
+    types(settings::internal::Types);
 }
 
 void onConnected(JsonObject& root){
-    espurna::web::ws::EnumerableConfig config{ root, STRING_VIEW("schConfig") };
+    espurna::web::ws::EnumerableConfig config{root, STRING_VIEW("schConfig")};
+    config.replacement(
+        settings::internal::type,
+        [](JsonArray& out, size_t index) {
+            out.add(std::to_underlying(settings::type(index)));
+        });
     config(STRING_VIEW("schedules"), settings::count(), settings::IndexedSettings);
 
     auto& schedules = config.root();

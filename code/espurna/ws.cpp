@@ -36,7 +36,7 @@ namespace {
 
 namespace internal {
 
-PROGMEM_STRING(SchemaKey, "schema");
+STRING_VIEW_INLINE(SchemaKey, "schema");
 
 } // namespace internal
 
@@ -55,26 +55,47 @@ constexpr bool authentication() {
 } // namespace
 
 EnumerableConfig::EnumerableConfig(JsonObject& root, StringView name) :
-    _root(root.createNestedObject(FPSTR(name.c_str())))
+    _root(root.createNestedObject(name))
 {}
 
-void EnumerableConfig::operator()(StringView name, espurna::settings::Iota iota, Check check, Setting* begin, Setting* end) {
-    JsonArray& entries = _root.createNestedArray(FPSTR(name.c_str()));
+void EnumerableConfig::replacement(SourceFunc source, TargetFunc target) {
+    _replacements.push_back(
+        Replacement{
+            .source = source,
+            .target = target,
+        });
+}
 
-    if (_root.containsKey(FPSTR(internal::SchemaKey))) {
+void EnumerableConfig::operator()(StringView name, espurna::settings::Iota iota, Check check, Setting* begin, Setting* end) {
+    JsonArray& entries = _root.createNestedArray(name);
+
+    if (_root.containsKey(internal::SchemaKey)) {
         return;
     }
 
-    JsonArray& schema = _root.createNestedArray(FPSTR(internal::SchemaKey));
+    JsonArray& schema = _root.createNestedArray(internal::SchemaKey);
     for (auto it = begin; it != end; ++it) {
-        schema.add(FPSTR((*it).prefix().c_str()));
+        schema.add((*it).prefix());
     }
 
     while (iota) {
         if (!check || check(*iota)) {
             JsonArray& entry = entries.createNestedArray();
             for (auto it = begin; it != end; ++it) {
-                entry.add((*it).value(*iota));
+                auto func = (*it).func();
+
+                auto replacement = std::find_if(
+                    _replacements.begin(),
+                    _replacements.end(),
+                    [&](const Replacement& replacement) {
+                        return func == replacement.source;
+                    });
+
+                if (replacement != _replacements.end()) {
+                    (*replacement).target(entry, *iota);
+                } else {
+                    entry.add(func(*iota));
+                }
             }
         }
 
@@ -83,22 +104,22 @@ void EnumerableConfig::operator()(StringView name, espurna::settings::Iota iota,
 }
 
 EnumerablePayload::EnumerablePayload(JsonObject& root, StringView name) :
-    _root(root.createNestedObject(FPSTR(name.c_str())))
+    _root(root.createNestedObject(name))
 {}
 
 void EnumerablePayload::operator()(StringView name, settings::Iota iota, Check check, Pairs&& pairs) {
-    JsonArray& entries = _root.createNestedArray(FPSTR(name.c_str()));
+    JsonArray& entries = _root.createNestedArray(name);
 
-    if (_root.containsKey(FPSTR(internal::SchemaKey))) {
+    if (_root.containsKey(internal::SchemaKey)) {
         return;
     }
 
-    JsonArray& schema = _root.createNestedArray(FPSTR(internal::SchemaKey));
+    JsonArray& schema = _root.createNestedArray(internal::SchemaKey);
 
     const auto begin = std::begin(pairs);
     const auto end = std::end(pairs);
     for (auto it = begin; it != end; ++it) {
-        schema.add(FPSTR((*it).name.c_str()));
+        schema.add((*it).name);
     }
 
     while (iota) {
@@ -111,6 +132,16 @@ void EnumerablePayload::operator()(StringView name, settings::Iota iota, Check c
 
         ++iota;
     }
+}
+
+EnumerableTypes::EnumerableTypes(JsonObject& root, StringView name) :
+    _root(root.createNestedArray(name))
+{}
+
+void EnumerableTypes::operator()(int value, StringView text) {
+    auto& entry = _root.createNestedArray();
+    entry.add(value);
+    entry.add(text);
 }
 
 } // namespace ws
@@ -577,12 +608,12 @@ void _wsParse(AsyncWebSocketClient* client, uint8_t* payload, size_t length) {
         JsonObject& data = root["data"];
         if (data.success()) {
             if (strcmp(action, "restore") == 0) {
-                const auto* message = settingsRestoreJson(data)
-                    ? PSTR("Changes saved, you should be able to reboot now")
-                    : PSTR("Cound not restore the configuration, see the debug log for more information");
+                const auto message = settingsRestoreJson(data)
+                    ? STRING_VIEW("Changes saved, you should be able to reboot now")
+                    : STRING_VIEW("Cound not restore the configuration, see the debug log for more information");
 
                 wsPost(client_id, [message](JsonObject& root) {
-                    root[F("message")] = FPSTR(message);
+                    root[F("message")] = message;
                 });
                 return;
             }

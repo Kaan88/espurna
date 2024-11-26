@@ -1,5 +1,6 @@
+import { showPanelByName } from './core.mjs';
 import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
-import { groupSettingsOnAddElem, variableListeners } from './settings.mjs';
+import { addEnumerables, groupSettingsOnAddElem, variableListeners } from './settings.mjs';
 
 /** @param {function(HTMLElement): void} callback */
 function withSchedules(callback) {
@@ -27,12 +28,38 @@ function onConfig(value) {
 }
 
 /**
+ * @param {[number, string, string]} value
+ */
+function onValidate(value) {
+    withSchedules((elem) => {
+        const [id, key, message] = value;
+        const elems = /** @type {NodeListOf<HTMLInputElement>} */
+            (elem.querySelectorAll(`input[name=${key}]`));
+
+        if (id < elems.length) {
+            showPanelByName("sch");
+
+            const target = elems[id];
+            target.focus();
+            target.setCustomValidity(message);
+            target.reportValidity();
+        }
+    });
+}
+
+/**
  * @returns {import('./settings.mjs').KeyValueListeners}
  */
 function listeners() {
     return {
         "schConfig": (_, value) => {
             onConfig(value);
+        },
+        "schValidate": (_, value) => {
+            onValidate(value);
+        },
+        "schTypes": (_, value) => {
+            addEnumerables("schType", value);
         },
     };
 }

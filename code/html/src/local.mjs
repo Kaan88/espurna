@@ -2,6 +2,25 @@ import { updateVariables } from './settings.mjs';
 
 export function init() {
     updateVariables({
+        schTypes: [
+            [1, "disabled"],
+            [2, "calendar"],
+            [3, "relative"],
+        ],
+        ledModes: [
+            [1, "wifi"],
+            [2, "relay"],
+            [3, "relay-inverse"],
+            [4, "findme"],
+            [5, "findme-wifi"],
+            [6, "on"],
+            [7, "off"],
+            [8, "relays"],
+            [9, "relays-wifi"],
+            [0, "manual"],
+        ],
+    });
+    updateVariables({
         ntpServer: "192.168.1.1",
         ntpTZ: 'UTC-2',
         ntpStartDelay: 10,
@@ -72,8 +91,8 @@ export function init() {
                 'ledRelay',
             ],
             leds: [
-                [15, 0, 'relay-inverse', 0],
-                [16, 0, 'relay', 1],
+                [15, 0, 3, 0],
+                [16, 0, 2, 1],
             ],
         },
         rfm69Topic: 'foo',
@@ -181,6 +200,7 @@ export function init() {
                 [2, 0, 'relay 0 1', '05,10:00'],
                 [2, 0, 'relay 1 2', '05:00'],
                 [1, 0, 'relay 2 0\nrelay 0 0', '10:00'],
+                [3, 0, 'mqtt.send "foo" "bar"', '15m after cal#2'],
             ],
             schema: [
                 'schType',

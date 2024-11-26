@@ -995,11 +995,19 @@ bool onKeyCheck(StringView key, const JsonVariant&) {
 
 void onVisible(JsonObject& root) {
     wsPayloadModule(root, settings::Prefix);
+
+    espurna::web::ws::EnumerableTypes types{root, STRING_VIEW("ledModes")};
+    types(espurna::led::settings::options::LedModeOptions);
 }
 
 void onConnected(JsonObject& root) {
     if (count()) {
         espurna::web::ws::EnumerableConfig config{root, STRING_VIEW("ledConfig")};
+        config.replacement(
+            settings::query::internal::mode,
+            [](JsonArray& out, size_t index) {
+                out.add(std::to_underlying(settings::mode(index)));
+            });
         config(STRING_VIEW("leds"), ::espurna::led::count(), settings::query::IndexedSettings);
     }
 }

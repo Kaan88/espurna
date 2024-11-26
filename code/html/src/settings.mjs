@@ -905,6 +905,10 @@ export function setOriginalsFromValuesForNode(node) {
 }
 
 /**
+ * @typedef {[number, string]} EnumerableTuple
+ */
+
+/**
  * automatically generate <select> options for know entities
  * @typedef {{id: number, name: string}} EnumerableEntry
  */
@@ -1090,9 +1094,17 @@ export function getEnumerables(name) {
 
 /**
  * @param {string} name
- * @param {EnumerableEntry[]} enumerables
+ * @param {EnumerableEntry[] | EnumerableTuple[]} enumerables
  */
 export function addEnumerables(name, enumerables) {
+    enumerables = enumerables.map((x) => {
+        if (Array.isArray(x)) {
+            return {id: x[0], name: x[1]};
+        }
+
+        return x;
+    });
+
     Enumerable[name] = enumerables;
     notifyEnumerables(name, enumerables);
 }

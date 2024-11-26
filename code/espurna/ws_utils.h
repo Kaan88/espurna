@@ -78,6 +78,9 @@ struct EnumerableConfig {
     using Check = bool(*)(size_t);
     using Setting = const settings::query::IndexedSetting;
 
+    using SourceFunc = Setting::ValueFunc;
+    using TargetFunc = void (*)(JsonArray&, size_t);
+
     EnumerableConfig(JsonObject& root, StringView name);
 
     void operator()(StringView name, settings::Iota iota, Check check, Setting* begin, Setting* end);
@@ -104,8 +107,41 @@ struct EnumerableConfig {
         return _root;
     }
 
+    void replacement(SourceFunc, TargetFunc);
+
 private:
+    struct Replacement {
+        SourceFunc source;
+        TargetFunc target;
+    };
+
+
+    std::vector<Replacement> _replacements;
     JsonObject& _root;
+};
+
+struct EnumerableTypes {
+    template <typename T>
+    using Enumeration = settings::options::Enumeration<T>;
+
+    EnumerableTypes(JsonObject& root, StringView name);
+
+    template <typename T>
+    void operator()(const Enumeration<T>* begin, const Enumeration<T>* end) {
+        for (auto it = begin; it != end; ++it) {
+            (*this)((*it).numeric(), (*it).string());
+        }
+    }
+
+    template <typename T>
+    void operator()(const T& other) {
+        (*this)(std::begin(other), std::end(other));
+    }
+
+    void operator()(int, StringView);
+
+private:
+    JsonArray& _root;
 };
 
 } // namespace ws
