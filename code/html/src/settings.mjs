@@ -1,6 +1,7 @@
 import { notifyError } from './errors.mjs';
 import {
     count,
+    capitalize,
     pageReloadIn,
     showPanelByName,
 } from './core.mjs';
@@ -797,9 +798,7 @@ function prepareSpanValue(span, value) {
     value = value.toString();
 
     if (value) {
-        const capitalized =
-            `${value.at(0).toUpperCase()}${value.slice(1)}`;
-        value = span.dataset[`value${capitalized}`] ?? value;
+        value = span.dataset[`value${capitalize(value)}`] ?? value;
     }
 
     const out = [

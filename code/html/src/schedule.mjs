@@ -1,6 +1,7 @@
 import { addFromTemplate, addFromTemplateWithSchema } from './template.mjs';
 import { addEnumerables, groupSettingsOnAddElem, variableListeners } from './settings.mjs';
 import { reportValidityForInputOrSelect } from './validate.mjs';
+import { capitalize } from './core.mjs';
 
 /** @param {function(HTMLElement): void} callback */
 function withSchedules(callback) {
@@ -54,7 +55,10 @@ function listeners() {
             onValidate(value);
         },
         "schTypes": (_, value) => {
-            addEnumerables("schType", value);
+            const tuples =
+                /** @type {import('./settings.mjs').EnumerableTuple[]} */(value);
+            addEnumerables("schType",
+                tuples.map((x) => [x[0], capitalize(x[1])]));
         },
     };
 }

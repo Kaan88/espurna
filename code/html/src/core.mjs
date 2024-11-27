@@ -226,3 +226,13 @@ export function assert(value, message = "") {
 export function count(values, callback) {
     return values.filter(callback).length;
 }
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+export function capitalize(value) {
+    return value === ""
+        ? value
+        : `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
