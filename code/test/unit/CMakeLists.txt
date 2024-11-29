@@ -10,7 +10,7 @@
 # $ cmake -B build
 # $ cmake --build build --target test
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.18)
 project(host-test VERSION 1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11 CACHE STRING "Global C standard version (...does not yet work with 17 though)")
@@ -61,20 +61,6 @@ target_compile_options(unity BEFORE PRIVATE
     -DUNITY_INCLUDE_DOUBLE
 )
 
-set(esp8266_version a4a8782c5611c02df3c0dd4744c86d02a4f037d3)
-
-FetchContent_Declare(
-    esp8266git
-    GIT_REPOSITORY https://github.com/esp8266/Arduino/
-    GIT_TAG ${esp8266_version}
-    GIT_CONFIG core.autocrlf=false core.eol=lf
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/cache/esp8266git-${esp8266_version}-src
-    SUBBUILD_DIR ${CMAKE_SOURCE_DIR}/cache/esp8266git-${esp8266_version}-subbuild
-)
-
-FetchContent_MakeAvailable(esp8266git)
-FetchContent_GetProperties(esp8266git SOURCE_DIR)
-
 set(arduinojson_version v5.13.5)
 
 FetchContent_Declare(
@@ -89,6 +75,22 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(ArduinoJson)
 FetchContent_GetProperties(ArduinoJson SOURCE_DIR)
+
+set(esp8266_version ccea72823ac50290bc05c67350d2be6626e65547)
+
+FetchContent_Declare(
+    esp8266git
+    GIT_REPOSITORY https://github.com/esp8266/Arduino/
+    GIT_TAG ${esp8266_version}
+    GIT_CONFIG core.autocrlf=false core.eol=lf
+    GIT_SUBMODULES libraries/LittleFS/lib/littlefs libraries/ESP8266SdFat
+    GIT_SUBMODULES_RECURSE FALSE
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/cache/esp8266git-src
+    SUBBUILD_DIR ${CMAKE_SOURCE_DIR}/cache/esp8266git-subbuild
+)
+
+FetchContent_MakeAvailable(esp8266git)
+FetchContent_GetProperties(esp8266git SOURCE_DIR)
 
 # mock'ed Arduino Core headers sometimes expect to be included with some pre-requisites, which we obviously don't have
 add_library(common INTERFACE)
