@@ -59,7 +59,7 @@ export function reportValidityForInputOrSelect(elem, message = "") {
     findPanel(elem, (panel) => {
         showPanel(panel);
 
-        if (message.length != 0) {
+        if (message.length !== 0) {
             elem.setCustomValidity(message);
             elem.dataset[CUSTOM_VALIDITY] = message;
         }
