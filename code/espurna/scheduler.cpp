@@ -236,16 +236,6 @@ bool check_parsed(const Schedule& schedule) {
 #if SCHEDULER_SUN_SUPPORT
 namespace sun {
 
-struct EventMatch : public Event {
-    datetime::Date date;
-    TimeMatch time;
-};
-
-struct Match {
-    EventMatch rising;
-    EventMatch setting;
-};
-
 Location location;
 Match match;
 
@@ -826,59 +816,6 @@ EventMatch* find_event_match(const TimeMatch& m) {
 
 EventMatch* find_event_match(const Schedule& schedule) {
     return find_event_match(schedule.time);
-}
-
-tm make_utc_date_time(datetime::Seconds seconds) {
-    tm out{};
-
-    time_t timestamp{ seconds.count() };
-    gmtime_r(&timestamp, &out);
-
-    return out;
-}
-
-datetime::Date make_date(const tm& date_time) {
-    datetime::Date out;
-
-    out.year = date_time.tm_year + 1900;
-    out.month = date_time.tm_mon + 1;
-    out.day = date_time.tm_mday;
-
-    return out;
-}
-
-TimeMatch make_time_match(const tm& date_time) {
-    TimeMatch out;
-
-    out.hour[date_time.tm_hour] = true;
-    out.minute[date_time.tm_min] = true;
-    out.flags = FlagUtc;
-
-    return out;
-}
-
-void update_event_match(EventMatch& match, datetime::Clock::time_point time_point) {
-    const auto next_valid = event::is_valid(match.next);
-    if (!event::is_valid(time_point)) {
-        if (next_valid) {
-            match.last = match.next;
-        }
-
-        match.next = event::DefaultTimePoint;
-        return;
-    }
-
-    const auto duration = time_point.time_since_epoch();
-
-    const auto date_time = make_utc_date_time(duration);
-    match.date = make_date(date_time);
-    match.time = make_time_match(date_time);
-
-    if (next_valid) {
-        match.last = match.next;
-    }
-
-    match.next = time_point;
 }
 
 void update_schedule_from(Schedule& schedule, const EventMatch& match) {
