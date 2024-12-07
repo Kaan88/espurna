@@ -1067,8 +1067,15 @@ void update_before(const datetime::Context& ctx) {
 #if TERMINAL_SUPPORT
 namespace terminal {
 
-#if SCHEDULER_SUN_SUPPORT
+using espurna::terminal::Command;
+using espurna::terminal::CommandContext;
+
 namespace internal {
+
+#if SCHEDULER_SUN_SUPPORT
+
+STRING_VIEW_INLINE(Sunrise, "Sunrise");
+STRING_VIEW_INLINE(Sunset, "Sunset");
 
 struct Datetime {
     String last;
@@ -1082,35 +1089,104 @@ Datetime sunrise_sunset(const sun::EventMatch& match) {
     };
 }
 
-void format_output(::terminal::CommandContext& ctx, const String& prefix, const Datetime& datetime) {
+void format_datetime(CommandContext& ctx, const String& prefix, const Datetime& datetime) {
     ctx.output.printf_P(PSTR("- %s\n  last: %s\n  next: %s\n"),
         prefix.c_str(),
         datetime.last.c_str(),
         datetime.next.c_str());
 }
 
-void dump_sunrise_sunset(::terminal::CommandContext& ctx) {
+void dump_sunrise(CommandContext& ctx) {
+    format_datetime(ctx,
+        Sunrise.toString(),
+        sunrise_sunset(sun::match.rising));
+}
+
+void dump_sunset(CommandContext& ctx) {
+    format_datetime(ctx,
+        Sunset.toString(),
+        sunrise_sunset(sun::match.setting));
+}
+
+void dump_sunrise_sunset(CommandContext& ctx) {
     if (event::is_valid(sun::next_update)) {
         ctx.output.printf_P(PSTR("- Next sunrise & sunset update at %s\n"),
             datetime::format_local_tz(sun::next_update).c_str());
     }
 
-    format_output(ctx,
-        STRING_VIEW("Sunrise").toString(),
-        sunrise_sunset(sun::match.rising));
-    format_output(ctx,
-        STRING_VIEW("Sunset").toString(),
-        sunrise_sunset(sun::match.setting));
+    dump_sunrise(ctx);
+    dump_sunset(ctx);
+}
+
+bool dump_sunrise_sunset(CommandContext& ctx, StringView name) {
+    if (Sunrise.equalsIgnoreCase(name)) {
+        dump_sunrise(ctx);
+        return true;
+    } else if (Sunset.equalsIgnoreCase(name)) {
+        dump_sunset(ctx);
+        return true;
+    }
+
+    return false;
+}
+
+#endif
+
+bool dump_named(CommandContext& ctx, StringView name = StringView()) {
+    for (auto& entry : named_events) {
+        if (name.length() && name != entry.name) {
+            continue;
+        }
+
+        const auto event = format_named_event(entry);
+        ctx.output.printf_P(PSTR("- \"%s\"\n    at: %s\n"),
+            entry.name.c_str(), event.c_str());
+
+        if (name.length()) {
+            return true;
+        }
+    }
+
+    if (!name.length()) {
+        return true;
+    }
+
+    return false;
+}
+
+bool dump_calendar(CommandContext& ctx, StringView name = StringView()) {
+    if (!last_actions.empty()) {
+        for (auto& entry : last_actions) {
+            auto event = STRING_VIEW("cal#").toString();
+            event += String(entry.index, 10);
+
+            if (name.length() && !name.equalsIgnoreCase(event)) {
+                continue;
+            }
+
+            ctx.output.printf_P(PSTR("- %s\n    at: %s\n"),
+                event.c_str(), format_last_action(entry).c_str());
+
+            if (name.length()) {
+                return true;
+            }
+        }
+    }
+
+    if (!name.length()) {
+        return true;
+    }
+
+    return false;
 }
 
 } // namespace internal
-#endif
 
 // SCHEDULE [<ID>]
 // SCHEDULE CHECK [CHUNK(S)...]
 PROGMEM_STRING(Entrypoint, "SCHEDULE");
 
-void entrypoint(::terminal::CommandContext&& ctx) {
+void entrypoint(CommandContext&& ctx) {
     if (ctx.argv.size() > 2 && (STRING_VIEW("CHECK").equalsIgnoreCase(ctx.argv[1]))) {
         String spec;
 
@@ -1168,60 +1244,51 @@ void entrypoint(::terminal::CommandContext&& ctx) {
 PROGMEM_STRING(Event, "EVENT");
 
 // EVENT [<NAME>] [<DATETIME>]
-void event(::terminal::CommandContext&& ctx) {
-    String name;
-
-    if (ctx.argv.size() == 2) {
-        name = std::move(ctx.argv[1]);
-    }
-
-    if (ctx.argv.size() != 3) {
-        for (auto& entry : named_events) {
-            if (name.length() && entry.name != name) {
-                continue;
-            }
-
-            ctx.output.printf_P(PSTR("- \"%s\"\n    at: %s\n"),
-                entry.name.c_str(),
-                format_named_event(entry).c_str());
-
-            if (name.length()) {
-                terminalOK(ctx);
-                return;
-            }
-        }
-
-        if (name.length()) {
-            terminalError(ctx, STRING_VIEW("Invalid name"));
-            return;
-        }
-
-        if (!last_actions.empty()) {
-            ctx.output.print(PSTR("Calendar events:\n"));
-            for (auto& entry : last_actions) {
-                ctx.output.printf_P(PSTR("- cal#%zu\n    at %s\n"),
-                    entry.index,
-                    format_last_action(entry).c_str());
-            }
-        }
-
+void event(CommandContext&& ctx) {
+    switch (ctx.argv.size()) {
+    case 1:
 #if SCHEDULER_SUN_SUPPORT
         internal::dump_sunrise_sunset(ctx);
 #endif
+        internal::dump_named(ctx);
+        internal::dump_calendar(ctx);
+        break;
 
-        terminalOK(ctx);
+    case 2:
+#if SCHEDULER_SUN_SUPPORT
+        if (internal::dump_sunrise_sunset(ctx, ctx.argv[1])) {
+            break;
+        }
+#endif
+        if (internal::dump_named(ctx, ctx.argv[1])) {
+            break;
+        }
+
+        if (internal::dump_calendar(ctx, ctx.argv[1])) {
+            break;
+        }
+
+        terminalError(ctx, STRING_VIEW("Invalid name"));
+        return;
+
+    case 3:
+        if (named_event(std::move(ctx.argv[1]), ctx.argv[2])) {
+            break;
+        }
+
+        terminalError(ctx, STRING_VIEW("Cannot set event"));
+        return;
+
+    case 0:
+    default:
+        terminalError(ctx, STRING_VIEW("EVENT [<NAME>] [<DATETIME>]"));
         return;
     }
 
-    if (named_event(std::move(ctx.argv[1]), ctx.argv[2])) {
-        terminalOK(ctx);
-        return;
-    }
-
-    terminalError(ctx, STRING_VIEW("Cannot set event"));
+    terminalOK(ctx);
 }
 
-static constexpr ::terminal::Command Commands[] PROGMEM {
+static constexpr Command Commands[] PROGMEM {
     {Entrypoint, entrypoint},
     {Event, event},
 };
