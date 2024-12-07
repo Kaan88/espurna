@@ -95,14 +95,14 @@ void error(ota_error_t error) {
     case OTA_RECEIVE_ERROR:
         reason = STRING_VIEW("Receive");
         break;
-#if !defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
-|| !defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
-|| !defined(ARDUINO_ESP8266_RELEASE_2_7_4)
-    case OTA_ERASE_SETTINGS_ERROR:
-        reason = STRING_VIEW("Settings erase");
-        break;
     case OTA_END_ERROR:
         reason = STRING_VIEW("End");
+        break;
+#if !defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
+&& !defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
+&& !defined(ARDUINO_ESP8266_RELEASE_2_7_4)
+    case OTA_ERASE_SETTINGS_ERROR:
+        reason = STRING_VIEW("Settings erase");
         break;
 #endif
     }
