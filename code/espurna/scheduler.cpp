@@ -1005,23 +1005,25 @@ void update_after(const datetime::Context& ctx) {
         return;
     }
 
-    auto next = update(time_point, ctx.utc, CompareAfter{});
+    const auto next = update(time_point, ctx.utc, CompareAfter{});
+
+    event::time_point unordered[] {
+        next,
+        match.rising.next,
+        match.setting.next,
+    };
 
     if (event::is_valid(match.rising.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunrise at %s\n"),
             datetime::format_local_tz(match.rising.next).c_str());
+        unordered[0] = event::DefaultTimePoint;
     }
 
     if (event::is_valid(match.setting.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunset at %s\n"),
             datetime::format_local_tz(match.setting.next).c_str());
+        unordered[0] = event::DefaultTimePoint;
     }
-
-    const event::time_point unordered[] {
-        next,
-        match.rising.next,
-        match.setting.next,
-    };
 
     next_update = event::DefaultTimePoint;
 
