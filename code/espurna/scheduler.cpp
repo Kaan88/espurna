@@ -1841,6 +1841,7 @@ void run(const datetime::Context& base) {
         DEBUG_MSG_P(PSTR("[SCH] Restoring #%zu => %s (%sm)\n"),
             result.index, action.c_str(),
             String(result.offset.count(), 10).c_str());
+        last_action(base, result.index);
         parse_action(action);
     }
 }
