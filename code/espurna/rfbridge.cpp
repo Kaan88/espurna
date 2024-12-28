@@ -51,6 +51,12 @@ void rfbOnCode(RfbCodeHandler handler) {
     _rfb_code_handlers.push_front(handler);
 }
 
+static void _rfbCode(unsigned char protocol, espurna::StringView code) {
+    for (auto& handler : _rfb_code_handlers) {
+        handler(protocol, code);
+    }
+}
+
 // -----------------------------------------------------------------------------
 // MATCH RECEIVED CODE WITH THE SPECIFIC RELAY ID
 // -----------------------------------------------------------------------------
@@ -729,12 +735,8 @@ void _rfbParse(uint8_t code, const std::vector<uint8_t>& payload) {
             mqttSend(MQTT_TOPIC_RFIN, buffer, false, false);
 #endif
 
-            for (auto& handler : _rfb_code_handlers) {
-                const auto begin = std::begin(buffer) + 12;
-                const auto end = std::end(buffer);
-                handler(RfbDefaultProtocol,
-                    espurna::StringView(begin, end));
-            }
+            _rfbCode(RfbDefaultProtocol,
+                espurna::StringView(buffer).slice(12));
         }
         break;
     }
@@ -742,6 +744,7 @@ void _rfbParse(uint8_t code, const std::vector<uint8_t>& payload) {
     case CodeRecvProto:
     case CodeRecvBucket: {
         _rfbAckImpl();
+
         char buffer[(RfbParser::MessageSizeMax * 2) + 1] = {0};
         if (hexEncode(payload.data(), payload.size(), buffer, sizeof(buffer))) {
             DEBUG_MSG_P(PSTR("[RF] Received %s code: %s\n"),
@@ -753,12 +756,8 @@ void _rfbParse(uint8_t code, const std::vector<uint8_t>& payload) {
 #endif
 
             // ref. https://github.com/Portisch/RF-Bridge-EFM8BB1/wiki/0xA6#example-of-a-received-decoded-protocol
-            for (auto& handler : _rfb_code_handlers) {
-                const auto begin = std::begin(buffer) + 2;
-                const auto end = std::end(buffer);
-                handler(payload[0],
-                    espurna::StringView(begin, end));
-            }
+            _rfbCode(payload[0],
+                espurna::StringView(buffer).slice(2));
         } else {
             DEBUG_MSG_P(PSTR("[RF] Received 0x%02X (%u bytes)\n"), code, payload.size());
         }
