@@ -24,6 +24,10 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 #include <list>
 #include <memory>
 
+#if RFB_PROVIDER == RFB_PROVIDER_RCSWITCH
+#include <RCSwitch.h>
+#endif
+
 // -----------------------------------------------------------------------------
 // GLOBALS TO THE MODULE
 // -----------------------------------------------------------------------------
@@ -33,18 +37,13 @@ namespace {
 unsigned char _rfb_repeats = RFB_SEND_REPEATS;
 
 #if RFB_PROVIDER == RFB_PROVIDER_RCSWITCH
-
-#include <RCSwitch.h>
 std::unique_ptr<RCSwitch> _rfb_modem;
 bool _rfb_receive { false };
 bool _rfb_transmit { false };
-
 #else
-
 Stream* _rfb_port { nullptr };
 constexpr bool _rfb_receive { true };
 constexpr bool _rfb_transmit { true };
-
 #endif
 
 std::forward_list<RfbCodeHandler> _rfb_code_handlers;
