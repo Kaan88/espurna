@@ -108,17 +108,38 @@ void setup() {
 namespace terminal {
 namespace {
 
+void port_impl(::terminal::CommandContext& ctx, size_t index, const Port& port) {
+    ctx.output.printf_P(
+        PSTR("w1/%zu\t{Pin=%hhu Parasite=#%c Devices=%zu}\n"),
+            index,
+            port.pin(),
+            port.parasite() ? 'y' : 'n',
+            port.devices().size());
+}
+
+void devices_impl(::terminal::CommandContext& ctx, const Port& port) {
+    size_t index = 0;
+    for (auto& device : port) {
+        ctx.output.printf_P(PSTR("device%zu\t{Address=%s}\n"),
+            index++, hexEncode(device.address).c_str());
+    }
+}
+
+STRING_VIEW_INLINE(ErrNoPorts, "No ports found");
+STRING_VIEW_INLINE(ErrInvalid, "Invalid port ID");
+
 STRING_VIEW_INLINE(List, "W1");
 
 void list(::terminal::CommandContext&& ctx) {
     size_t index = 0;
-    for (auto& reference : internal::references) {
-        ctx.output.printf_P(
-            PSTR("w1/%zu\t{Pin=%hhu Parasite=#%c Devices=%zu}\n"),
-                index++,
-                reference->pin(),
-                reference->parasite() ? 'y' : 'n',
-                reference->devices());
+    for (auto& port : internal::references) {
+        port_impl(ctx, index++, *port);
+    }
+
+    if (index > 0) {
+        terminalOK(ctx);
+    } else {
+        terminalError(ctx, ErrNoPorts);
     }
 }
 
@@ -126,24 +147,28 @@ STRING_VIEW_INLINE(Devices, "W1.DEVICES");
 
 void devices(::terminal::CommandContext&& ctx) {
     size_t id = 0;
-    if ((internal::references.size() > 1) && ctx.argv.size() != 2) {
-        terminalError(ctx, F("W1.DEVICES [<ID>]"));
+    if (internal::references.size() > 1) {
+        if (!tryParseId(ctx.argv[1], internal::references.size(), id)) {
+            terminalError(ctx, ErrInvalid);
+            return;
+        }
+
+        devices_impl(ctx, *internal::references[id]);
+        terminalOK(ctx);
+
         return;
     }
 
-    if (internal::references.size() > 1) {
-        if (!tryParseId(ctx.argv[1], internal::references.size(), id)) {
-            terminalError(ctx, F("Invalid port ID"));
-            return;
-        }
+    size_t index = 0;
+    for (const auto& port : internal::references) {
+        port_impl(ctx, index++, *port);
+        devices_impl(ctx, *port);
     }
 
-    auto reference = internal::references[id];
-
-    size_t index = 0;
-    for (auto& device : *reference) {
-        ctx.output.printf_P(PSTR("device%zu\t{Address=%s}\n"),
-            index++, hexEncode(device.address).c_str());
+    if (index > 0) {
+        terminalOK(ctx);
+    } else {
+        terminalError(ctx, ErrNoPorts);
     }
 }
 
