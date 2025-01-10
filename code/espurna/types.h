@@ -174,6 +174,12 @@ struct SourceLocation {
     const char* func;
 };
 
+inline bool operator==(SourceLocation lhs, SourceLocation rhs) {
+    return lhs.line == rhs.line
+        && lhs.file == rhs.file
+        && lhs.func == rhs.func;
+}
+
 inline SourceLocation trim_source_location(SourceLocation value) {
     for (auto* ptr = value.file; *ptr != '\0'; ++ptr) {
         if ((*ptr == '/') || (*ptr == '\\')) {

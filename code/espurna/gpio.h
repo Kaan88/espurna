@@ -30,6 +30,14 @@ struct Origin {
     SourceLocation location;
 };
 
+inline bool operator==(Origin lhs, Origin rhs) {
+    return lhs.base == rhs.base
+        && lhs.pin == rhs.pin
+        && lhs.lock == rhs.lock
+        && lhs.result == rhs.result
+        && lhs.location == rhs.location;
+}
+
 struct Mode {
     int8_t value;
 };

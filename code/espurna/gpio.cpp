@@ -632,6 +632,10 @@ std::forward_list<Origin> origins;
 } // namespace internal
 
 void add(Origin origin) {
+    internal::origins.remove_if(
+        [&](const Origin& other) {
+            return other == origin;
+        });
     internal::origins.emplace_front(origin);
 }
 
