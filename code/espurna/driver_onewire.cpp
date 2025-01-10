@@ -26,14 +26,84 @@ Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 namespace espurna {
 namespace driver {
 namespace onewire {
+
+StringView error(Error error) {
+    StringView out;
+
+    switch (error) {
+    case Error::Ok:
+        out = STRING_VIEW("OK");
+        break;
+
+    case Error::NotFound:
+        out = STRING_VIEW("Not found");
+        break;
+
+    case Error::Unresponsive:
+        out = STRING_VIEW("Device does not respond");
+        break;
+
+    case Error::GpioUsed:
+        out = STRING_VIEW("GPIO Already Used");
+        break;
+
+    case Error::Config:
+        out = STRING_VIEW("Invalid Configuration");
+        break;
+
+    }
+
+    return out;
+}
+
+StringView reset_result(ResetResult result) {
+    StringView out;
+
+    switch (result) {
+    case ResetResult::Unknown:
+        out = STRING_VIEW("Unknown");
+        break;
+
+    case ResetResult::Busy:
+        out = STRING_VIEW("Busy");
+        break;
+
+    case ResetResult::Presence:
+        out = STRING_VIEW("Presence");
+        break;
+    }
+
+    return out;
+}
+
 namespace internal {
 namespace {
 
 bool debug { false };
 std::vector<PortPtr> references;
 
-bool reset(OneWire* wire) {
-    return wire->reset() != 0;
+ResetResult reset(OneWire* wire) {
+    auto out = ResetResult::Unknown;
+
+    switch (wire->reset()) {
+    case 0:
+        out = ResetResult::Busy;
+        break;
+
+    case 1:
+        out = ResetResult::Presence;
+        break;
+    }
+
+#if DEBUG_SUPPORT
+    if (debug) {
+        const auto ret = reset_result(out);
+        DEBUG_MSG_P(PSTR("[W1] Reset (%.*s)\n"),
+            ret.length(), ret.data());
+    }
+#endif
+
+    return out;
 }
 
 void skip(OneWire* wire) {
@@ -222,6 +292,11 @@ Error Port::attach(unsigned char pin, bool parasite) {
     auto wire = std::make_unique<OneWire>(pin);
 
     auto devices = search(*wire, pin);
+    if (internal::debug) {
+        DEBUG_MSG_P(PSTR("[W1] Found %zu device(s) on GPIO%zu\n"),
+            devices.size(), pin);
+    }
+
     if (!devices.size()) {
         gpioUnlock(pin);
         return Error::NotFound;
@@ -291,12 +366,23 @@ Port::Devices Port::search(OneWire& wire, unsigned char pin) {
     return out;
 }
 
-bool Port::reset() {
-    return _wire->reset() == 0;
+ResetResult Port::reset() const {
+    return internal::reset(_wire.get());
+}
+
+bool Port::presence() const {
+    return reset() == ResetResult::Presence;
 }
 
 void Port::write(Address address, Span<const uint8_t> data) {
-    internal::reset(_wire.get());
+    if (!presence()) {
+        if (internal::debug) {
+            DEBUG_MSG_P(PSTR("[W1] Write to %s failed\n"),
+                hexEncode(address).c_str());
+        }
+        return;
+    }
+
     internal::select(_wire.get(), address);
     internal::write_bytes(_wire.get(), data, parasite());
 }
@@ -311,7 +397,13 @@ void Port::write(Address address, uint8_t value) {
 }
 
 void Port::write(uint8_t value) {
-    internal::reset(_wire.get());
+    if (!presence()) {
+        if (internal::debug) {
+            DEBUG_MSG_P(PSTR("[W1] Write failed\n"));
+        }
+        return;
+    }
+
     internal::skip(_wire.get());
 
     const std::array<uint8_t, 1> data{{ value }};
@@ -319,50 +411,24 @@ void Port::write(uint8_t value) {
 }
 
 bool Port::request(Address address, Span<const uint8_t> input, Span<uint8_t> output) {
-    //if (!//
-    //    return false;
-    //}
-    internal::reset(_wire.get());
+    if (!presence()) {
+        if (internal::debug) {
+            DEBUG_MSG_P(PSTR("[W1] Request to %s failed\n"),
+                hexEncode(address).c_str());
+        }
+        return false;
+    }
 
     internal::select(_wire.get(), address);
     internal::write_bytes(_wire.get(), input);
     internal::read_bytes(_wire.get(), output);
 
-    return internal::reset(_wire.get());
+    return presence();
 }
 
 bool Port::request(Address address, uint8_t value, Span<uint8_t> output) {
     const std::array<uint8_t, 1> input{ value };
     return request(address, make_span(input), output);
-}
-
-StringView error(Error error) {
-    StringView out;
-
-    switch (error) {
-    case Error::Ok:
-        out = STRING_VIEW("OK");
-        break;
-
-    case Error::NotFound:
-        out = STRING_VIEW("Not found");
-        break;
-
-    case Error::Unresponsive:
-        out = STRING_VIEW("Device does not respond");
-        break;
-
-    case Error::GpioUsed:
-        out = STRING_VIEW("GPIO Already Used");
-        break;
-
-    case Error::Config:
-        out = STRING_VIEW("Invalid Configuration");
-        break;
-
-    }
-
-    return out;
 }
 
 void setup() {
