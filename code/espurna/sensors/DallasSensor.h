@@ -917,6 +917,9 @@ private:
         DEBUG_MSG_P(PSTR("[DALLAS] %s is port handler\n"),
             hexEncode(ptr->getDeviceAddress()).c_str());
         ptr->setPortHandler();
+
+        // Track the port globally
+        espurna::driver::onewire::reference(_port);
     }
 
     Config _config;
