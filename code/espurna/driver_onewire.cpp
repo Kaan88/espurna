@@ -76,8 +76,9 @@ StringView reset_result(ResetResult result) {
     return out;
 }
 
-namespace internal {
 namespace {
+
+namespace internal {
 
 bool debug { false };
 std::vector<PortPtr> references;
@@ -136,47 +137,21 @@ void read_bytes(OneWire* wire, Span<uint8_t> data) {
     }
 }
 
-} // namespace
 } // namespace internal
-
-Port::Port() = default;
-
-Port::~Port() {
-    detach();
-}
-
-void dereference(PortPtr port) {
-    internal::references.erase(
-        std::remove(
-            internal::references.begin(), internal::references.end(), port));
-}
-
-void reference(PortPtr port) {
-    const auto it = std::find(
-        internal::references.begin(), internal::references.end(), port);
-    if (it != internal::references.end()) {
-        return;
-    }
-
-    internal::references.push_back(port);
-}
 
 #if DEBUG_SUPPORT
 namespace debug {
-namespace {
 
 void setup() {
     STRING_VIEW_INLINE(Debug, "w1Debug");
     internal::debug = getSetting(Debug, false);
 }
 
-} // namespace
-} // namespace
+} // namespace debug
 #endif
 
 #if TERMINAL_SUPPORT
 namespace terminal {
-namespace {
 
 void port_impl(::terminal::CommandContext& ctx, size_t index, const Port& port) {
     ctx.output.printf_P(
@@ -251,9 +226,10 @@ void setup() {
     espurna::terminal::add(Commands);
 }
 
-} // namespace
 } // namespace terminal
 #endif
+
+} // namespace
 
 uint16_t crc16(Span<const uint8_t> data) {
     return OneWire::crc16(data.data(), data.size());
@@ -278,6 +254,28 @@ bool check_crc8(Span<const uint8_t> data) {
         data.size() - 1);
 
     return data.back() == crc8(span);
+}
+
+void dereference(PortPtr port) {
+    internal::references.erase(
+        std::remove(
+            internal::references.begin(), internal::references.end(), port));
+}
+
+void reference(PortPtr port) {
+    const auto it = std::find(
+        internal::references.begin(), internal::references.end(), port);
+    if (it != internal::references.end()) {
+        return;
+    }
+
+    internal::references.push_back(port);
+}
+
+Port::Port() = default;
+
+Port::~Port() {
+    detach();
 }
 
 Error Port::attach(unsigned char pin, bool parasite) {
