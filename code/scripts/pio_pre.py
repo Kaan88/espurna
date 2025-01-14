@@ -84,7 +84,9 @@ def install_libraries(specs, storage, verbose=False):
     lm = LibraryPackageManager(storage)
     lm.set_log_level(logging.DEBUG if verbose else logging.INFO)
 
+    # as described in platformio .ini
     known = set()
+
     for spec in specs:
         pkg = lm.get_package(spec)
         if not pkg:
@@ -95,10 +97,12 @@ def install_libraries(specs, storage, verbose=False):
 
     lm.memcache_reset()
 
+    # actually installed packages (library storage)
     installed = set(lm.get_installed())
+
     for pkg in installed.difference(known):
         try:
-            lm.uninstall(pkg)
+            lm.uninstall(pkg, skip_dependencies=True)
         except:
             pass
 
