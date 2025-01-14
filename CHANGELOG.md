@@ -3,7 +3,11 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.19.0] ?
+## [1.20.0] (dev)
+
+- ...
+
+## [1.19.0] Snapshot build 2025-01-14
 
 ### Added
 - Validate scheduler spec on boot, in WebUI and in terminal (`SCHEDULE CHECK ...`) [#2626](https://github.com/xoseperez/espurna/issues/2626)
