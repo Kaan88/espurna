@@ -3,9 +3,33 @@
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## Pending changes
+## [1.19.0] ?
 
-???
+### Added
+- Validate scheduler spec on boot, in WebUI and in terminal (`SCHEDULE CHECK ...`) [#2626](https://github.com/xoseperez/espurna/issues/2626)
+- DYP A02YYU ultrasonic sensor [#2622](https://github.com/xoseperez/espurna/issues/2622), thanks to **[@toniSg](https://github.com/toniSg)**
+- MQTT settings setter topic `<root>/settings/+/set`, where `+` represents settings key [#2617](https://github.com/xoseperez/espurna/issues/2617)
+- MQTT custom topics for JSON and status [#2616](https://github.com/xoseperez/espurna/issues/2616)
+- Allow to change QoS & Retain of the MQTT status topic [#2616](https://github.com/xoseperez/espurna/issues/2616)
+- MQTT & HTTP settings reload [8c35bf6f](https://github.com/xoseperez/espurna/commit/8c35bf6fc5b2ff32e18f17f0d683aed2a3b7ef92)
+
+### Changed
+- Update to FauxmoESP 3.4.1 [#2632](https://github.com/xoseperez/espurna/issues/2632)
+- MQTT configuration errors cancel active connection [6e14dee5](https://github.com/xoseperez/espurna/commit/6e14dee583742256d442ec87b84a4f80d268d8c2)
+- Only the last GPIO lock / unlock event is logged to save RAM [7337d7f1](https://github.com/xoseperez/espurna/commit/7337d7f158ab5a50bd01734062380d5aedf27324)
+
+### Fixed
+- 1-Wire checks for presence pulse and improved logging [#2633](https://github.com/xoseperez/espurna/issues/2633), [21ee2d56](https://github.com/xoseperez/espurna/commit/21ee2d560d28c3478c3557eaf9a309e91eb6f055)
+- 1-Wire driver terminal commands crashes [0927423d](https://github.com/xoseperez/espurna/commit/0927423d28f99c1bab3352632f39bf825d728fc8)
+- RPN rules for RFBRIDGE not matching any received codes [bd2e52af](https://github.com/xoseperez/espurna/commit/bd2e52af877f1ebb1400d71e15919d7341f2eb79)
+- Scheduler AFTER never triggering with SUNRISE or SUNSET events [#2629](https://github.com/xoseperez/espurna/issues/2629)
+- WebUI scheduler entries incorrectly displayed as 'Disabled' [#2628](https://github.com/xoseperez/espurna/issues/2628)
+- Incorrect value average in analog sensors [#2625](https://github.com/xoseperez/espurna/issues/2625)
+- Optional retain flag for MQTT status topic (last will and testament / LWT) [#2616](https://github.com/xoseperez/espurna/issues/2616)
+- MQTT mDNS discovery crashing the device [7ef81d0c](https://github.com/xoseperez/espurna/commit/7ef81d0c96420d267d5d6f724e0a790c8ce2588d), [412fc588](https://github.com/xoseperez/espurna/commit/412fc58867bc013052943441ec2e1e415ed374ce)
+- Early TELNET output timeout [c4f0d010](https://github.com/xoseperez/espurna/commit/c4f0d0101ef5e1a54dc9a00562369f991ef0f182)
+
+### Changed
 
 ## [1.18.0] Snapshot build 2024-08-30
 
