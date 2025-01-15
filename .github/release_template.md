@@ -4,7 +4,7 @@ When updating from 1.14.1 make sure **there is enough available space on the dev
 
 Make sure to **only** perform OTA upgrade with a properly powered device. Attempting to flash and / or use a normally AC powered device (like a Sonoff) instead powered through 3v3 **may** result in unexpected issues with the firmware.
 
-# Snapshot build $$DATE$$
+# Snapshot build
 
 **How to upgrade "over-the-air" aka OTA**: https://github.com/xoseperez/espurna/wiki/OTA
 **Latest changes**: https://github.com/xoseperez/espurna/compare/$$LAST_TAG$$...$$BUILD_TAG$$

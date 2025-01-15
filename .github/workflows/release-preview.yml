@@ -1,4 +1,4 @@
-name: Release (test)
+name: Preview release template
 
 on:
   workflow_dispatch:
@@ -7,10 +7,10 @@ jobs:
   variables:
     runs-on: ubuntu-latest
     outputs:
+      build_date: ${{ steps.result.outputs.build_date }}
       build_tag: ${{ steps.result.outputs.build_tag }}
-      date: ${{ steps.result.outputs.date }}
-      dev: ${{ steps.result.outputs.dev }}
-      last_tag: ${{ steps.result.outputs.last }}
+      last_rev: ${{ steps.result.outputs.last_rev }}
+      last_tag: ${{ steps.result.outputs.last_tag }}
 
     steps:
       - name: Prepare version variables
@@ -18,7 +18,7 @@ jobs:
         shell: bash
         run: |
           remote_last_tag() {
-            git ls-remote --tags --sort='version:refname' https://github.com/xoseperez/espurna 'github*' |\
+            git ls-remote --tags --sort='version:refname' https://github.com/xoseperez/espurna.git 'github*' |\
               cut -d'/' -f3 |\
               grep -o -E '^github[0-9]{6}$' |\
               sort -r |\
@@ -30,16 +30,16 @@ jobs:
           }
 
           date=$(date +'%y%m%d')
-          echo "date=${date}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${date}" >> "$GITHUB_OUTPUT"
+
+          tag="github${date}"
+          echo "build_tag=${tag}" >> "$GITHUB_OUTPUT"
 
           dev=$(remote_revision dev)
-          echo "dev=${dev}" >> "$GITHUB_OUTPUT"
+          echo "last_rev=${dev}" >> "$GITHUB_OUTPUT"
 
           last=$(remote_last_tag)
           echo "last_tag=${last}" >> "$GITHUB_OUTPUT"
-
-          build="github${date}"
-          echo "build_tag=${build}" >> "$GITHUB_OUTPUT"
 
   release:
     needs: variables
@@ -55,9 +55,13 @@ jobs:
 
       - name: Render release template
         run: |
+           echo "build_date=" ${{ needs.variables.outputs.build_date }}
+           echo "build_tag=" ${{ needs.variables.outputs.build_tag }}
+           echo "last_rev=" ${{ needs.variables.outputs.last_rev }}
+           echo "last_tag=" ${{ needs.variables.outputs.last_tag }}
+
            sed \
              -i \
-             -e 's/\$\$DATE\$\$/'${{ needs.variables.outputs.date }}'/g' \
              -e 's/\$\$BUILD_TAG\$\$/'${{ needs.variables.outputs.build_tag }}'/g' \
              -e 's/\$\$LAST_TAG\$\$/'${{ needs.variables.outputs.last_tag }}'/g' \
              release_template.md

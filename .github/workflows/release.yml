@@ -11,10 +11,10 @@ jobs:
   variables:
     runs-on: ubuntu-latest
     outputs:
+      build_date: ${{ steps.result.outputs.build_date }}
       build_tag: ${{ steps.result.outputs.build_tag }}
-      date: ${{ steps.result.outputs.date }}
-      dev: ${{ steps.result.outputs.dev }}
-      last_tag: ${{ steps.result.outputs.last }}
+      last_rev: ${{ steps.result.outputs.last_rev }}
+      last_tag: ${{ steps.result.outputs.last_tag }}
 
     steps:
       - name: Prepare version variables
@@ -34,16 +34,16 @@ jobs:
           }
 
           date=$(date +'%y%m%d')
-          echo "date=${date}" >> "$GITHUB_OUTPUT"
+          echo "build_date=${date}" >> "$GITHUB_OUTPUT"
+
+          tag="github${date}"
+          echo "build_tag=${tag}" >> "$GITHUB_OUTPUT"
 
           dev=$(remote_revision dev)
-          echo "dev=${dev}" >> "$GITHUB_OUTPUT"
+          echo "last_rev=${dev}" >> "$GITHUB_OUTPUT"
 
           last=$(remote_last_tag)
           echo "last_tag=${last}" >> "$GITHUB_OUTPUT"
-
-          build="github${date}"
-          echo "build_tag=${build}" >> "$GITHUB_OUTPUT"
 
   build:
     needs: variables
@@ -162,7 +162,7 @@ jobs:
       - uses: ncipollo/release-action@v1
         with:
           tag: ${{ needs.variables.outputs.build_tag }}
-          commit: ${{ needs.variables.outputs.dev }}
+          commit: ${{ needs.variables.outputs.last_rev }}
           name: Snapshot build (${{ needs.variables.outputs.build_tag }})
           bodyFile: "release_template.md"
           artifacts: "Debug.zip,build/*.bin"
