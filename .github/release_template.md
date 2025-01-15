@@ -9,3 +9,8 @@ Make sure to **only** perform OTA upgrade with a properly powered device. Attemp
 **How to upgrade "over-the-air" aka OTA**: https://github.com/xoseperez/espurna/wiki/OTA
 **Latest changes**: https://github.com/xoseperez/espurna/compare/$last_tag...$tag
 **CHANGELOG.md**: https://github.com/xoseperez/espurna/blob/$tag/CHANGELOG.md
+
+# Build from source
+
+**PlatformIO**: https://github.com/xoseperez/espurna/wiki/PlatformIO
+**Arduino IDE**: https://github.com/xoseperez/espurna/wiki/ArduinoIDE
