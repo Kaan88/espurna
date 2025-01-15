@@ -1,0 +1,68 @@
+name: Release (test)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  variables:
+    runs-on: ubuntu-latest
+    outputs:
+      build_tag: ${{ steps.result.outputs.build_tag }}
+      date: ${{ steps.result.outputs.date }}
+      dev: ${{ steps.result.outputs.dev }}
+      last_tag: ${{ steps.result.outputs.last }}
+
+    steps:
+      - name: Prepare version variables
+        id: result
+        shell: bash
+        run: |
+          remote_last_tag() {
+            git ls-remote --tags --sort='version:refname' https://github.com/xoseperez/espurna 'github*' |\
+              cut -d'/' -f3 |\
+              grep -o -E '^github[0-9]{6}$' |\
+              sort -r |\
+              head -1
+          }
+
+          remote_revision() {
+            git ls-remote --exit-code --heads https://github.com/xoseperez/espurna.git refs/heads/$1 | cut -d$'\t' -f1
+          }
+
+          date=$(date +'%y%m%d')
+          echo "date=${date}" >> "$GITHUB_OUTPUT"
+
+          dev=$(remote_revision dev)
+          echo "dev=${dev}" >> "$GITHUB_OUTPUT"
+
+          last=$(remote_last_tag)
+          echo "last_tag=${last}" >> "$GITHUB_OUTPUT"
+
+          build="github${date}"
+          echo "build_tag=${build}" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: variables
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch release template
+        run: |
+           curl \
+             -H "Authentication: ${{ secrets.GITUB_TOKEN }}" \
+             -H "Accept: application/vnd.github.VERSION.raw" \
+             -o release_template.md \
+             https://api.github.com/repos/xoseperez/espurna/contents/.github/release_template.md
+
+      - name: Render release template
+        run: |
+           sed \
+             -i \
+             -e 's/\$\$DATE\$\$/'${{ needs.variables.outputs.date }}'/g' \
+             -e 's/\$\$BUILD_TAG\$\$/'${{ needs.variables.outputs.build_tag }}'/g' \
+             -e 's/\$\$LAST_TAG\$\$/'${{ needs.variables.outputs.last_tag }}'/g' \
+             release_template.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release_template.md
+          path: release_template.md
