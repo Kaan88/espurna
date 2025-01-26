@@ -18,33 +18,33 @@ namespace terminal {
 namespace parser {
 
 String error(Error value) {
-    String out;
+    StringView out;
 
     switch (value) {
     case Error::Ok:
-        out = PSTR("Ok");
+        out = STRING_VIEW("Ok");
         break;
     case Error::Uninitialized:
-        out = PSTR("Uninitialized");
+        out = STRING_VIEW("Uninitialized");
         break;
     case Error::Busy:
-        out = PSTR("Busy");
+        out = STRING_VIEW("Busy");
         break;
     case Error::UnterminatedQuote:
-        out = PSTR("UnterminatedQuote");
+        out = STRING_VIEW("UnterminatedQuote");
         break;
     case Error::InvalidEscape:
-        out = PSTR("InvalidEscape");
+        out = STRING_VIEW("InvalidEscape");
         break;
     case Error::UnexpectedLineEnd:
-        out = PSTR("UnexpectedLineEnd");
+        out = STRING_VIEW("UnexpectedLineEnd");
         break;
     case Error::NoSpaceAfterQuote:
-        out = PSTR("NoSpaceAfterQuote");
+        out = STRING_VIEW("NoSpaceAfterQuote");
         break;
     }
 
-    return out;
+    return out.toString();
 }
 
 namespace {
