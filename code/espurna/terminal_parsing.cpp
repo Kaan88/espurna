@@ -556,7 +556,6 @@ void DelimiterBuffer::append(Stream& stream, size_t length) {
     auto capacity = _capacity - _size;
 
     while (length > capacity) {
-        printf("%zu vs. %zu\n", length, capacity);
         const auto chunk = std::min(_capacity - _size, length);
 
 #if defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
