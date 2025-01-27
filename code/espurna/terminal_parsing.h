@@ -19,29 +19,21 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 
 namespace espurna {
 namespace terminal {
-
-using Argv = std::vector<String>;
-
 namespace parser {
 
 enum class Error {
-    Ok,
     Uninitialized,     // parser never started / no text
     Busy,              // parser was already parsing something
-    UnterminatedQuote, // parsing stopped without terminating a quoted entry
-    NoSpaceAfterQuote, // parsing stopped since there was no space after quote
     InvalidEscape,     // escaped text was invalid
-    UnexpectedLineEnd, // unexpected \r encounteted in the input
+    NoSpaceAfterQuote, // parsing stopped since there was no space after quote
+    UnexpectedLineEnd, // unexpected \r encountered in the input
+    UnterminatedQuote, // parsing stopped without terminating a quoted entry
+    Ok,                // success
 };
 
 String error(Error);
 
 } // namespace parser
-
-struct CommandLine {
-    Argv argv;
-    parser::Error error;
-};
 
 // Type wrapper that flushes output on finding '\n'.
 // Inherit from `String` to allow us to manage internal buffer directly.
@@ -110,11 +102,21 @@ private:
     bool _lock { false };
 };
 
-// Generic command line parser
-// - `argv` array contains copies or every 'split' string found in the source line
-//   (usual `argc` is expected to be equal to the `argv.size()`)
-// - `error` set to any parser errors encountered, or `Ok` when everything is fine
-CommandLine parse_line(StringView line);
+using Tokens = std::vector<StringView>;
+using Buffer = std::vector<String>;
+
+// Values of every token from the input on success (Error::Ok)
+// Remaining part of the string (when terminated early)
+// Empty vector and parsing error otherwise
+struct ParsedLine {
+    Tokens tokens;
+    Buffer buffer;
+    StringView remaining;
+    parser::Error error;
+};
+
+ParsedLine parse_line(StringView line);
+ParsedLine parse_terminated(StringView line);
 
 } // namespace terminal
 } // namespace espurna

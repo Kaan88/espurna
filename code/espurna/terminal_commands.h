@@ -22,7 +22,7 @@ namespace terminal {
 // We need to be able to pass arbitrary Args structure into the command function
 // Like Embedis implementation, we only pass things that we actually use instead of complete obj instance
 struct CommandContext {
-    Argv argv;
+    Buffer argv;
     Print& output;
     Print& error;
 };
@@ -67,10 +67,10 @@ bool find_and_call(StringView, Print& output);
 bool find_and_call(StringView, Print& output, Print& error);
 
 // try and call an already parsed command line
-bool find_and_call(CommandLine, Print& output);
+bool find_and_call(ParsedLine, Print& output);
 
 // try and call an already parsed command line
-bool find_and_call(CommandLine, Print& output, Print& error);
+bool find_and_call(ParsedLine, Print& output, Print& error);
 
 // search the given string for valid commands and call them in sequence
 bool api_find_and_call(StringView, Print& output);

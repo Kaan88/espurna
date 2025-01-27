@@ -30,6 +30,40 @@ namespace internal {
 using CommandsView = std::forward_list<Commands>;
 CommandsView commands;
 
+Buffer parsed_to_buffer(ParsedLine& parsed) {
+    Buffer out;
+    out.reserve(parsed.tokens.size());
+
+    for (auto& token : parsed.tokens) {
+        auto buffered = std::find_if(
+            parsed.buffer.begin(),
+            parsed.buffer.end(),
+            [&](const String& other) {
+                return token.data() == other.begin();
+            });
+
+        if (buffered != parsed.buffer.end()) {
+            out.push_back(std::move(*buffered));
+            parsed.buffer.erase(buffered);
+        } else {
+            out.push_back(token.toString());
+        }
+    }
+
+    parsed.tokens.clear();
+    parsed.buffer.clear();
+
+    return out;
+}
+
+String prepare_error(parser::Error error) {
+    String out;
+    out += STRING_VIEW("TERMINAL: ");
+    out += parser::error(error);
+
+    return out;
+}
+
 } // namespace internal
 } // namespace
 
@@ -104,12 +138,16 @@ void error(const espurna::terminal::CommandContext& ctx, const String& message) 
     error(ctx.error, message);
 }
 
-bool find_and_call(CommandLine cmd, Print& output, Print& error_output) {
-    const auto* command = find(cmd.argv[0]);
+bool find_and_call(ParsedLine parsed, Print& output, Print& error_output) {
+    if (!parsed.tokens.size()) {
+        return false;
+    }
+
+    const auto* command = find(parsed.tokens[0]);
     if (command) {
         (*command).func(
             CommandContext{
-                .argv = std::move(cmd.argv),
+                .argv = internal::parsed_to_buffer(parsed),
                 .output = output,
                 .error = error_output,
             });
@@ -121,21 +159,18 @@ bool find_and_call(CommandLine cmd, Print& output, Print& error_output) {
     return false;
 }
 
-bool find_and_call(CommandLine cmd, Print& output) {
-    return find_and_call(cmd, output, output);
+bool find_and_call(ParsedLine parsed, Print& output) {
+    return find_and_call(std::move(parsed), output, output);
 }
 
 bool find_and_call(StringView cmd, Print& output, Print& error_output) {
     auto result = parse_line(cmd);
     if (result.error != parser::Error::Ok) {
-        String message;
-        message += STRING_VIEW("TERMINAL: ");
-        message += parser::error(result.error);
-        error(error_output, message);
+        error(error_output, internal::prepare_error(result.error));
         return false;
     }
 
-    if (!result.argv.size()) {
+    if (!result.tokens.size()) {
         return false;
     }
 
@@ -147,23 +182,33 @@ bool find_and_call(StringView cmd, Print& output) {
 }
 
 bool api_find_and_call(StringView cmd, Print& output, Print& error_output) {
-    bool result { true };
+    bool out { false };
+    auto input = cmd;
 
-    LineView lines(cmd);
-    while (lines) {
-        const auto next = lines.next();
-        if (!next.length()) {
+    while (input.length()) {
+        auto result = parse_line(input);
+        input = result.remaining;
+
+        if (result.error != parser::Error::Ok) {
+            error(error_output, internal::prepare_error(result.error));
+            out = false;
             break;
         }
 
-        // prefer to break early when commands are missing
-        if (!find_and_call(next, output, error_output)) {
-            result = false;
+        if (!result.tokens.size()) {
+            out = false;
             break;
         }
+
+        if (!find_and_call(std::move(result), output, error_output)) {
+            out = false;
+            break;
+        }
+
+        out = true;
     }
 
-    return result;
+    return out;
 }
 
 bool api_find_and_call(StringView cmd, Print& output) {

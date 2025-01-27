@@ -51,10 +51,10 @@ void test_hex_codes() {
         const char input[] = "abc \"\\x61\\x62\\x63\"\r\n";
 
         const auto result = parse_line(input);
-        TEST_ASSERT_EQUAL(2, result.argv.size());
+        TEST_ASSERT_EQUAL(2, result.tokens.size());
         TEST_ASSERT_EQUAL_STRING("Ok", parser::error(result.error).c_str());
-        TEST_ASSERT_EQUAL_STRING("abc", result.argv[0].c_str());
-        TEST_ASSERT_EQUAL_STRING("abc", result.argv[1].c_str());
+        TEST_ASSERT_EQUAL_STRING("abc", result.tokens[0].toString().c_str());
+        TEST_ASSERT_EQUAL_STRING("abc", result.tokens[1].toString().c_str());
 
         TEST_ASSERT(find_and_call(result, DefaultOutput));
         TEST_ASSERT(abc_done);
@@ -78,8 +78,8 @@ void test_parse_overlap() {
         TEST_ASSERT(std::next(eol) != end);
         ptr = std::next(eol);
 
-        TEST_ASSERT_EQUAL(1, result.argv.size());
-        TEST_ASSERT_EQUAL_STRING("three", result.argv[0].c_str());
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL_STRING("three", result.tokens[0].toString().c_str());
     }
 
     {
@@ -89,8 +89,8 @@ void test_parse_overlap() {
         TEST_ASSERT(std::next(eol) != end);
         ptr = std::next(eol);
 
-        TEST_ASSERT_EQUAL(1, result.argv.size());
-        TEST_ASSERT_EQUAL_STRING("two", result.argv[0].c_str());
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL_STRING("two", result.tokens[0].toString().c_str());
     }
 
     {
@@ -98,25 +98,72 @@ void test_parse_overlap() {
         const auto result = parse_line(StringView(ptr, std::next(eol)));
         TEST_ASSERT_EQUAL(parser::Error::Ok, result.error);
         TEST_ASSERT(std::next(eol) == end);
-        TEST_ASSERT_EQUAL(1, result.argv.size());
-        TEST_ASSERT_EQUAL_STRING("one", result.argv[0].c_str());
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL_STRING("one", result.tokens[0].toString().c_str());
+    }
+}
+
+// Ensure non-terminated string is only parsed when asked for
+void test_parse_inject() {
+    STRING_VIEW_INLINE(Multiple, "this\r\nshould\r\nbe\r\nparsed");
+
+    StringView inputs[] {
+        "this",
+        "should",
+        "be",
+        "parsed",
+    };
+
+    auto input = Multiple;
+
+    for (size_t index = 0; index < 3; ++index) {
+        const auto result = parse_line(input);
+
+        TEST_ASSERT_EQUAL(parser::Error::Ok, result.error);
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL(0, result.buffer.size());
+
+        TEST_ASSERT(inputs[index] == result.tokens[0]);
+
+        TEST_ASSERT(result.remaining.length() > 0);
+        input = result.remaining;
+    }
+
+    {
+        const auto result = parse_line(input);
+        TEST_ASSERT_EQUAL(parser::Error::UnexpectedLineEnd, result.error);
+    }
+
+    {
+        const auto result = parse_terminated(input);
+        TEST_ASSERT_EQUAL(parser::Error::Ok, result.error);
+
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL(0, result.buffer.size());
+
+        TEST_ASSERT(inputs[3] == result.tokens[0]);
+        TEST_ASSERT(result.remaining.length() == 0);
     }
 }
 
 // recent terminal version also allows a static commands list instead of passing
 // each individual name+func one by one
 void test_commands_array() {
-    static int command_calls = 0;
+    static bool results[] {
+        false,
+        false,
+        false,
+    };
 
     static Command commands[] {
         Command{.name = "array.one", .func = [](CommandContext&&) {
-            ++command_calls;
+            results[0] = true;
         }},
         Command{.name = "array.two", .func = [](CommandContext&&) {
-            ++command_calls;
+            results[1] = true;
         }},
         Command{.name = "array.three", .func = [](CommandContext&&) {
-            ++command_calls;
+            results[2] = true;
         }},
     };
 
@@ -127,39 +174,55 @@ void test_commands_array() {
 
     const char input[] = "array.one\narray.two\narray.three\n";
     TEST_ASSERT(api_find_and_call(input, DefaultOutput));
-    TEST_ASSERT_EQUAL(3, command_calls);
+
+    TEST_ASSERT(results[0]);
+    TEST_ASSERT(results[1]);
+    TEST_ASSERT(results[2]);
 }
 
 // Ensure that we can register multiple commands (at least 3, might want to test much more in the future?)
 // Ensure that registered commands can be called and they are called in order
 void test_multiple_commands() {
     // make sure commands execute in sequence
-    static int command_calls = 0;
+    static bool results[] {
+        false,
+        false,
+        false,
+    };
 
     add("test1", [](CommandContext&& ctx) {
         TEST_ASSERT_EQUAL_STRING("test1", ctx.argv[0].c_str());
         TEST_ASSERT_EQUAL(1, ctx.argv.size());
-        TEST_ASSERT_EQUAL(0, command_calls);
-        ++command_calls;
+        TEST_ASSERT_FALSE(results[0]);
+        TEST_ASSERT_FALSE(results[1]);
+        TEST_ASSERT_FALSE(results[2]);
+        results[0] = true;
     });
 
     add("test2", [](CommandContext&& ctx) {
         TEST_ASSERT_EQUAL_STRING("test2", ctx.argv[0].c_str());
         TEST_ASSERT_EQUAL(1, ctx.argv.size());
-        TEST_ASSERT_EQUAL(1, command_calls);
-        ++command_calls;
+        TEST_ASSERT_FALSE(results[1]);
+        TEST_ASSERT_FALSE(results[2]);
+        TEST_ASSERT(results[0]);
+        results[1] = true;
     });
 
     add("test3", [](CommandContext&& ctx) {
         TEST_ASSERT_EQUAL_STRING("test3", ctx.argv[0].c_str());
         TEST_ASSERT_EQUAL(1, ctx.argv.size());
-        TEST_ASSERT_EQUAL(2, command_calls);
-        ++command_calls;
+        TEST_ASSERT(results[0]);
+        TEST_ASSERT(results[1]);
+        TEST_ASSERT_FALSE(results[2]);
+        results[2] = true;
     });
 
     const char input[] = "test1\r\ntest2\r\ntest3\r\n";
     TEST_ASSERT(api_find_and_call(input, DefaultOutput));
-    TEST_ASSERT_EQUAL(3, command_calls);
+
+    TEST_ASSERT(results[0]);
+    TEST_ASSERT(results[1]);
+    TEST_ASSERT(results[2]);
 }
 
 void test_command() {
@@ -221,21 +284,23 @@ void test_command_args() {
 void test_new_line() {
     {
         const auto result = parse_line("test.new.line\r\n");
-        TEST_ASSERT_EQUAL(1, result.argv.size());
-        TEST_ASSERT_EQUAL_STRING("test.new.line", result.argv[0].c_str());
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL_STRING("test.new.line",
+            result.tokens[0].toString().c_str());
     }
 
     {
         const auto result = parse_line("test.new.line\n");
-        TEST_ASSERT_EQUAL(1, result.argv.size());
-        TEST_ASSERT_EQUAL_STRING("test.new.line", result.argv[0].c_str());
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL_STRING("test.new.line",
+            result.tokens[0].toString().c_str());
     }
 
     {
         const auto result = parse_line("test.new.line\r");
         TEST_ASSERT_EQUAL_STRING("UnexpectedLineEnd",
             parser::error(result.error).c_str());
-        TEST_ASSERT_EQUAL(0, result.argv.size());
+        TEST_ASSERT_EQUAL(0, result.tokens.size());
     }
 }
 
@@ -245,38 +310,38 @@ void test_quotes() {
         const auto result = parse_line("test.quotes \"quote that does not\"feel right");
         TEST_ASSERT_EQUAL_STRING("NoSpaceAfterQuote",
             parser::error(result.error).c_str());
-        TEST_ASSERT_EQUAL(0, result.argv.size());
+        TEST_ASSERT_EQUAL(0, result.tokens.size());
     }
 
     {
         const auto result = parse_line("test.quotes \"quote that does not line break\"");
         TEST_ASSERT_EQUAL_STRING("NoSpaceAfterQuote",
             parser::error(result.error).c_str());
-        TEST_ASSERT_EQUAL(0, result.argv.size());
+        TEST_ASSERT_EQUAL(0, result.tokens.size());
     }
 
     {
         const auto result = parse_line("test.quotes \"quote without a pair\r\n");
         TEST_ASSERT_EQUAL_STRING("UnterminatedQuote",
             parser::error(result.error).c_str());
-        TEST_ASSERT_EQUAL(0, result.argv.size());
+        TEST_ASSERT_EQUAL(0, result.tokens.size());
     }
 
     {
         const auto result = parse_line("test.quotes 'quote without a pair\r\n");
         TEST_ASSERT_EQUAL_STRING("UnterminatedQuote",
             parser::error(result.error).c_str());
-        TEST_ASSERT_EQUAL(0, result.argv.size());
+        TEST_ASSERT_EQUAL(0, result.tokens.size());
     }
 
     {
         const auto result = parse_line("test.quotes ''\r\n");
-        TEST_ASSERT_EQUAL(2, result.argv.size());
+        TEST_ASSERT_EQUAL(2, result.tokens.size());
     }
 
     {
         const auto result = parse_line("test.quotes \"\"\r\n");
-        TEST_ASSERT_EQUAL(2, result.argv.size());
+        TEST_ASSERT_EQUAL(2, result.tokens.size());
     }
 }
 
@@ -458,6 +523,7 @@ int main(int, char**) {
     RUN_TEST(test_command);
     RUN_TEST(test_command_args);
     RUN_TEST(test_parse_overlap);
+    RUN_TEST(test_parse_inject);
     RUN_TEST(test_commands_array);
     RUN_TEST(test_multiple_commands);
     RUN_TEST(test_hex_codes);
