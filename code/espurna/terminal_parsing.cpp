@@ -310,6 +310,7 @@ loop:
             case '\r':
                 state = State::CarriageReturn;
                 break;
+            case ';':
             case '\n':
                 state = State::Done;
                 break;
@@ -339,6 +340,7 @@ text:
             case '\r':
                 state = State::CarriageReturnAfterText;
                 break;
+            case ';':
             case '\n':
                 values.push_token();
                 state = State::Done;
@@ -373,6 +375,7 @@ text:
             case '\r':
                 state = State::CarriageReturn;
                 break;
+            case ';':
             case '\n':
                 state = State::Initial;
                 break;
@@ -381,6 +384,7 @@ text:
 
         case State::EscapedText: {
             switch (*it) {
+            case ';':
             case '\r':
             case '\n':
                 result = Error::UnexpectedLineEnd;
@@ -417,8 +421,9 @@ text:
 
         case State::SingleQuote:
             switch (*it) {
-            case '\r':
+            case ';':
             case '\n':
+            case '\r':
                 result = Error::UnterminatedQuote;
                 goto out;
             case '\\':
@@ -455,6 +460,7 @@ text:
                 values.push_token();
                 state = State::Initial;
                 break;
+            case ';':
             case '\n':
                 values.push_token();
                 state = State::Done;
@@ -467,8 +473,9 @@ text:
 
         case State::DoubleQuote:
             switch (*it) {
-            case '\r':
+            case ';':
             case '\n':
+            case '\r':
                 result = Error::UnterminatedQuote;
                 goto out;
             case '"':

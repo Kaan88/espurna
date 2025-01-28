@@ -197,7 +197,11 @@ void test_commands_array() {
     TEST_ASSERT_EQUAL(before + 3, size());
 
     const char input[] = "array.one\narray.two\narray.three\n";
-    TEST_ASSERT(api_find_and_call(input, DefaultOutput));
+
+    PrintString out(64);
+    const auto result = api_find_and_call(input, out);
+    TEST_ASSERT_MESSAGE(out.isEmpty(), out.c_str());
+    TEST_ASSERT(result);
 
     TEST_ASSERT(results[0]);
     TEST_ASSERT(results[1]);
@@ -212,6 +216,7 @@ void test_multiple_commands() {
         false,
         false,
         false,
+        false,
     };
 
     add("test1", [](CommandContext&& ctx) {
@@ -220,15 +225,17 @@ void test_multiple_commands() {
         TEST_ASSERT_FALSE(results[0]);
         TEST_ASSERT_FALSE(results[1]);
         TEST_ASSERT_FALSE(results[2]);
+        TEST_ASSERT_FALSE(results[3]);
         results[0] = true;
     });
 
     add("test2", [](CommandContext&& ctx) {
         TEST_ASSERT_EQUAL_STRING("test2", ctx.argv[0].c_str());
         TEST_ASSERT_EQUAL(1, ctx.argv.size());
+        TEST_ASSERT(results[0]);
         TEST_ASSERT_FALSE(results[1]);
         TEST_ASSERT_FALSE(results[2]);
-        TEST_ASSERT(results[0]);
+        TEST_ASSERT_FALSE(results[3]);
         results[1] = true;
     });
 
@@ -238,15 +245,27 @@ void test_multiple_commands() {
         TEST_ASSERT(results[0]);
         TEST_ASSERT(results[1]);
         TEST_ASSERT_FALSE(results[2]);
+        TEST_ASSERT_FALSE(results[3]);
         results[2] = true;
     });
 
-    const char input[] = "test1\r\ntest2\r\ntest3\r\n";
+    add("test4", [](CommandContext&& ctx) {
+        TEST_ASSERT_EQUAL_STRING("test4", ctx.argv[0].c_str());
+        TEST_ASSERT_EQUAL(1, ctx.argv.size());
+        TEST_ASSERT(results[0]);
+        TEST_ASSERT(results[1]);
+        TEST_ASSERT(results[2]);
+        TEST_ASSERT_FALSE(results[3]);
+        results[3] = true;
+    });
+
+    const char input[] = "test1; test2\n test3\r\n test4";
     TEST_ASSERT(api_find_and_call(input, DefaultOutput));
 
     TEST_ASSERT(results[0]);
     TEST_ASSERT(results[1]);
     TEST_ASSERT(results[2]);
+    TEST_ASSERT(results[3]);
 }
 
 void test_command() {
@@ -298,7 +317,7 @@ void test_command_args() {
     PrintString out(64);
     const char empty[] = "test.command.arg1_empty \"\"";
     const auto result = find_and_call(empty, out);
-    TEST_ASSERT_EQUAL(0, out.length());
+    TEST_ASSERT_EQUAL_MESSAGE(0, out.length(), out.c_str());
     TEST_ASSERT(result);
     TEST_ASSERT(!waiting);
 
@@ -515,7 +534,7 @@ void test_error_output() {
     });
 
     TEST_ASSERT(find_and_call("test.error1", out, err));
-    TEST_ASSERT_EQUAL(0, out.length());
+    TEST_ASSERT_EQUAL_MESSAGE(0, out.length(), out.c_str());
     TEST_ASSERT_EQUAL_STRING("foo", err.c_str());
 
     out.clear();
@@ -526,15 +545,15 @@ void test_error_output() {
     });
 
     TEST_ASSERT(find_and_call("test.error2", out, err));
-    TEST_ASSERT_EQUAL(0, err.length());
     TEST_ASSERT_EQUAL_STRING("bar", out.c_str());
+    TEST_ASSERT_EQUAL_MESSAGE(0, err.length(), err.c_str());
 
     out.clear();
     err.clear();
 
     TEST_ASSERT(!find_and_call("test.error3", out, err));
-    TEST_ASSERT_EQUAL(0, out.length());
-    TEST_ASSERT(err.length() > 0);
+    TEST_ASSERT_EQUAL_MESSAGE(0, out.length(), out.c_str());
+    TEST_ASSERT_NOT_EQUAL_MESSAGE(0, err.length(), err.c_str());
 }
 
 } // namespace
