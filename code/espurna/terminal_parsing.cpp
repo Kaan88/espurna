@@ -494,14 +494,26 @@ text:
     }
 
 out:
-    if (inject_newline && it == line.end()) {
-        inject_newline = false;
-        it = Lf.begin();
-        end = Lf.end();
-        goto loop;
+    switch (state) {
+    case State::CarriageReturn:
+    case State::CarriageReturnAfterText:
+    case State::Text:
+    case State::Initial:
+    case State::SkipUntilNewLine:
+    case State::AfterQuote:
+        if (inject_newline) {
+            inject_newline = false;
+            it = Lf.begin();
+            end = Lf.end();
+            goto loop;
+        }
+        break;
+
+    default:
+        break;
     }
 
-    if (it != end) {
+    if ((it >= line.begin()) && (it <= line.end())) {
         result = StringView(it, end);
     }
 
