@@ -853,10 +853,6 @@ namespace terminal {
 namespace internal {
 
 void inject(String command) {
-    if (!command.endsWith("\r\n") && !command.endsWith("\n")) {
-        command.concat('\n');
-    }
-
     static EphemeralPrint output;
     PrintString error(64);
 

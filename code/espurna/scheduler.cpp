@@ -1685,10 +1685,6 @@ using terminal_stub::parse_action;
 #else
 
 void parse_action(String action) {
-    if (!action.endsWith("\r\n") && !action.endsWith("\n")) {
-        action.concat('\n');
-    }
-
     static EphemeralPrint output;
     PrintString error(64);
 

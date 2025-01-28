@@ -186,7 +186,7 @@ bool api_find_and_call(StringView cmd, Print& output, Print& error_output) {
     auto input = cmd;
 
     while (input.length()) {
-        auto result = parse_line(input);
+        auto result = parse_terminated(input);
         input = result.remaining;
 
         if (result.error != parser::Error::Ok) {

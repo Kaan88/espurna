@@ -519,18 +519,14 @@ void setup() {
                 return;
             }
 
-            auto line = payload.toString();
-            if (!payload.endsWith("\r\n") && !payload.endsWith("\n")) {
-                line += '\n';
-            }
-
             // TODO: unlike http handler, we have only one output stream
             //       and **must** have a fixed-size output buffer
             //       (wishlist: MQTT client does some magic and we don't buffer twice)
             // TODO: or, at least, make it growable on-demand and cap at MSS?
             // TODO: PrintLine<...> instead of one giant blob?
 
-            auto ptr = std::make_shared<String>(std::move(line));
+            auto ptr = std::make_shared<String>(payload.toString());
+
             espurnaRegisterOnce([ptr]() {
                 PrintString out(TCP_MSS);
                 api_find_and_call(*ptr, out);
@@ -721,11 +717,6 @@ void setup() {
                 return false;
             }
 
-            auto cmd = std::make_shared<String>(line.toString());
-            if (!line.endsWith("\r\n") && !line.endsWith("\n")) {
-                (*cmd) += '\n';
-            }
-
             api.handle([cmd](AsyncWebServerRequest* request) {
                 espurna::web::print::scheduleFromRequest(
                     request,
@@ -766,12 +757,7 @@ void setup() {
             return true;
         }
 
-        if (!line.endsWith("\r\n") && !line.endsWith("\n")) {
-            line += '\n';
-        }
-
         auto cmd = std::make_shared<String>(std::move(line));
-
         espurna::web::print::scheduleFromRequest(
             request,
             [cmd](Print& out) {
