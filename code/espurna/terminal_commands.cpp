@@ -164,7 +164,7 @@ bool find_and_call(ParsedLine parsed, Print& output) {
 }
 
 bool find_and_call(StringView cmd, Print& output, Print& error_output) {
-    auto result = parse_line(cmd);
+    auto result = parse_terminated(cmd);
     if (result.error != parser::Error::Ok) {
         error(error_output, internal::prepare_error(result.error));
         return false;

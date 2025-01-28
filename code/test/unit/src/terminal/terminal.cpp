@@ -105,7 +105,7 @@ void test_parse_overlap() {
 
 // Ensure non-terminated string is only parsed when asked for
 void test_parse_inject() {
-    STRING_VIEW_INLINE(Multiple, "this\r\nshould\r\nbe\r\nparsed");
+    STRING_VIEW_INLINE(Multiple, "this\r\nshould\nbe\r\nparsed");
 
     StringView inputs[] {
         "this",
@@ -116,10 +116,12 @@ void test_parse_inject() {
 
     auto input = Multiple;
 
+    // first three tokens are successfully parsed
     for (size_t index = 0; index < 3; ++index) {
         const auto result = parse_line(input);
 
         TEST_ASSERT_EQUAL(parser::Error::Ok, result.error);
+        TEST_ASSERT_GREATER_THAN(0, result.remaining.length());
         TEST_ASSERT_EQUAL(1, result.tokens.size());
         TEST_ASSERT_EQUAL(0, result.buffer.size());
 
@@ -129,20 +131,42 @@ void test_parse_inject() {
         input = result.remaining;
     }
 
+    // last one is missing line ending
     {
         const auto result = parse_line(input);
         TEST_ASSERT_EQUAL(parser::Error::UnexpectedLineEnd, result.error);
     }
 
+    // but should be parsed when implicitly terminated
     {
         const auto result = parse_terminated(input);
         TEST_ASSERT_EQUAL(parser::Error::Ok, result.error);
 
         TEST_ASSERT_EQUAL(1, result.tokens.size());
         TEST_ASSERT_EQUAL(0, result.buffer.size());
+        TEST_ASSERT_EQUAL(0, result.remaining.length());
 
         TEST_ASSERT(inputs[3] == result.tokens[0]);
         TEST_ASSERT(result.remaining.length() == 0);
+    }
+
+    // incomplete newlines are not normally parsed
+    {
+        const auto result = parse_line("incomplete\r");
+        TEST_ASSERT_EQUAL(parser::Error::UnexpectedLineEnd, result.error);
+    }
+
+    // but should be when implicitly terminated
+    {
+        const auto result = parse_terminated("incomplete\r");
+        TEST_ASSERT_EQUAL(parser::Error::Ok, result.error);
+
+        TEST_ASSERT_EQUAL(1, result.tokens.size());
+        TEST_ASSERT_EQUAL(0, result.buffer.size());
+        TEST_ASSERT_EQUAL(0, result.remaining.length());
+
+        TEST_ASSERT_EQUAL_STRING("incomplete",
+            result.tokens[0].toString().c_str());
     }
 }
 
@@ -234,12 +258,12 @@ void test_command() {
         ++counter;
     });
 
-    const char crlf[] = "test.command\r\n";
-    TEST_ASSERT(find_and_call(crlf, DefaultOutput));
+    const char command[] = "test.command";
+    TEST_ASSERT(find_and_call(command, DefaultOutput));
     TEST_ASSERT_EQUAL_MESSAGE(1, counter,
         "`test.command` cannot be called more than one time");
 
-    TEST_ASSERT(find_and_call(crlf, DefaultOutput));
+    TEST_ASSERT(find_and_call(command, DefaultOutput));
     TEST_ASSERT_EQUAL_MESSAGE(2, counter,
         "`test.command` cannot be called more than two times");
 
@@ -247,6 +271,11 @@ void test_command() {
     TEST_ASSERT(find_and_call(lf, DefaultOutput));
     TEST_ASSERT_EQUAL_MESSAGE(3, counter,
         "`test.command` cannot be called more than three times");
+
+    const char crlf[] = "test.command\r\n";
+    TEST_ASSERT(find_and_call(crlf, DefaultOutput));
+    TEST_ASSERT_EQUAL_MESSAGE(4, counter,
+        "`test.command` cannot be called more than four times");
 }
 
 // Ensure that we can properly handle arguments
@@ -267,7 +296,7 @@ void test_command_args() {
     waiting = true;
 
     PrintString out(64);
-    const char empty[] = "test.command.arg1_empty \"\"\r\n";
+    const char empty[] = "test.command.arg1_empty \"\"";
     const auto result = find_and_call(empty, out);
     TEST_ASSERT_EQUAL(0, out.length());
     TEST_ASSERT(result);
@@ -275,7 +304,7 @@ void test_command_args() {
 
     waiting = true;
 
-    const char one_arg[] = "test.command.arg1 test\r\n";
+    const char one_arg[] = "test.command.arg1 test";
     TEST_ASSERT(find_and_call(one_arg, DefaultOutput));
     TEST_ASSERT(!waiting);
 }
@@ -356,7 +385,7 @@ void test_case_insensitive() {
         __asm__ volatile ("nop");
     });
 
-    const char input[] = "TeSt.lOwErCaSe1\r\n";
+    const char input[] = "TeSt.lOwErCaSe1";
     TEST_ASSERT(find_and_call(input, DefaultOutput));
 }
 
@@ -368,7 +397,7 @@ void test_output() {
         }
     });
 
-    const char input[] = "test.output test1234567890\r\n";
+    const char input[] = "test.output test1234567890";
 
     PrintString output(64);
     TEST_ASSERT(find_and_call(input, output));
@@ -379,19 +408,19 @@ void test_output() {
 
 // un-buffered view returning multiple times until strings are exhausted
 void test_line_view() {
-    const char input[] = "one\r\ntwo\r\nthree\r\n";
+    const char input[] = "one\r\ntwo\nthree\r\n";
     LineView view(input);
 
     const auto one = view.next();
-    TEST_ASSERT_EQUAL_STRING("one\r\n",
+    TEST_ASSERT_EQUAL_STRING("one",
         one.toString().c_str());
 
     const auto two = view.next();
-    TEST_ASSERT_EQUAL_STRING("two\r\n",
+    TEST_ASSERT_EQUAL_STRING("two",
         two.toString().c_str());
 
     const auto three = view.next();
-    TEST_ASSERT_EQUAL_STRING("three\r\n",
+    TEST_ASSERT_EQUAL_STRING("three",
         three.toString().c_str());
 
     TEST_ASSERT_EQUAL(0, view.next().length());
@@ -412,8 +441,12 @@ void test_line_buffer() {
     TEST_ASSERT_EQUAL(0, buffer.next().value.length());
 
     buffer.append("\r\n");
-    TEST_ASSERT_EQUAL(__builtin_strlen(input) + 2,
-        buffer.next().value.length());
+
+    const auto next = buffer.next();
+    TEST_ASSERT_EQUAL(0, buffer.size());
+    TEST_ASSERT_EQUAL(__builtin_strlen(input), next.value.length());
+    TEST_ASSERT_EQUAL_CHAR_ARRAY(
+        &input[0], next.value.data(), __builtin_strlen(input));
 }
 
 // Ensure that when buffer overflows, we set 'overflow' flags
@@ -423,7 +456,7 @@ void test_line_buffer_overflow() {
     static_assert(Buffer::capacity() == 16, "");
 
     Buffer buffer;
-    TEST_ASSERT(buffer.size() == 0);
+    TEST_ASSERT_EQUAL(0, buffer.size());
     TEST_ASSERT(!buffer.overflow());
 
     // verify our expansion works, buffer needs to overflow
@@ -437,13 +470,12 @@ void test_line_buffer_overflow() {
     const auto result = buffer.next();
     TEST_ASSERT(result.overflow);
 
-    TEST_ASSERT(buffer.size() == 0);
+    TEST_ASSERT_EQUAL(0, buffer.size());
     TEST_ASSERT(!buffer.overflow());
 
     // TODO: can't compare string_view directly, not null terminated
     const auto line = result.value.toString();
-    TEST_ASSERT_EQUAL_STRING("d\n", line.c_str());
-    TEST_ASSERT(line.length() > 0);
+    TEST_ASSERT_EQUAL_STRING("d", line.c_str());
 }
 
 // When input has multiple 'new-line' characters, generated result only has one line at a time
@@ -465,17 +497,13 @@ void test_line_buffer_multiple() {
     // (in theory, could also add refcount... right now seems like an overkill)
 
     const auto first = buffer.next();
-    TEST_ASSERT(buffer.size() > 0);
-    TEST_ASSERT_EQUAL(First.length(),
-            first.value.length());
-    TEST_ASSERT(First == first.value);
+    TEST_ASSERT_GREATER_THAN(0, buffer.size());
+    TEST_ASSERT(First.slice(0, First.length() - 1) == first.value);
 
     // second entry resets everything
     const auto second = buffer.next();
     TEST_ASSERT_EQUAL(0, buffer.size());
-    TEST_ASSERT_EQUAL(Second.length(),
-            second.value.length());
-    TEST_ASSERT(Second == second.value);
+    TEST_ASSERT(Second.slice(0, Second.length() - 1) == second.value);
 }
 
 void test_error_output() {
@@ -486,7 +514,7 @@ void test_error_output() {
         ctx.error.print("foo");
     });
 
-    TEST_ASSERT(find_and_call("test.error1\n", out, err));
+    TEST_ASSERT(find_and_call("test.error1", out, err));
     TEST_ASSERT_EQUAL(0, out.length());
     TEST_ASSERT_EQUAL_STRING("foo", err.c_str());
 
@@ -497,14 +525,14 @@ void test_error_output() {
         ctx.output.print("bar");
     });
 
-    TEST_ASSERT(find_and_call("test.error2\n", out, err));
+    TEST_ASSERT(find_and_call("test.error2", out, err));
     TEST_ASSERT_EQUAL(0, err.length());
     TEST_ASSERT_EQUAL_STRING("bar", out.c_str());
 
     out.clear();
     err.clear();
 
-    TEST_ASSERT(!find_and_call("test.error3\n", out, err));
+    TEST_ASSERT(!find_and_call("test.error3", out, err));
     TEST_ASSERT_EQUAL(0, out.length());
     TEST_ASSERT(err.length() > 0);
 }

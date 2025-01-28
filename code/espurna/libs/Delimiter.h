@@ -19,11 +19,8 @@ struct DelimiterBuffer {
 
     DelimiterBuffer() = delete;
 
-    explicit DelimiterBuffer(char* storage, size_t capacity, char delim) :
-        _storage(storage),
-        _capacity(capacity),
-        _delimiter(delim)
-    {}
+    explicit DelimiterBuffer(char* storage, size_t capacity);
+    explicit DelimiterBuffer(char* storage, size_t capacity, StringView delimiter);
 
     Result next();
 
@@ -64,74 +61,69 @@ struct DelimiterBuffer {
         append(&value, 1);
     }
 
+    StringView get() const {
+        return StringView{&_storage[_cursor], &_storage[_size]};
+    }
+
 private:
     char* _storage;
     size_t _capacity { 0 };
     size_t _size { 0 };
     size_t _cursor { 0 };
 
-    char _delimiter;
+    StringView _delimiter;
 
     bool _overflow { false };
 };
 
+namespace line_buffer_impl {
+
 template <size_t Capacity>
-struct LineBuffer {
-    using Result = DelimiterBuffer::Result;
-
-    LineBuffer() :
-        LineBuffer('\n')
-    {}
-
-    explicit LineBuffer(char delimiter) :
-        _buffer(_storage.data(), _storage.size(), delimiter)
-    {}
-
-    Result next() {
-        return _buffer.next();
+struct Storage {
+    char* data() {
+        return _storage.data();
     }
 
-    void reset() {
-        _buffer.reset();
+    size_t size() const {
+        return _storage.size();
     }
 
     static constexpr size_t capacity() {
         return Capacity;
     }
 
-    size_t size() const {
-        return _buffer.size();
-    }
+private:
+    std::array<char, Capacity> _storage{};
+};
 
-    bool overflow() const {
-        return _buffer.overflow();
-    }
+struct Base : public DelimiterBuffer {
+    using Result = DelimiterBuffer::Result;
 
-    void append(const char* data, size_t length) {
-        _buffer.append(data, length);
-    }
+    Base(char*, size_t);
+    Result next();
+};
 
-    void append(StringView value) {
-        _buffer.append(value);
-    }
+} // namespace line_buffer_impl
 
-    void append(Stream& stream, size_t length) {
-        _buffer.append(stream, length);
-    }
+// Helper storage class to contain a fixed-size buffer on top of a delimited buffer.
+// ::next() handles both '\n' and '\r\n' as line delimiters
+template <size_t Capacity>
+struct LineBuffer : public line_buffer_impl::Storage<Capacity>, public line_buffer_impl::Base {
+    LineBuffer() :
+        line_buffer_impl::Storage<Capacity>(),
+        line_buffer_impl::Base(data(), capacity())
+    {}
 
-    void append(Stream& stream) {
-        _buffer.append(stream);
-    }
+    using line_buffer_impl::Storage<Capacity>::capacity;
 
-    void append(char value) {
-        _buffer.append(value);
-    }
+    using line_buffer_impl::Base::append;
+    using line_buffer_impl::Base::get;
+    using line_buffer_impl::Base::next;
+    using line_buffer_impl::Base::overflow;
+    using line_buffer_impl::Base::size;
 
 private:
-    using Storage = std::array<char, Capacity>;
-    Storage _storage{};
-
-    DelimiterBuffer _buffer;
+    using line_buffer_impl::Storage<Capacity>::data;
 };
 
 // Similar to delimited buffer, but instead work on an already existing string
@@ -139,7 +131,7 @@ private:
 struct DelimiterView {
     DelimiterView() = delete;
 
-    explicit DelimiterView(StringView view, char delimiter) :
+    explicit DelimiterView(StringView view, StringView delimiter) :
         _view(view),
         _delimiter(delimiter)
     {}
@@ -168,15 +160,15 @@ struct DelimiterView {
 
 private:
     StringView _view;
-    char _delimiter;
+    StringView _delimiter;
 
     size_t _cursor { 0 };
 };
 
+// Same as a buffered variant, ::next() handles both '\n' and '\r\n' as line delimiters
 struct LineView : public DelimiterView {
-    explicit LineView(StringView view) :
-        DelimiterView(view, '\n')
-    {}
+    explicit LineView(StringView);
+    StringView next();
 };
 
 } // namespace espurna

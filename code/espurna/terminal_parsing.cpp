@@ -120,9 +120,12 @@ char unescape_char(char c) {
 
 // Intermediate storage for parsed tokens and (optionally) buffered values from escaped characters
 struct Values {
+    // contiguous view to the original input
+    // passed as sv to 'tokens' when data can be used as-is
     const char* span_begin { nullptr };
     size_t span_len { 0 };
 
+    // temporary for 'buffer' when escaped data appears and part of the string is copied here
     String token;
     char byte_lhs { 0 };
 
@@ -254,6 +257,7 @@ private:
     Buffer _buffer;
 };
 
+constexpr auto Lf = StringView("\n");
 
 struct Parser {
     Parser() = default;
@@ -283,8 +287,6 @@ private:
 Result Parser::operator()(StringView line, bool inject_newline) {
     Result result;
     Values values;
-
-    STRING_VIEW_INLINE(Return, "\n");
 
     auto it = line.begin();
     auto end = line.end();
@@ -487,8 +489,8 @@ text:
 out:
     if (inject_newline && it == line.end()) {
         inject_newline = false;
-        it = Return.begin();
-        end = Return.end();
+        it = Lf.begin();
+        end = Lf.end();
         goto loop;
     }
 
@@ -539,7 +541,6 @@ ParsedLine parse_line(StringView line, bool inject_newline) {
 }
 
 } // namespace
-
 } // namespace parser
 
 ParsedLine parse_line(StringView value) {
@@ -552,20 +553,112 @@ ParsedLine parse_terminated(StringView value) {
 
 } // namespace terminal
 
+namespace {
+
+// rough implementation for an arbitrary string<->string 'first match' of rhs within lhs
+const char* find_first(StringView lhs, StringView rhs) {
+    auto begin = lhs.begin();
+    auto end = lhs.end();
+
+    auto rhs_begin = rhs.begin();
+    auto rhs_end = rhs.end();
+
+    for (;;) {
+        auto it = begin;
+
+        for (auto rhs_it = rhs_begin;; ++it, ++rhs_it) {
+            if (rhs_it == rhs_end) {
+                return begin;
+            }
+
+            if (it == end) {
+                return end;
+            }
+
+            if (*rhs_it != *it) {
+                break;
+            }
+        }
+
+        ++begin;
+    }
+
+    return end;
+}
+
+} // namespace
+
+StringView without_trailing(StringView value, char c) {
+    if (value.length()) {
+        const auto last = value.length() - 1;
+        if (value[last] == c) {
+            return value.slice(0, last);
+        }
+    }
+
+    return value;
+}
+
+LineView::LineView(StringView value) :
+    DelimiterView(value, terminal::parser::Lf)
+{}
+
+StringView LineView::next() {
+    return without_trailing(DelimiterView::next(), '\r');
+}
+
+namespace line_buffer_impl {
+
+Base::Result Base::next() {
+    auto next = DelimiterBuffer::next();
+    return Result{
+        .value = without_trailing(next.value, '\r'),
+        .overflow = next.overflow,
+    };
+}
+
+Base::Base(char *data, size_t size) :
+    DelimiterBuffer(data, size, terminal::parser::Lf)
+{}
+
+} // namespace line_buffer_impl
+
+DelimiterBuffer::DelimiterBuffer(char* storage, size_t capacity, StringView delimiter) :
+    _storage(storage),
+    _capacity(capacity),
+    _delimiter(delimiter)
+{}
+
+DelimiterBuffer::DelimiterBuffer(char* storage, size_t capacity) :
+    DelimiterBuffer(storage, capacity, terminal::parser::Lf)
+{}
+
 DelimiterBuffer::Result DelimiterBuffer::next() {
-    const auto begin = &_storage[_cursor];
-    const auto end = &_storage[_size];
+    const auto current = get();
 
-    if (begin != end) {
-        const auto eol = std::find(begin, end, _delimiter);
-        if (eol != end) {
-            const auto after = std::next(eol);
+    if (current.length()) {
+        if (!_delimiter.length()) {
+            auto overflow = _overflow;
+            reset();
+
+            return Result{
+                .value = current,
+                .overflow = overflow,
+            };
+        }
+
+        auto first = find_first(current, _delimiter);
+        if (first != current.end()) {
+            const auto value = StringView{current.begin(), first};
             const auto out = Result{
-                .value = StringView{begin, after},
-                .overflow = _overflow };
+                .value = value,
+                .overflow = _overflow
+            };
 
-            if (after != end) {
-                _cursor = std::distance(&_storage[0], after);
+            const auto after = value.length() + _delimiter.length();
+            const auto cursor = _cursor + after;
+            if (cursor != _size) {
+                _cursor = cursor;
             } else {
                 reset();
             }
@@ -576,7 +669,8 @@ DelimiterBuffer::Result DelimiterBuffer::next() {
 
     return Result{
         .value = StringView(),
-        .overflow = _overflow };
+        .overflow = _overflow
+    };
 }
 
 void DelimiterBuffer::append(const char* data, size_t length) {
@@ -629,20 +723,22 @@ void DelimiterBuffer::append(Stream& stream, size_t length) {
 }
 
 StringView DelimiterView::next() {
-    const auto Begin = begin();
-    const auto End = end();
+    const auto current = get();
 
-    if (Begin != End) {
-        const auto eol = std::find(Begin, End, _delimiter);
-        if (eol != End) {
-            const auto after = std::next(eol);
-            if (after != End) {
-                _cursor = std::distance(_view.begin(), after);
-            } else {
-                _cursor = _view.length();
-            }
+    if (current.length()) {
+        if (!_delimiter.length()) {
+            _cursor = _view.length();
+            return current;
+        }
 
-            return StringView{Begin, after};
+        const auto first = find_first(current, _delimiter);
+        if (first != current.end()) {
+            const auto value = StringView{current.begin(), first};
+
+            _cursor += value.length();
+            _cursor += _delimiter.length();
+
+            return value;
         }
     }
 
