@@ -478,7 +478,7 @@ void processing_loop() {
             break;
         }
 
-        find_and_call(result.value, port);
+        api_find_and_call(result.value, port);
     }
 }
 

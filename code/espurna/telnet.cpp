@@ -531,7 +531,7 @@ public:
             _cmds.pop_front();
 
             ExhaustingPrint<Client> print(this);
-            if (!espurna::terminal::find_and_call(cmd, print)) {
+            if (!espurna::terminal::api_find_and_call(cmd, print)) {
                 _cmds.clear();
                 break;
             }
