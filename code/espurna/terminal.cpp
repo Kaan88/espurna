@@ -717,6 +717,8 @@ void setup() {
                 return false;
             }
 
+            auto cmd = std::make_shared<String>(line.toString());
+
             api.handle([cmd](AsyncWebServerRequest* request) {
                 espurna::web::print::scheduleFromRequest(
                     request,
