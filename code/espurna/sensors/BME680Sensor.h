@@ -380,7 +380,7 @@ class BME680Sensor : public I2CSensor<> {
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude BME680Sensor::Magnitudes[];
 #endif
 

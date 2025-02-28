@@ -8,7 +8,7 @@ Copyright (C) 2017-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #pragma once
 
-#include "settings.h"
+#include "types.h"
 #include "libs/BasePin.h"
 
 #include <cstddef>
@@ -29,6 +29,14 @@ struct Origin {
     bool result;
     SourceLocation location;
 };
+
+inline bool operator==(Origin lhs, Origin rhs) {
+    return lhs.base == rhs.base
+        && lhs.pin == rhs.pin
+        && lhs.lock == rhs.lock
+        && lhs.result == rhs.result
+        && lhs.location == rhs.location;
+}
 
 struct Mode {
     int8_t value;

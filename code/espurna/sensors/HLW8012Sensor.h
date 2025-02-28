@@ -383,7 +383,7 @@ class HLW8012Sensor : public BaseEmonSensor {
         HLW8012 _hlw8012{};
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseEmonSensor::Magnitude HLW8012Sensor::Magnitudes[];
 #endif
 

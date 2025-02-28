@@ -42,6 +42,12 @@ enum class Error {
     NotFound,
 };
 
+enum class ResetResult {
+    Unknown,
+    Busy, // no devices on the bus / bus is shortened
+    Presence, // PRESENCE pulse was sent
+};
+
 class Port {
 public:
     using Address = std::array<uint8_t, 8>;
@@ -63,7 +69,8 @@ public:
     Error attach(unsigned char pin, bool parasite);
     void detach();
 
-    bool reset();
+    ResetResult reset() const;
+    bool presence() const;
 
     void write(Address address, Span<const uint8_t>);
     void write(Address, const uint8_t*, size_t);
@@ -127,6 +134,8 @@ void dereference(PortPtr);
 void reference(PortPtr);
 
 StringView error(Error);
+StringView reset_result(ResetResult);
+
 void setup();
 
 } // namesapce onewire

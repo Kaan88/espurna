@@ -26,14 +26,85 @@ Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 namespace espurna {
 namespace driver {
 namespace onewire {
-namespace internal {
+
+StringView error(Error error) {
+    StringView out;
+
+    switch (error) {
+    case Error::Ok:
+        out = STRING_VIEW("OK");
+        break;
+
+    case Error::NotFound:
+        out = STRING_VIEW("Not found");
+        break;
+
+    case Error::Unresponsive:
+        out = STRING_VIEW("Device does not respond");
+        break;
+
+    case Error::GpioUsed:
+        out = STRING_VIEW("GPIO Already Used");
+        break;
+
+    case Error::Config:
+        out = STRING_VIEW("Invalid Configuration");
+        break;
+
+    }
+
+    return out;
+}
+
+StringView reset_result(ResetResult result) {
+    StringView out;
+
+    switch (result) {
+    case ResetResult::Unknown:
+        out = STRING_VIEW("Unknown");
+        break;
+
+    case ResetResult::Busy:
+        out = STRING_VIEW("Busy");
+        break;
+
+    case ResetResult::Presence:
+        out = STRING_VIEW("Presence");
+        break;
+    }
+
+    return out;
+}
+
 namespace {
+
+namespace internal {
 
 bool debug { false };
 std::vector<PortPtr> references;
 
-bool reset(OneWire* wire) {
-    return wire->reset() != 0;
+ResetResult reset(OneWire* wire) {
+    auto out = ResetResult::Unknown;
+
+    switch (wire->reset()) {
+    case 0:
+        out = ResetResult::Busy;
+        break;
+
+    case 1:
+        out = ResetResult::Presence;
+        break;
+    }
+
+#if DEBUG_SUPPORT
+    if (debug) {
+        const auto ret = reset_result(out);
+        DEBUG_MSG_P(PSTR("[W1] Reset (%.*s)\n"),
+            ret.length(), ret.data());
+    }
+#endif
+
+    return out;
 }
 
 void skip(OneWire* wire) {
@@ -66,59 +137,54 @@ void read_bytes(OneWire* wire, Span<uint8_t> data) {
     }
 }
 
-} // namespace
 } // namespace internal
-
-Port::Port() = default;
-
-Port::~Port() {
-    detach();
-}
-
-void dereference(PortPtr port) {
-    internal::references.erase(
-        std::remove(
-            internal::references.begin(), internal::references.end(), port));
-}
-
-void reference(PortPtr port) {
-    const auto it = std::find(
-        internal::references.begin(), internal::references.end(), port);
-    if (it != internal::references.end()) {
-        return;
-    }
-
-    internal::references.push_back(port);
-}
 
 #if DEBUG_SUPPORT
 namespace debug {
-namespace {
 
 void setup() {
     STRING_VIEW_INLINE(Debug, "w1Debug");
     internal::debug = getSetting(Debug, false);
 }
 
-} // namespace
-} // namespace
+} // namespace debug
 #endif
 
 #if TERMINAL_SUPPORT
 namespace terminal {
-namespace {
+
+void port_impl(::terminal::CommandContext& ctx, size_t index, const Port& port) {
+    ctx.output.printf_P(
+        PSTR("w1/%zu\t{Pin=%hhu Parasite=#%c Devices=%zu}\n"),
+            index,
+            port.pin(),
+            port.parasite() ? 'y' : 'n',
+            port.devices().size());
+}
+
+void devices_impl(::terminal::CommandContext& ctx, const Port& port) {
+    size_t index = 0;
+    for (auto& device : port) {
+        ctx.output.printf_P(PSTR("device%zu\t{Address=%s}\n"),
+            index++, hexEncode(device.address).c_str());
+    }
+}
+
+STRING_VIEW_INLINE(ErrNoPorts, "No ports found");
+STRING_VIEW_INLINE(ErrInvalid, "Invalid port ID");
 
 STRING_VIEW_INLINE(List, "W1");
 
 void list(::terminal::CommandContext&& ctx) {
     size_t index = 0;
-    for (auto& reference : internal::references) {
-        ctx.output.printf_P(
-            PSTR("w1/%zu\t{Pin=%hhu Parasite=#%c Devices=%zu}\n"),
-                index++,
-                reference->pin(),
-                reference->parasite() ? 'y' : 'n',
-                reference->devices());
+    for (auto& port : internal::references) {
+        port_impl(ctx, index++, *port);
+    }
+
+    if (index > 0) {
+        terminalOK(ctx);
+    } else {
+        terminalError(ctx, ErrNoPorts);
     }
 }
 
@@ -126,24 +192,28 @@ STRING_VIEW_INLINE(Devices, "W1.DEVICES");
 
 void devices(::terminal::CommandContext&& ctx) {
     size_t id = 0;
-    if ((internal::references.size() > 1) && ctx.argv.size() != 2) {
-        terminalError(ctx, F("W1.DEVICES [<ID>]"));
+    if (internal::references.size() > 1) {
+        if (!tryParseId(ctx.argv[1], internal::references.size(), id)) {
+            terminalError(ctx, ErrInvalid);
+            return;
+        }
+
+        devices_impl(ctx, *internal::references[id]);
+        terminalOK(ctx);
+
         return;
     }
 
-    if (internal::references.size() > 1) {
-        if (!tryParseId(ctx.argv[1], internal::references.size(), id)) {
-            terminalError(ctx, F("Invalid port ID"));
-            return;
-        }
+    size_t index = 0;
+    for (const auto& port : internal::references) {
+        port_impl(ctx, index++, *port);
+        devices_impl(ctx, *port);
     }
 
-    auto reference = internal::references[id];
-
-    size_t index = 0;
-    for (auto& device : *reference) {
-        ctx.output.printf_P(PSTR("device%zu\t{Address=%s}\n"),
-            index++, hexEncode(device.address).c_str());
+    if (index > 0) {
+        terminalOK(ctx);
+    } else {
+        terminalError(ctx, ErrNoPorts);
     }
 }
 
@@ -156,9 +226,10 @@ void setup() {
     espurna::terminal::add(Commands);
 }
 
-} // namespace
 } // namespace terminal
 #endif
+
+} // namespace
 
 uint16_t crc16(Span<const uint8_t> data) {
     return OneWire::crc16(data.data(), data.size());
@@ -185,6 +256,28 @@ bool check_crc8(Span<const uint8_t> data) {
     return data.back() == crc8(span);
 }
 
+void dereference(PortPtr port) {
+    internal::references.erase(
+        std::remove(
+            internal::references.begin(), internal::references.end(), port));
+}
+
+void reference(PortPtr port) {
+    const auto it = std::find(
+        internal::references.begin(), internal::references.end(), port);
+    if (it != internal::references.end()) {
+        return;
+    }
+
+    internal::references.push_back(port);
+}
+
+Port::Port() = default;
+
+Port::~Port() {
+    detach();
+}
+
 Error Port::attach(unsigned char pin, bool parasite) {
     if (pin == GPIO_NONE) {
         return Error::Config;
@@ -197,6 +290,11 @@ Error Port::attach(unsigned char pin, bool parasite) {
     auto wire = std::make_unique<OneWire>(pin);
 
     auto devices = search(*wire, pin);
+    if (internal::debug) {
+        DEBUG_MSG_P(PSTR("[W1] Found %zu device(s) on GPIO%zu\n"),
+            devices.size(), pin);
+    }
+
     if (!devices.size()) {
         gpioUnlock(pin);
         return Error::NotFound;
@@ -266,12 +364,23 @@ Port::Devices Port::search(OneWire& wire, unsigned char pin) {
     return out;
 }
 
-bool Port::reset() {
-    return _wire->reset() == 0;
+ResetResult Port::reset() const {
+    return internal::reset(_wire.get());
+}
+
+bool Port::presence() const {
+    return reset() == ResetResult::Presence;
 }
 
 void Port::write(Address address, Span<const uint8_t> data) {
-    internal::reset(_wire.get());
+    if (!presence()) {
+        if (internal::debug) {
+            DEBUG_MSG_P(PSTR("[W1] Write to %s failed\n"),
+                hexEncode(address).c_str());
+        }
+        return;
+    }
+
     internal::select(_wire.get(), address);
     internal::write_bytes(_wire.get(), data, parasite());
 }
@@ -286,7 +395,13 @@ void Port::write(Address address, uint8_t value) {
 }
 
 void Port::write(uint8_t value) {
-    internal::reset(_wire.get());
+    if (!presence()) {
+        if (internal::debug) {
+            DEBUG_MSG_P(PSTR("[W1] Write failed\n"));
+        }
+        return;
+    }
+
     internal::skip(_wire.get());
 
     const std::array<uint8_t, 1> data{{ value }};
@@ -294,50 +409,24 @@ void Port::write(uint8_t value) {
 }
 
 bool Port::request(Address address, Span<const uint8_t> input, Span<uint8_t> output) {
-    //if (!//
-    //    return false;
-    //}
-    internal::reset(_wire.get());
+    if (!presence()) {
+        if (internal::debug) {
+            DEBUG_MSG_P(PSTR("[W1] Request to %s failed\n"),
+                hexEncode(address).c_str());
+        }
+        return false;
+    }
 
     internal::select(_wire.get(), address);
     internal::write_bytes(_wire.get(), input);
     internal::read_bytes(_wire.get(), output);
 
-    return internal::reset(_wire.get());
+    return presence();
 }
 
 bool Port::request(Address address, uint8_t value, Span<uint8_t> output) {
     const std::array<uint8_t, 1> input{ value };
     return request(address, make_span(input), output);
-}
-
-StringView error(Error error) {
-    StringView out;
-
-    switch (error) {
-    case Error::Ok:
-        out = STRING_VIEW("OK");
-        break;
-
-    case Error::NotFound:
-        out = STRING_VIEW("Not found");
-        break;
-
-    case Error::Unresponsive:
-        out = STRING_VIEW("Device does not respond");
-        break;
-
-    case Error::GpioUsed:
-        out = STRING_VIEW("GPIO Already Used");
-        break;
-
-    case Error::Config:
-        out = STRING_VIEW("Invalid Configuration");
-        break;
-
-    }
-
-    return out;
 }
 
 void setup() {

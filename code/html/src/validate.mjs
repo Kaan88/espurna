@@ -9,6 +9,8 @@ const DIFFERENT_PASSWORD = "Passwords are different!";
 const EMPTY_PASSWORD = "Password cannot be empty!";
 const INVALID_PASSWORD = "Invalid password!";
 
+const CUSTOM_VALIDITY = "customValidity";
+
 /**
  * @param {string} value
  * @returns {boolean}
@@ -36,7 +38,6 @@ export function validatePassword(value) {
  * @typedef {[HTMLInputElement, HTMLInputElement]} PasswordInputPair
  */
 
-
 /**
  * @param {import('./settings.mjs').InputOrSelect} elem
  * @param {function(HTMLElement): void} callback
@@ -52,12 +53,28 @@ function findPanel(elem, callback) {
 
 /**
  * @param {import('./settings.mjs').InputOrSelect} elem
+ * @param {string} message
  */
-function reportValidityForInputOrSelect(elem) {
+export function reportValidityForInputOrSelect(elem, message = "") {
     findPanel(elem, (panel) => {
         showPanel(panel);
+
+        if (message.length !== 0) {
+            elem.setCustomValidity(message);
+            elem.dataset[CUSTOM_VALIDITY] = message;
+        }
+
+        elem.focus();
         elem.reportValidity();
     });
+}
+
+/**
+ * @param {import('./settings.mjs').InputOrSelect} elem
+ */
+export function resetCustomValidity(elem) {
+    delete elem.dataset[CUSTOM_VALIDITY];
+    elem.setCustomValidity("");
 }
 
 /**

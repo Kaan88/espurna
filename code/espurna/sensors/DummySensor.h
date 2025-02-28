@@ -140,7 +140,7 @@ private:
     double _delta { 0.0 };
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude Sensor::Magnitudes[];
 #endif
 

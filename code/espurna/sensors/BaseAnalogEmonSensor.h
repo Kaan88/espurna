@@ -227,7 +227,7 @@ private:
     size_t _adc_counts { static_cast<size_t>(1) << _resolution };       // Max count
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude BaseAnalogEmonSensor::Magnitudes[];
 #endif
 

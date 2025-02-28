@@ -209,11 +209,6 @@ class PMSX003Sensor : public BaseSensor, PMSX003 {
             return out;
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char index) const override {
-            return String(PMS_PORT, 10);
-        }
-
         // Type for slot # index
         unsigned char type(unsigned char index) const override {
             return Specs[_type].slot_types[index];
@@ -329,7 +324,7 @@ class PMSX003Sensor : public BaseSensor, PMSX003 {
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr PMSX003Sensor::Spec PMSX003Sensor::Specs[];
 #endif
 

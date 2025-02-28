@@ -16,6 +16,7 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 
 #include <ArduinoOTA.h>
 
+namespace espurna {
 namespace ota {
 namespace arduino {
 namespace {
@@ -79,30 +80,42 @@ void progress(unsigned int progress, unsigned int total) {
 
 void error(ota_error_t error) {
 #if DEBUG_SUPPORT
-    const __FlashStringHelper* ptr { F("Unknown") };
+    StringView reason = STRING_VIEW("Unknown");
 
     switch (error) {
     case OTA_AUTH_ERROR:
-        ptr = F("Authentication");
+        reason = STRING_VIEW("Authentication");
         break;
     case OTA_BEGIN_ERROR:
-        ptr = F("Begin");
+        reason = STRING_VIEW("Begin");
         break;
     case OTA_CONNECT_ERROR:
-        ptr = F("Connection");
+        reason = STRING_VIEW("Connection");
         break;
     case OTA_RECEIVE_ERROR:
-        ptr = F("Receive");
+        reason = STRING_VIEW("Receive");
         break;
     case OTA_END_ERROR:
-        ptr = F("End");
+        reason = STRING_VIEW("End");
         break;
+#if !defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
+&& !defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
+&& !defined(ARDUINO_ESP8266_RELEASE_2_7_4) \
+&& !defined(ARDUINO_ESP8266_RELEASE_3_0_0) \
+&& !defined(ARDUINO_ESP8266_RELEASE_3_0_1) \
+&& !defined(ARDUINO_ESP8266_RELEASE_3_0_2) \
+&& !defined(ARDUINO_ESP8266_RELEASE_3_1_0) \
+&& !defined(ARDUINO_ESP8266_RELEASE_3_1_1) \
+&& !defined(ARDUINO_ESP8266_RELEASE_3_1_2)
+    case OTA_ERASE_SETTINGS_ERROR:
+        reason = STRING_VIEW("Settings erase");
+        break;
+#endif
     }
 
-    DEBUG_MSG_P(PSTR("[OTA] \"%s\" (%u, updater code %u)\n"),
-            reinterpret_cast<const char*>(ptr),
-            static_cast<unsigned int>(error),
-            Update.getError());
+    DEBUG_MSG_P(PSTR("[OTA] OTA Stopped: %.*s\n"),
+        reason.length(), reason.data());
+    otaPrintError();
 #endif
 
     eepromRotate(true);
@@ -123,9 +136,10 @@ void setup() {
 } // namespace
 } // namespace arduino
 } // namespace ota
+} // namespace espurna
 
 void otaArduinoSetup() {
-    ota::arduino::setup();
+    espurna::ota::arduino::setup();
 }
 
 #endif // OTA_ARDUINOOTA_SUPPORT

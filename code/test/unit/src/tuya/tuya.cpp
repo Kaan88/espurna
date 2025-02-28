@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <queue>
 
+#include <espurna/libs/StreamEcho.h>
 #include <espurna/libs/TypeChecks.h>
 #include <espurna/tuya_types.h>
 #include <espurna/tuya_util.h>
@@ -192,46 +193,9 @@ void test_dataframe_raw_data() {
 
 }
 
-class BufferedStream : public Stream {
-    public:
-        // Print interface
-        size_t write(uint8_t c) {
-            _buffer.push((int)c);
-            return 1;
-        }
-        size_t write(const unsigned char* data, unsigned long size) {
-            for (size_t n = 0; n < size; ++n) {
-                _buffer.push(data[n]);
-            }
-            return size;
-        }
-        int availableForWrite() { return 1; }
-        void flush() {
-            while (!_buffer.empty()) {
-                _buffer.pop();
-            }
-        }
-        // Stream interface
-        int available() {
-            return _buffer.size();
-        }
-        int read() {
-            if (!_buffer.size()) return -1;
-            int c = _buffer.front();
-            _buffer.pop();
-            return c;
-        }
-        int peek() {
-            if (!_buffer.size()) return -1;
-            return _buffer.front();
-        }
-    private:
-        std::queue<int> _buffer;
-};
-
 void test_transport() {
     container data = {0x55, 0xaa, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01};
-    BufferedStream stream;
+    StreamEcho stream;
     stream.write(data.data(), data.size());
 
     Transport transport(stream);
@@ -246,7 +210,7 @@ void test_transport() {
 void test_dataframe_report() {
     container input = {0x55, 0xaa, 0x00, 0x07, 0x00, 0x08, 0x02, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x10, 0x26};
 
-    BufferedStream stream;
+    StreamEcho stream;
     stream.write(input.data(), input.size());
 
     Transport transport(stream);
@@ -268,7 +232,7 @@ void test_dataframe_report() {
 }
 
 void test_dataframe_echo() {
-    BufferedStream stream;
+    StreamEcho stream;
     Transport transport(stream);
 
     {

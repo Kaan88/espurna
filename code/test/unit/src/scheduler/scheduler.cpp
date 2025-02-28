@@ -1449,6 +1449,81 @@ void test_sun() {
         result.sunset.time_since_epoch().count());
 }
 
+void test_sun_event() {
+    sun::EventMatch match;
+
+    TEST_ASSERT(match.last == event::DefaultTimePoint);
+    TEST_ASSERT(match.next == event::DefaultTimePoint);
+
+    auto last = event::DefaultTimePoint;
+    auto next = datetime::Clock::time_point{ datetime::Seconds(ReferenceTimestamp) };
+
+#define TEST_DATE(X) \
+    TEST_ASSERT_EQUAL(2006, (X).year);\
+    TEST_ASSERT_EQUAL(1, (X).month);\
+    TEST_ASSERT_EQUAL(2, (X).day)
+
+#define TEST_TIME(X, MINUTE) \
+    TEST_ASSERT_EQUAL(1 << 22, (X).hour.to_ullong());\
+    TEST_ASSERT_EQUAL(1 << (MINUTE), (X).minute.to_ullong());\
+    TEST_ASSERT(((X).flags & scheduler::FlagUtc) > 0)
+
+    // Initial input updates .next exactly once and .last stays 'Default'
+
+    for (int times = 0; times < 2; ++times) {
+        sun::update_event_match(match, next);
+
+        TEST_DATE(match.date);
+        TEST_TIME(match.time, 4);
+
+        TEST_ASSERT(last == event::DefaultTimePoint);
+
+        TEST_ASSERT(match.last == event::DefaultTimePoint);
+        TEST_ASSERT(match.next == next);
+    }
+
+    // Different timestamp swaps .next and .last and replaces .next with the input
+    // TODO input & .next are compared for equality, order does not matter
+
+    last = next;
+    next += datetime::Minutes(1);
+
+    sun::update_event_match(match, next);
+
+    TEST_DATE(match.date);
+    TEST_TIME(match.time, 5);
+
+    TEST_ASSERT(match.last == last);
+    TEST_ASSERT(match.next == next);
+
+    // 'Default' input updates .last and resets .next exactly once
+
+    for (int times = 0; times < 2; ++times) {
+        sun::update_event_match(match, event::DefaultTimePoint);
+
+        TEST_DATE(match.date);
+        TEST_TIME(match.time, 5);
+
+        TEST_ASSERT(match.last == next);
+        TEST_ASSERT(match.next == event::DefaultTimePoint);
+    }
+
+    last = next;
+    next += datetime::Minutes(1);
+
+    // Updating from .next = 'Default' preserves existing last
+
+    for (int times = 0; times < 2; ++times) {
+        sun::update_event_match(match, next);
+
+        TEST_DATE(match.date);
+        TEST_TIME(match.time, 6);
+
+        TEST_ASSERT(match.last == last);
+        TEST_ASSERT(match.next == next);
+    }
+}
+
 void test_datetime_parsing() {
     datetime::DateHhMmSs parsed{};
     bool utc { false };
@@ -1543,6 +1618,7 @@ int main(int, char**) {
     RUN_TEST(test_schedule_parsing_weekdays_range);
     RUN_TEST(test_search_bits);
     RUN_TEST(test_sun);
+    RUN_TEST(test_sun_event);
     RUN_TEST(test_time_impl);
     RUN_TEST(test_time_invalid_parsing);
     RUN_TEST(test_time_parsing);

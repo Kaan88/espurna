@@ -16,6 +16,9 @@
 #include "BaseSensor.h"
 #include "BaseEmonSensor.h"
 
+#include "../system_time.h"
+#include "../libs/fs_math.h"
+
 class CSE7766Sensor : public BaseEmonSensor {
 
     public:
@@ -111,11 +114,6 @@ class CSE7766Sensor : public BaseEmonSensor {
             return F("CSE7766");
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char) const override {
-            return String(CSE7766_PORT, 10);
-        }
-
         // Loop-like method, call it in your main loop
         void tick() override {
             _read();
@@ -192,7 +190,7 @@ class CSE7766Sensor : public BaseEmonSensor {
             }
 
             if ((_data[0] & 0xFC) > 0xF0) {
-                _error = SENSOR_ERROR_OTHER;
+                _error = SENSOR_ERROR_VALUE;
 #if SENSOR_DEBUG
                 if (0xF1 == (_data[0] & 0xF1)) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Abnormal coefficient storage area\n"));
                 if (0xF2 == (_data[0] & 0xF2)) DEBUG_MSG_P(PSTR("[SENSOR] CSE7766: Power cycle exceeded range\n"));
@@ -263,10 +261,10 @@ class CSE7766Sensor : public BaseEmonSensor {
                 difference = cf_pulses - cf_pulses_last;
             }
 
-            _energy[0] += espurna::sensor::WattSeconds {
-                .value = static_cast<uint32_t>(difference * (float) _coefP / 1000000.0) };
-            cf_pulses_last = cf_pulses;
+            const uint32_t value = static_cast<uint32_t>(difference * (float) _coefP / 1000000.0);
+            _energy[0] += espurna::sensor::WattSeconds(value);
 
+            cf_pulses_last = cf_pulses;
         }
 
         void _read() {
@@ -285,9 +283,12 @@ class CSE7766Sensor : public BaseEmonSensor {
 
                 uint8_t byte = _serial->read();
 
-                // first byte must be 0x55 or 0xF?
+                // first byte is one one of
+                // - 0xAA - NOT calibrated
+                // - 0x55 - calibrated
+                // - 0xF? - abnormal state
                 if (0 == _data_index) {
-                    if ((0x55 != byte) && (byte < 0xF0)) {
+                    if ((0xAA != byte) && (0x55 != byte) && (byte < 0xF0)) {
                         continue;
                     }
 
@@ -333,7 +334,7 @@ class CSE7766Sensor : public BaseEmonSensor {
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude CSE7766Sensor::Magnitudes[];
 #endif
 

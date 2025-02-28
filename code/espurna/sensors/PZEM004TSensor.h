@@ -586,7 +586,7 @@ private:
     Reading _reading;
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseEmonSensor::Magnitude PZEM004TSensor::Magnitudes[];
 #endif
 

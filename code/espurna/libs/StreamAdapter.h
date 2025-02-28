@@ -7,12 +7,11 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 
 */
 
+#pragma once
+
 #include <Arduino.h>
-#include <core_version.h>
 
 #include <memory>
-
-#pragma once
 
 template <typename T>
 struct StreamAdapter final : public Stream {
@@ -42,11 +41,7 @@ struct StreamAdapter final : public Stream {
     }
 
     void flush() override {
-// 2.3.0  - Stream::flush()
-// latest - Print::flush()
-#if not defined(ARDUINO_ESP8266_RELEASE_2_3_0)
         _writer.flush();
-#endif
     }
 
     size_t write(const uint8_t* buffer, size_t size) override {

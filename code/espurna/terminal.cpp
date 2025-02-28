@@ -30,6 +30,7 @@ Copyright (C) 2020-2022 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include "wifi.h"
 
 #include "libs/PrintString.h"
+#include "libs/Delimiter.h"
 
 #include <algorithm>
 #include <utility>
@@ -454,27 +455,12 @@ void processing_loop() {
     static LineBuffer buffer;
 
     auto& port = *internal::stream;
-
-#if defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
-    || defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
-    || defined(ARDUINO_ESP8266_RELEASE_2_7_4)
-    // 'Stream::readBytes()' includes a deadline, so any
-    // call without using the actual value will result
-    // in a 1second wait (by default)
-    std::array<char, build::serialBufferSize()> tmp;
     const auto available = port.available();
-    port.readBytes(tmp.data(), available);
-    buffer.append(tmp.data(), available);
-#else
-    // Recent Core versions allow to access RX buffer directly
-    const auto available = port.peekAvailable();
     if (available <= 0) {
         return;
     }
 
-    buffer.append(port.peekBuffer(), available);
-    port.peekConsume(available);
-#endif
+    buffer.append(port, available);
 
     if (buffer.overflow()) {
         terminal::error(port, F("Serial buffer overflow"));
@@ -482,17 +468,17 @@ void processing_loop() {
     }
 
     for (;;) {
-        const auto result = buffer.line();
+        const auto result = buffer.next();
         if (result.overflow) {
             terminal::error(port, F("Command line buffer overflow"));
             continue;
         }
 
-        if (!result.line.length()) {
+        if (!result.value.length()) {
             break;
         }
 
-        find_and_call(result.line, port);
+        api_find_and_call(result.value, port);
     }
 }
 
@@ -533,18 +519,14 @@ void setup() {
                 return;
             }
 
-            auto line = payload.toString();
-            if (!payload.endsWith("\r\n") && !payload.endsWith("\n")) {
-                line += '\n';
-            }
-
             // TODO: unlike http handler, we have only one output stream
             //       and **must** have a fixed-size output buffer
             //       (wishlist: MQTT client does some magic and we don't buffer twice)
             // TODO: or, at least, make it growable on-demand and cap at MSS?
             // TODO: PrintLine<...> instead of one giant blob?
 
-            auto ptr = std::make_shared<String>(std::move(line));
+            auto ptr = std::make_shared<String>(payload.toString());
+
             espurnaRegisterOnce([ptr]() {
                 PrintString out(TCP_MSS);
                 api_find_and_call(*ptr, out);
@@ -736,9 +718,6 @@ void setup() {
             }
 
             auto cmd = std::make_shared<String>(line.toString());
-            if (!line.endsWith("\r\n") && !line.endsWith("\n")) {
-                (*cmd) += '\n';
-            }
 
             api.handle([cmd](AsyncWebServerRequest* request) {
                 espurna::web::print::scheduleFromRequest(
@@ -780,12 +759,7 @@ void setup() {
             return true;
         }
 
-        if (!line.endsWith("\r\n") && !line.endsWith("\n")) {
-            line += '\n';
-        }
-
         auto cmd = std::make_shared<String>(std::move(line));
-
         espurna::web::print::scheduleFromRequest(
             request,
             [cmd](Print& out) {

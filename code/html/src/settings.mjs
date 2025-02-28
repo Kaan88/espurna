@@ -1,6 +1,7 @@
 import { notifyError } from './errors.mjs';
 import {
     count,
+    capitalize,
     pageReloadIn,
     showPanelByName,
 } from './core.mjs';
@@ -11,7 +12,7 @@ import {
     listenAppConnected,
 } from './connection.mjs';
 
-import { validateForms } from './validate.mjs';
+import { validateForms, resetCustomValidity } from './validate.mjs';
 
 /**
  * @param {HTMLElement} elem
@@ -797,9 +798,7 @@ function prepareSpanValue(span, value) {
     value = value.toString();
 
     if (value) {
-        const capitalized =
-            `${value.at(0).toUpperCase()}${value.slice(1)}`;
-        value = span.dataset[`value${capitalized}`] ?? value;
+        value = span.dataset[`value${capitalize(value)}`] ?? value;
     }
 
     const out = [
@@ -903,6 +902,10 @@ function findInputOrSelect(node) {
 export function setOriginalsFromValuesForNode(node) {
     setOriginalsFromValues(findInputOrSelect(node));
 }
+
+/**
+ * @typedef {[number, string]} EnumerableTuple
+ */
 
 /**
  * automatically generate <select> options for know entities
@@ -1090,9 +1093,17 @@ export function getEnumerables(name) {
 
 /**
  * @param {string} name
- * @param {EnumerableEntry[]} enumerables
+ * @param {EnumerableEntry[] | EnumerableTuple[]} enumerables
  */
 export function addEnumerables(name, enumerables) {
+    enumerables = enumerables.map((x) => {
+        if (Array.isArray(x)) {
+            return {id: x[0], name: x[1]};
+        }
+
+        return x;
+    });
+
     Enumerable[name] = enumerables;
     notifyEnumerables(name, enumerables);
 }
@@ -1295,6 +1306,8 @@ export function onElementChange(event) {
     if ("none" === action) {
         return;
     }
+
+    resetCustomValidity(target);
 
     if (!checkAndSetElementChanged(target)) {
         return;

@@ -93,12 +93,13 @@ class NTCSensor : public AnalogSensor {
             return espurna::sensor::Unit::None;
         }
 
+        // Pre-read hook (usually to populate registers with up-to-date data)
         void pre() override {
             // Previous version happened to use AnalogSensor readings with factor and offset applied
             // In case it was useful, this should also support the scaling in calculations for T
-            // Actual ADC voltage is 0.0...1.0, convert back from 12bit scale
+            // Actual ADC voltage is 0.0...1.0, convert back from pre-scaled reading
             // Depending on where NTC is connected, get current resistance
-            const double voltage = static_cast<double>(_rawRead()) / AnalogSensor::RawMax;
+            const double voltage = _sampledVoltageValue();
 
             _error = SENSOR_ERROR_OK;
             if (_input_voltage < voltage) {
@@ -112,30 +113,29 @@ class NTCSensor : public AnalogSensor {
                 (resistance_down && (voltage > 0.0))
                     ? ((_resistance_down * (_input_voltage - voltage)) / voltage)
                     : (resistance_down)
-                        ? std::numeric_limits<decltype(_rawRead())>::max()
+                        ? std::numeric_limits<decltype(::analogRead(A0))>::max()
                         : ((_resistance_up * voltage) / (_input_voltage - voltage));
 
             // 1/T = 1/T0 + 1/B * ln(R/R0)
-            _value = 1.0 / ((1.0 / _T0) + (fs_log(resistance / _R0) / _beta));
+            _temperature = 1.0 / ((1.0 / _T0) + (fs_log(resistance / _R0) / _beta));
         }
 
         // Current value for slot # index
         double value(unsigned char index) override {
             if (index == 0) {
-                return _value;
+                return _temperature;
             }
 
-            return 0.0;
+            return 0;
         }
 
     protected:
-        double _value = 0;
-
         unsigned long _beta = NTC_BETA;
         unsigned long _resistance_up = NTC_R_UP;
         unsigned long _resistance_down = NTC_R_DOWN;
         unsigned long _R0 = NTC_R0;
         double _T0 = NTC_T0;
         double _input_voltage = NTC_INPUT_VOLTAGE;
+        double _temperature { 0 };
 
 };

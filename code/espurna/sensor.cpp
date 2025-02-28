@@ -42,6 +42,9 @@ Copyright (C) 2020-2022 by Maxim Prokhorov <prokhorov dot max at outlook dot com
     #include "sensors/DummySensor.h"
 #endif
 
+#if A02YYU_SUPPORT
+    #include "sensors/A02YYUSensor.h"
+#endif
 #if AM2320_SUPPORT
     #include "sensors/AM2320Sensor.h"
 #endif
@@ -229,6 +232,8 @@ Copyright (C) 2020-2022 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 #include "filters/MovingAverageFilter.h"
 #include "filters/SumFilter.h"
 
+#include "sensor_emon.ipp"
+
 //--------------------------------------------------------------------------------
 
 namespace espurna {
@@ -322,103 +327,6 @@ constexpr auto DefaultValuePair =
     make_value_pair(Value::Unknown, Unit::None);
 
 } // namespace
-
-// Generic storage. Most of the time we init this on boot with both members or start at 0 and increment with watt-second
-
-Energy::Energy(Energy::Pair pair) :
-    _kwh(pair.kwh),
-    _ws(pair.ws)
-{}
-
-Energy::Energy(WattSeconds ws) {
-    _ws.value = ws.value;
-    while (_ws.value >= WattSecondsMax) {
-        _ws.value -= WattSecondsMax;
-        ++_kwh.value;
-    }
-}
-
-Energy::Energy(WattHours other) :
-    Energy(static_cast<double>(other.value) / 1000.0)
-{}
-
-Energy::Energy(double kwh) {
-    double lhs;
-    double rhs = fs_modf(kwh, &lhs);
-
-    _kwh.value = lhs;
-    _ws.value = rhs * static_cast<double>(KilowattHours::Ratio::num);
-}
-
-Energy& Energy::operator+=(WattSeconds other) {
-    return *this += Energy(other);
-}
-
-Energy Energy::operator+(WattSeconds other) {
-    Energy result(*this);
-    result += other;
-
-    return result;
-}
-
-Energy& Energy::operator+=(const Energy& other) {
-    _kwh.value += other._kwh.value;
-
-    const auto left = WattSecondsMax - _ws.value;
-    if (other._ws.value >= left) {
-        _kwh.value += 1;
-        _ws.value += (other._ws.value - left);
-    } else {
-        _ws.value += other._ws.value;
-    }
-
-    return *this;
-}
-
-Energy::operator bool() const {
-    return (_kwh.value > 0) && (_ws.value > 0);
-}
-
-WattSeconds Energy::asWattSeconds() const {
-    using Type = WattSeconds::Type;
-
-    static constexpr auto TypeMax = std::numeric_limits<Type>::max();
-    static constexpr Type KwhMax { TypeMax / WattSecondsMax };
-
-    auto kwh = _kwh.value;
-    while (kwh >= KwhMax) {
-        kwh -= KwhMax;
-    }
-
-    WattSeconds out;
-    out.value += _ws.value;
-    out.value += kwh * WattSecondsMax;
-
-    return out;
-}
-
-double Energy::asDouble() const {
-    return static_cast<double>(_kwh.value)
-        + static_cast<double>(_ws.value)
-        / static_cast<double>(WattSecondsMax);
-}
-
-String Energy::asString() const {
-    String out;
-
-    // Value without `+` is treated as just `<kWh>`
-    out += String(_kwh.value, 10);
-    if (_ws.value) {
-        out += '+';
-        out += String(_ws.value, 10);
-    }
-
-    return out;
-}
-
-void Energy::reset() {
-    *this = Energy{};
-}
 
 namespace {
 
@@ -2034,6 +1942,20 @@ size_t count() {
 // - update config/custom.h or config/sensor.h, adding `#define DHT2_PIN ...` and `#define DHT2_TYPE ...`
 
 void load() {
+#if A02YYU_SUPPORT
+    {
+        const auto port = uartPort(A02YYU_PORT - 1);
+        
+        if (!port) {
+            return;
+        }
+        
+        auto* sensor = new A02YYUSensor();
+        sensor->setPort(port->stream);        
+
+        add(sensor);
+    }
+#endif
 #if AM2320_SUPPORT
     {
         auto* sensor = new AM2320Sensor();
@@ -3749,13 +3671,16 @@ void report(const Value& report, const Magnitude& magnitude) {
 #if SENSOR_PUBLISH_ADDRESSES
     STRING_VIEW_INLINE(AddressTopic, SENSOR_ADDRESS_TOPIC);
 
-    String address_topic;
-    address_topic.reserve(1 + report.topic.length() + AddressTopic.length());
-    address_topic.concat(AddressTopic.data(), AddressTopic.length());
-    address_topic += '/';
-    address_topic += report.topic;
+    const auto address = magnitude.sensor->address(magnitude.slot);
+    if (address.length()) {
+        String address_topic;
+        address_topic.reserve(1 + report.topic.length() + AddressTopic.length());
+        address_topic.concat(AddressTopic.data(), AddressTopic.length());
+        address_topic += '/';
+        address_topic += report.topic;
 
-    mqttSend(address_topic.c_str(), magnitude.sensor->address(magnitude.slot).c_str());
+        mqttSend(address_topic.c_str(), address.c_str());
+    }
 #endif
 }
 

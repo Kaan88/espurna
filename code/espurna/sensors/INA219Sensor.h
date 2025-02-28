@@ -592,7 +592,7 @@ public:
     }
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude INA219Sensor::Magnitudes[];
 constexpr BaseSensor::Magnitude INA219Sensor::RatioSupport[];
 #endif

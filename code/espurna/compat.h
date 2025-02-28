@@ -143,6 +143,13 @@ constexpr auto cend(const T& value) -> decltype(std::end(value)) {
 }
 #endif
 
+#if __cplusplus < 202102L
+template <typename Enum, typename Type = typename std::underlying_type<Enum>::type>
+constexpr Type to_underlying(Enum value) {
+    return static_cast<Type>(value);
+}
+#endif
+
 } // namespace std
 
 // Same as min and max, force same type arguments

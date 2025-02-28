@@ -11,17 +11,14 @@
             <details>
 
             <summary>Available modes</summary>
-            <ol class="pure-u-1 pure-u-lg-3-4">
-                <li><strong>WiFi status</strong> will blink at 1Hz when attempting to connect. If successfully connected it will briefly blink every 5 seconds if in STA mode, or every second if the device is still in AP mode.</li>
-                <li><strong>Follow switch</strong> will force the LED to follow the status of a given switch (defaults to the 1st switch, use the selector to change it).</li>
-                <li><strong>Inverse switch</strong> is same as the above, but using the inverse status as status of the LED.</li>
-                <li><strong>Find me</strong> will turn the LED ON when all relays are OFF. This is meant to locate the device at night.</li>
-                <li><strong>Find me &amp; WiFi</strong> will also follow the WiFi status, and stay mostly ON when relays are OFF and mostly OFF when any of them are ON.</li>
-                <li><strong>Relay status</strong> will turn the LED ON whenever any switch is ON, and OFF otherwise. This is global status notification.</li>
-                <li><strong>Relay status &amp; WiFi</strong> will follow the WiFi status but will stay mostly OFF when relays are OFF, and mostly ON when any of them are ON.</li>
-                <li><strong>Manually managed</strong> will let you manage the LED status through the API. For example, MQTT will subscribe to the "&lt;base_topic&gt;/led/0/set", sending a payload of 0, 1 or 2 (to toggle it) will change the LED status accordingly.</li>
-                <li><strong>Always ON</strong> and <strong>Always OFF</strong> modes are self-explanatory.</li>
-            </ol>
+            <ul class="pure-u-1 pure-u-lg-3-4">
+                <li><code>wifi</code><p>blink once per second when attempting to connect. If successfully connected it will briefly power the led ON every 5 seconds if in STA mode, or every second if the device is in AP mode.</p></li>
+                <li><code>relay</code> and <code>relay-inverse</code> - follow the status of a given switch (defaults to the 1st switch, use the selector to change it).</li>
+                <li><code>findme</code> and <code>findme-wifi</code> - turns the LED ON when all relays are OFF. This is meant to locate the device at night.</li>
+                <li><code>relays</code> and <code>relays-wifi</code> - turn the LED ON whenever any switch is ON, and OFF otherwise.</li>
+                <li><code>on</code> and <code>off</code> - LED is either permanently ON or OFF.</li>
+                <li><code>manual</code> - LED can be turned ON or OFF only through the API. For example, MQTT will subscribe to the "&lt;base_topic&gt;/led/0/set". Publishing "on", "off" or "toggle" to that topic will change the LED status accordingly.</li>
+            </ul>
 
             </details>
 

@@ -46,6 +46,11 @@ Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 
 namespace espurna {
 namespace scheduler {
+namespace error {
+
+STRING_VIEW_INLINE(InvalidTime, "Invalid time string");
+
+} // namespace error
 
 enum class Type : int {
     Unknown = 0,
@@ -218,18 +223,18 @@ void cleanup_last_actions(const datetime::Context& ctx) {
     cleanup_entries_impl(ctx, last_actions, LastTtl);
 }
 
+[[gnu::unused]]
+bool check_parsed(const Relative& relative) {
+    return relative.type != relative::Type::None;
+}
+
+[[gnu::unused]]
+bool check_parsed(const Schedule& schedule) {
+    return schedule.ok;
+}
+
 #if SCHEDULER_SUN_SUPPORT
 namespace sun {
-
-struct EventMatch : public Event {
-    datetime::Date date;
-    TimeMatch time;
-};
-
-struct Match {
-    EventMatch rising;
-    EventMatch setting;
-};
 
 Location location;
 Match match;
@@ -523,6 +528,70 @@ void setup() {
     });
 }
 
+bool validate(Type type, StringView spec) {
+    switch (type) {
+    case Type::Unknown:
+        break;
+
+    case Type::Disabled:
+        return true;
+
+    case Type::Calendar:
+        return check_parsed(parse_schedule(spec));
+
+    case Type::Relative:
+        return check_parsed(parse_relative(spec));
+    }
+
+    return false;
+}
+
+bool validate(StringView spec) {
+    return validate(Type::Calendar, spec)
+        || validate(Type::Relative, spec);
+}
+
+#if DEBUG_SUPPORT || WEB_SUPPORT
+void report_validate(size_t index) {
+    DEBUG_MSG_P(PSTR("[SCH] ERROR: #%zu -> %.*s\n"),
+            index,
+            error::InvalidTime.length(),
+            error::InvalidTime.data());
+#if WEB_SUPPORT
+    wsPost([index](JsonObject& root) {
+        auto& info = root.createNestedArray(STRING_VIEW("schValidate"));
+        info.add(index);
+        info.add(keys::Time);
+        info.add(error::InvalidTime);
+    });
+#endif
+}
+#endif
+
+void validate() {
+#if DEBUG_SUPPORT || WEB_SUPPORT
+    for (size_t index = 0; index < build::max(); ++index) {
+        const auto type = settings::type(index);
+
+        switch (type) {
+        case Type::Unknown:
+            return;
+
+        case Type::Disabled:
+            break;
+
+        case Type::Calendar:
+        case Type::Relative:
+            if (!validate(type, time(index))) {
+                report_validate(index);
+            }
+
+            break;
+        }
+    }
+#endif
+}
+
 } // namespace settings
 
 namespace v1 {
@@ -749,55 +818,6 @@ EventMatch* find_event_match(const Schedule& schedule) {
     return find_event_match(schedule.time);
 }
 
-tm make_utc_date_time(datetime::Seconds seconds) {
-    tm out{};
-
-    time_t timestamp{ seconds.count() };
-    gmtime_r(&timestamp, &out);
-
-    return out;
-}
-
-datetime::Date make_date(const tm& date_time) {
-    datetime::Date out;
-
-    out.year = date_time.tm_year + 1900;
-    out.month = date_time.tm_mon + 1;
-    out.day = date_time.tm_mday;
-
-    return out;
-}
-
-TimeMatch make_time_match(const tm& date_time) {
-    TimeMatch out;
-
-    out.hour[date_time.tm_hour] = true;
-    out.minute[date_time.tm_min] = true;
-    out.flags = FlagUtc;
-
-    return out;
-}
-
-void update_event_match(EventMatch& match, datetime::Clock::time_point time_point) {
-    if (!event::is_valid(time_point)) {
-        if (event::is_valid(match.next)) {
-            match.last = match.next;
-        }
-
-        match.next = event::DefaultTimePoint;
-        return;
-    }
-
-    const auto duration = time_point.time_since_epoch();
-
-    const auto date_time = make_utc_date_time(duration);
-    match.date = make_date(date_time);
-    match.time = make_time_match(date_time);
-
-    match.last = match.next;
-    match.next = time_point;
-}
-
 void update_schedule_from(Schedule& schedule, const EventMatch& match) {
     schedule.date.day[match.date.day] = true;
     schedule.date.month[match.date.month] = true;
@@ -846,7 +866,7 @@ void update(datetime::Clock::time_point, const tm& today) {
 }
 
 template <typename T>
-void update(datetime::Clock::time_point time_point, const tm& today, T compare) {
+datetime::Clock::time_point update(datetime::Clock::time_point time_point, const tm& today, T compare) {
     auto result = sun::sunrise_sunset(location, today);
 
     const auto reset_sunrise =
@@ -855,12 +875,13 @@ void update(datetime::Clock::time_point time_point, const tm& today, T compare) 
     const auto reset_sunset =
         !event::is_valid(result.sunset) || compare(time_point, result.sunset);
 
-    next_update = event::DefaultTimePoint;
+    auto out = event::DefaultTimePoint;
 
     tm tmp;
     if (reset_sunrise || reset_sunset) {
         std::memcpy(&tmp, &today, sizeof(tmp));
-        next_update = delta_compare(tmp, time_point, compare);
+
+        out = delta_compare(tmp, time_point, compare);
 
         const auto other = sun::sunrise_sunset(location, tmp);
         if (reset_sunrise && event::is_valid(other.sunrise)) {
@@ -874,6 +895,8 @@ void update(datetime::Clock::time_point time_point, const tm& today, T compare) 
 
     update_event_match(match.rising, result.sunrise);
     update_event_match(match.setting, result.sunset);
+
+    return out;
 }
 
 template <typename T>
@@ -881,24 +904,36 @@ void update(time_t timestamp, const tm& today, T&& compare) {
     update(datetime::make_time_point(timestamp), today, std::forward<T>(compare));
 }
 
-String format_match(const EventMatch& match) {
-    return datetime::format_local_tz(match.next);
+String format_time_point(const event::time_point& time_point) {
+    return (time_point.time_since_epoch() > datetime::Clock::duration::zero())
+        ? datetime::format_local_tz(time_point)
+        : STRING_VIEW("value not set").toString();
+}
+
+String format_next(const EventMatch& match) {
+    return format_time_point(match.next);
+}
+
+String format_last(const EventMatch& match) {
+    return format_time_point(match.last);
 }
 
 // check() needs current or future events, discard timestamps in the past
 // round to minutes when doing so as well, since std::greater<> would compare seconds
-struct CheckCompare {
+struct CompareAfter {
     bool operator()(const event::time_point& lhs, const event::time_point& rhs) {
         return event::greater(lhs, rhs);
     }
 };
 
-template <>
-datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CheckCompare) {
+datetime::Clock::time_point delta_compare_days(tm& out, datetime::Clock::time_point time_point, datetime::Days days) {
     return datetime::make_time_point(
-        datetime::delta_utc(
-            out, time_point.time_since_epoch(),
-            datetime::Days{ 1 }));
+        datetime::delta_utc(out, time_point.time_since_epoch(), days));
+}
+
+template <>
+datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CompareAfter) {
+    return delta_compare_days(out, time_point, datetime::Days{ 1 });
 }
 
 void update_after(const datetime::Context& ctx) {
@@ -907,17 +942,60 @@ void update_after(const datetime::Context& ctx) {
         return;
     }
 
-    update(time_point, ctx.utc, CheckCompare{});
+    const auto next = update(time_point, ctx.utc, CompareAfter{});
+
+    event::time_point unordered[] {
+        next,
+        match.rising.next,
+        match.setting.next,
+    };
 
     if (event::is_valid(match.rising.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunrise at %s\n"),
-            format_match(match.rising).c_str());
+            datetime::format_local_tz(match.rising.next).c_str());
+        unordered[0] = event::DefaultTimePoint;
     }
 
     if (event::is_valid(match.setting.next)) {
         DEBUG_MSG_P(PSTR("[SCH] Sunset at %s\n"),
-            format_match(match.setting).c_str());
+            datetime::format_local_tz(match.setting.next).c_str());
+        unordered[0] = event::DefaultTimePoint;
     }
+
+    next_update = event::DefaultTimePoint;
+
+    for (const auto& value : unordered) {
+        if (!event::is_valid(value)) {
+            continue;
+        }
+
+        next_update = event::is_valid(next_update)
+            ? std::min(next_update, value)
+            : value;
+    }
+}
+
+// relative events need current or past time point
+struct CompareBefore {
+    bool operator()(const event::time_point& lhs, const event::time_point& rhs) {
+        return event::less(lhs, rhs);
+    }
+};
+
+template <>
+datetime::Clock::time_point delta_compare(tm& out, datetime::Clock::time_point time_point, CompareBefore) {
+    return delta_compare_days(out, time_point, datetime::Days{ -1 });
+}
+
+void update_before(const datetime::Context& ctx) {
+    const auto time_point = event::make_time_point(ctx);
+    update(time_point, ctx.utc, CompareBefore{});
+
+    match.rising.last = match.rising.next;
+    match.rising.next = event::DefaultTimePoint;
+
+    match.setting.last = match.setting.next;
+    match.setting.next = event::DefaultTimePoint;
 }
 
 } // namespace sun
@@ -928,42 +1006,159 @@ void update_after(const datetime::Context& ctx) {
 #if TERMINAL_SUPPORT
 namespace terminal {
 
-#if SCHEDULER_SUN_SUPPORT
+using espurna::terminal::Command;
+using espurna::terminal::CommandContext;
+
 namespace internal {
 
-String sunrise_sunset(const sun::EventMatch& match) {
-    if (match.next.time_since_epoch() > datetime::Clock::duration::zero()) {
-        return sun::format_match(match);
-    }
+#if SCHEDULER_SUN_SUPPORT
 
-    return STRING_VIEW("value not set").toString();
+STRING_VIEW_INLINE(Sunrise, "Sunrise");
+STRING_VIEW_INLINE(Sunset, "Sunset");
+
+struct Datetime {
+    String last;
+    String next;
+};
+
+Datetime sunrise_sunset(const sun::EventMatch& match) {
+    return Datetime{
+        .last = sun::format_last(match),
+        .next = sun::format_next(match),
+    };
 }
 
-void format_output(::terminal::CommandContext& ctx, const String& prefix, const String& value) {
-    ctx.output.printf_P(PSTR("- %s%s%s\n"),
+void format_datetime(CommandContext& ctx, const String& prefix, const Datetime& datetime) {
+    ctx.output.printf_P(PSTR("- %s\n  last: %s\n  next: %s\n"),
         prefix.c_str(),
-        value.length()
-            ? PSTR(" at ")
-            : " ",
-        value.c_str());
+        datetime.last.c_str(),
+        datetime.next.c_str());
 }
 
-void dump_sunrise_sunset(::terminal::CommandContext& ctx) {
-    format_output(ctx,
-        STRING_VIEW("Sunrise").toString(),
+void dump_sunrise(CommandContext& ctx) {
+    format_datetime(ctx,
+        Sunrise.toString(),
         sunrise_sunset(sun::match.rising));
-    format_output(ctx,
-        STRING_VIEW("Sunset").toString(),
+}
+
+void dump_sunset(CommandContext& ctx) {
+    format_datetime(ctx,
+        Sunset.toString(),
         sunrise_sunset(sun::match.setting));
 }
 
-} // namespace internal
+void dump_sunrise_sunset(CommandContext& ctx) {
+    if (event::is_valid(sun::next_update)) {
+        ctx.output.printf_P(PSTR("- Next sunrise & sunset update at %s\n"),
+            datetime::format_local_tz(sun::next_update).c_str());
+    }
+
+    dump_sunrise(ctx);
+    dump_sunset(ctx);
+}
+
+bool dump_sunrise_sunset(CommandContext& ctx, StringView name) {
+    if (Sunrise.equalsIgnoreCase(name)) {
+        dump_sunrise(ctx);
+        return true;
+    } else if (Sunset.equalsIgnoreCase(name)) {
+        dump_sunset(ctx);
+        return true;
+    }
+
+    return false;
+}
+
 #endif
 
-// SCHEDULE [<ID>]
-PROGMEM_STRING(Dump, "SCHEDULE");
+bool dump_named(CommandContext& ctx, StringView name = StringView()) {
+    for (auto& entry : named_events) {
+        if (name.length() && name != entry.name) {
+            continue;
+        }
 
-void dump(::terminal::CommandContext&& ctx) {
+        const auto event = format_named_event(entry);
+        ctx.output.printf_P(PSTR("- \"%s\"\n    at: %s\n"),
+            entry.name.c_str(), event.c_str());
+
+        if (name.length()) {
+            return true;
+        }
+    }
+
+    if (!name.length()) {
+        return true;
+    }
+
+    return false;
+}
+
+bool dump_calendar(CommandContext& ctx, StringView name = StringView()) {
+    if (!last_actions.empty()) {
+        for (auto& entry : last_actions) {
+            auto event = STRING_VIEW("cal#").toString();
+            event += String(entry.index, 10);
+
+            if (name.length() && !name.equalsIgnoreCase(event)) {
+                continue;
+            }
+
+            ctx.output.printf_P(PSTR("- %s\n    at: %s\n"),
+                event.c_str(), format_last_action(entry).c_str());
+
+            if (name.length()) {
+                return true;
+            }
+        }
+    }
+
+    if (!name.length()) {
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace internal
+
+// SCHEDULE [<ID>]
+// SCHEDULE CHECK [CHUNK(S)...]
+PROGMEM_STRING(Entrypoint, "SCHEDULE");
+
+void entrypoint(CommandContext&& ctx) {
+    if (ctx.argv.size() > 2 && (STRING_VIEW("CHECK").equalsIgnoreCase(ctx.argv[1]))) {
+        String spec;
+
+        size_t reserve = 0;
+        std::for_each(
+            ctx.argv.begin() + 2,
+            ctx.argv.end(),
+            [&](const String& arg) {
+                reserve += 1 + arg.length();
+            });
+        spec.reserve(reserve);
+
+        if (ctx.argv.size() > 3) {
+            for (size_t index = 2; index < ctx.argv.size(); ++index) {
+                if (index > 2) {
+                    spec += ' ';
+                }
+
+                spec += ctx.argv[index];
+            }
+        } else {
+            spec = std::move(ctx.argv[2]);
+        }
+
+        if (settings::validate(spec)) {
+            terminalOK(ctx);
+            return;
+        }
+
+        terminalError(ctx, error::InvalidTime);
+        return;
+    }
+
     if (ctx.argv.size() != 2) {
         settingsDump(ctx, settings::Settings);
         return;
@@ -988,68 +1183,52 @@ void dump(::terminal::CommandContext&& ctx) {
 PROGMEM_STRING(Event, "EVENT");
 
 // EVENT [<NAME>] [<DATETIME>]
-void event(::terminal::CommandContext&& ctx) {
-    String name;
-
-    if (ctx.argv.size() == 2) {
-        name = std::move(ctx.argv[1]);
-    }
-
-    if (ctx.argv.size() != 3) {
-        bool once { true };
-        for (auto& entry : named_events) {
-            if (name.length() && entry.name != name) {
-                continue;
-            }
-
-            if (once) {
-                ctx.output.print(PSTR("Named events:\n"));
-                once = false;
-            }
-
-            ctx.output.printf_P(PSTR("- \"%s\" at %s\n"),
-                entry.name.c_str(),
-                format_named_event(entry).c_str());
-
-            if (name.length()) {
-                terminalOK(ctx);
-                return;
-            }
-        }
-
-        if (name.length()) {
-            terminalError(ctx, STRING_VIEW("Invalid name"));
-            return;
-        }
-
-        if (!last_actions.empty()) {
-            ctx.output.print(PSTR("Calendar events:\n"));
-            for (auto& entry : last_actions) {
-                ctx.output.printf_P(PSTR("- cal#%zu at %s\n"),
-                    entry.index,
-                    format_last_action(entry).c_str());
-            }
-        }
-
+void event(CommandContext&& ctx) {
+    switch (ctx.argv.size()) {
+    case 1:
 #if SCHEDULER_SUN_SUPPORT
-        ctx.output.print(PSTR("Sun events:\n"));
         internal::dump_sunrise_sunset(ctx);
 #endif
+        internal::dump_named(ctx);
+        internal::dump_calendar(ctx);
+        break;
 
-        terminalOK(ctx);
+    case 2:
+#if SCHEDULER_SUN_SUPPORT
+        if (internal::dump_sunrise_sunset(ctx, ctx.argv[1])) {
+            break;
+        }
+#endif
+        if (internal::dump_named(ctx, ctx.argv[1])) {
+            break;
+        }
+
+        if (internal::dump_calendar(ctx, ctx.argv[1])) {
+            break;
+        }
+
+        terminalError(ctx, STRING_VIEW("Invalid name"));
+        return;
+
+    case 3:
+        if (named_event(std::move(ctx.argv[1]), ctx.argv[2])) {
+            break;
+        }
+
+        terminalError(ctx, STRING_VIEW("Cannot set event"));
+        return;
+
+    case 0:
+    default:
+        terminalError(ctx, STRING_VIEW("EVENT [<NAME>] [<DATETIME>]"));
         return;
     }
 
-    if (named_event(std::move(ctx.argv[1]), ctx.argv[2])) {
-        terminalOK(ctx);
-        return;
-    }
-
-    terminalError(ctx, STRING_VIEW("Cannot set event"));
+    terminalOK(ctx);
 }
 
-static constexpr ::terminal::Command Commands[] PROGMEM {
-    {Dump, dump},
+static constexpr Command Commands[] PROGMEM {
+    {Entrypoint, entrypoint},
     {Event, event},
 };
 
@@ -1351,10 +1530,18 @@ void onVisible(JsonObject& root) {
     for (const auto& pair : settings::Settings) {
         root[pair.key()] = pair.value();
     }
+
+    espurna::web::ws::EnumerableTypes types{root, STRING_VIEW("schTypes")};
+    types(settings::internal::Types);
 }
 
 void onConnected(JsonObject& root){
-    espurna::web::ws::EnumerableConfig config{ root, STRING_VIEW("schConfig") };
+    espurna::web::ws::EnumerableConfig config{root, STRING_VIEW("schConfig")};
+    config.replacement(
+        settings::internal::type,
+        [](JsonArray& out, size_t index) {
+            out.add(std::to_underlying(settings::type(index)));
+        });
     config(STRING_VIEW("schedules"), settings::count(), settings::IndexedSettings);
 
     auto& schedules = config.root();
@@ -1498,10 +1685,6 @@ using terminal_stub::parse_action;
 #else
 
 void parse_action(String action) {
-    if (!action.endsWith("\r\n") && !action.endsWith("\n")) {
-        action.concat('\n');
-    }
-
     static EphemeralPrint output;
     PrintString error(64);
 
@@ -1660,6 +1843,7 @@ void run(const datetime::Context& base) {
         DEBUG_MSG_P(PSTR("[SCH] Restoring #%zu => %s (%sm)\n"),
             result.index, action.c_str(),
             String(result.offset.count(), 10).c_str());
+        last_action(base, result.index);
         parse_action(action);
     }
 }
@@ -1883,7 +2067,7 @@ next:
 }
 
 struct Prepared {
-    Span<scheduler::Type> types;
+    Span<const scheduler::Type> types;
     EventOffsets event_offsets;
     std::shared_ptr<expect::Context> expect;
 
@@ -1899,7 +2083,7 @@ struct Prepared {
     }
 };
 
-Prepared prepare_event_offsets(const datetime::Context& ctx, Span<scheduler::Type> types) {
+Prepared prepare_event_offsets(const datetime::Context& ctx, Span<const scheduler::Type> types) {
     Prepared out{
         .types = types,
         .event_offsets = {},
@@ -1912,7 +2096,7 @@ Prepared prepare_event_offsets(const datetime::Context& ctx, Span<scheduler::Typ
         }
 
         auto relative = settings::relative(index);
-        if (Type::None == relative.type) {
+        if (!check_parsed(relative)) {
             continue;
         }
 
@@ -2019,7 +2203,7 @@ void handle_after(const datetime::Context& ctx, Prepared& prepared) {
 
 } // namespace relative
 
-void handle_calendar(const datetime::Context& ctx, Span<Type> types) {
+void handle_calendar(const datetime::Context& ctx, Span<const Type> types) {
     for (size_t index = 0; index < types.size(); ++index) {
         bool ok = false;
 
@@ -2055,6 +2239,10 @@ void tick(NtpTick tick) {
         initial = false;
         settings::gc(settings::count());
         restore::run(ctx);
+#if SCHEDULER_SUN_SUPPORT
+        sun::update_before(ctx);
+#endif
+        settings::validate();
     }
 
 #if SCHEDULER_SUN_SUPPORT
@@ -2083,6 +2271,8 @@ void tick(NtpTick tick) {
 void setup() {
     migrateVersion(scheduler::settings::migrate);
     settings::setup();
+
+    espurnaRegisterReload(settings::validate);
 
 #if SCHEDULER_SUN_SUPPORT
     sun::setup();

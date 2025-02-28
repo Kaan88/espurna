@@ -886,7 +886,7 @@ Codes codes;
 
 Codes::iterator find(Codes& container, unsigned char protocol, StringView match) {
     return std::find_if(container.begin(), container.end(),
-        [protocol, &match](const Code& code) {
+        [protocol, match](const Code& code) {
             return (code.protocol == protocol) && (code.raw == match);
         });
 }

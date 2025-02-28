@@ -1522,10 +1522,6 @@ Preset preset() {
 namespace internal {
 
 void inject(String command) {
-    if (!command.endsWith("\r\n") && !command.endsWith("\n")) {
-        command.concat('\n');
-    }
-
     static EphemeralPrint output;
     PrintString error(64);
     if (!espurna::terminal::api_find_and_call(command, output, error)) {

@@ -11,39 +11,40 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 #include <cctype>
 
 #include "terminal_parsing.h"
+#include "libs/Delimiter.h"
 
 namespace espurna {
 namespace terminal {
 namespace parser {
 
 String error(Error value) {
-    String out;
+    StringView out;
 
     switch (value) {
-    case Error::Ok:
-        out = PSTR("Ok");
-        break;
     case Error::Uninitialized:
-        out = PSTR("Uninitialized");
+        out = STRING_VIEW("Uninitialized");
         break;
     case Error::Busy:
-        out = PSTR("Busy");
-        break;
-    case Error::UnterminatedQuote:
-        out = PSTR("UnterminatedQuote");
+        out = STRING_VIEW("Busy");
         break;
     case Error::InvalidEscape:
-        out = PSTR("InvalidEscape");
-        break;
-    case Error::UnexpectedLineEnd:
-        out = PSTR("UnexpectedLineEnd");
+        out = STRING_VIEW("InvalidEscape");
         break;
     case Error::NoSpaceAfterQuote:
-        out = PSTR("NoSpaceAfterQuote");
+        out = STRING_VIEW("NoSpaceAfterQuote");
+        break;
+    case Error::UnexpectedLineEnd:
+        out = STRING_VIEW("UnexpectedLineEnd");
+        break;
+    case Error::UnterminatedQuote:
+        out = STRING_VIEW("UnterminatedQuote");
+        break;
+    case Error::Ok:
+        out = STRING_VIEW("Ok");
         break;
     }
 
-    return out;
+    return out.toString();
 }
 
 namespace {
@@ -117,18 +118,112 @@ char unescape_char(char c) {
     return c;
 }
 
+// Intermediate storage for parsed tokens and (optionally) buffered values from escaped characters
+struct Values {
+    // contiguous view to the original input
+    // passed as sv to 'tokens' when data can be used as-is
+    const char* span_begin { nullptr };
+    size_t span_len { 0 };
+
+    // temporary for 'buffer' when escaped data appears and part of the string is copied here
+    String token;
+    char byte_lhs { 0 };
+
+    Tokens tokens;
+    Buffer buffer;
+
+    bool token_available() const {
+        return token.length() != 0;
+    }
+
+    StringView make_span_view() const {
+        return StringView(span_begin, span_len);
+    }
+
+    bool span_available() const {
+        return span_begin && span_len;
+    }
+
+    void reset_span(const char* it) {
+        span_begin = it;
+        span_len = 0;
+    }
+
+    void append_span(const char* it) {
+        if (!span_available()) {
+            reset_span(it);
+        }
+
+        ++span_len;
+    }
+
+    void push_span() {
+        if (span_available()) {
+            token += make_span_view();
+            reset_span(nullptr);
+        }
+    }
+
+    bool push_span_token() {
+        if (span_available()) {
+            tokens.push_back(make_span_view());
+            reset_span(nullptr);
+            return true;
+        }
+
+        return false;
+    }
+
+    bool push_buffered_token() {
+        if (token_available()) {
+            push_span();
+            buffer.push_back(std::move(token));
+            tokens.push_back(buffer.back());
+            return true;
+        }
+
+        return false;
+    }
+
+    void append_token(char c) {
+        push_span();
+        token.concat(&c, 1);
+    }
+
+    void append_byte_lhs(char c) {
+        byte_lhs = c;
+    }
+
+    void append_byte_rhs(char c) {
+        append_token(hex_digit_to_value(byte_lhs, c));
+    }
+
+    void push_token() {
+        if (!push_buffered_token() && !push_span_token()) {
+            tokens.push_back(StringView{});
+        }
+    }
+};
+
 struct Result {
     Result() = default;
 
-    Result& operator=(Error error) {
+    Result& operator=(Error error) noexcept {
         _error = error;
-        _argv.clear();
+        _buffer.clear();
+        _tokens.clear();
         return *this;
     }
 
-    Result& operator=(Argv&& argv) {
-        _argv = std::move(argv);
+    Result& operator=(Values&& values) noexcept {
+        _buffer = std::move(values.buffer);
+        _tokens = std::move(values.tokens);
         _error = Error::Ok;
+        return *this;
+    }
+
+    Result& operator=(StringView value) noexcept {
+        _remaining = value;
         return *this;
     }
 
@@ -140,23 +235,33 @@ struct Result {
         return _error;
     }
 
-    CommandLine get() {
-        auto out = CommandLine{
-            .argv = std::move(_argv),
-            .error = _error };
-
+    ParsedLine get() {
+        auto error = _error;
         _error = Error::Uninitialized;
-        return out;
+
+        auto remaining = _remaining;
+        _remaining = StringView{};
+
+        return ParsedLine{
+            .tokens = std::move(_tokens),
+            .buffer = std::move(_buffer),
+            .remaining = std::move(remaining),
+            .error = error,
+        };
     }
 
 private:
     Error _error { Error::Uninitialized };
-    Argv _argv;
+    StringView _remaining;
+    Tokens _tokens;
+    Buffer _buffer;
 };
+
+constexpr auto Lf = StringView("\n");
 
 struct Parser {
     Parser() = default;
-    Result operator()(StringView);
+    Result operator()(StringView view, bool inject_newline = false);
 
 private:
     // only tracked within our `operator()(<LINE>)`
@@ -176,68 +281,17 @@ private:
         AfterQuote,
     };
 
-    // our storage for
-    // - ARGV resulting list
-    // - text buffer or (interim) text span / range
-    // - escaped character (since we don't look ahead when iterating)
-    struct Values {
-        struct Span {
-            const char* begin { nullptr };
-            const char* end { nullptr };
-        };
-
-        Span span;
-        String chunk;
-        char byte_lhs { 0 };
-
-        Argv argv;
-
-        void append_span(const char* ptr) {
-            if (!span.begin) {
-                span.begin = ptr;
-            }
-
-            span.end = !span.end
-                ? std::next(span.begin)
-                : std::next(ptr);
-        }
-
-        void push_span() {
-            if (span.begin && span.end) {
-                StringView view(span.begin, span.end);
-                chunk.concat(view.c_str(), view.length());
-                span = Values::Span{};
-            }
-        }
-
-        void append_chunk(char c) {
-            push_span();
-            chunk.concat(&c, 1);
-        }
-
-        void append_byte_lhs(char c) {
-            byte_lhs = c;
-        }
-
-        void append_byte_rhs(char c) {
-            append_chunk(hex_digit_to_value(byte_lhs, c));
-        }
-
-        void push_chunk() {
-            push_span();
-            argv.push_back(chunk);
-            chunk = "";
-        }
-    };
-
     bool _parsing { false };
 };
 
-Result Parser::operator()(StringView line) {
+Result Parser::operator()(StringView line, bool inject_newline) {
     Result result;
     Values values;
 
-    State state { State::Initial };
+    auto it = line.begin();
+    auto end = line.end();
+
+    auto state = State::Initial;
 
     ReentryLock lock(_parsing);
     if (!lock.initialized()) {
@@ -245,8 +299,9 @@ Result Parser::operator()(StringView line) {
         goto out;
     }
 
-    for (auto it = line.begin(); it != line.end(); ++it) {
-        switch (State(state)) {
+loop:
+    for (;it != end; ++it) {
+        switch (state) {
         case State::Initial:
             switch (*it) {
             case ' ':
@@ -255,6 +310,7 @@ Result Parser::operator()(StringView line) {
             case '\r':
                 state = State::CarriageReturn;
                 break;
+            case ';':
             case '\n':
                 state = State::Done;
                 break;
@@ -272,7 +328,7 @@ text:
             switch (*it) {
             case ' ':
             case '\t':
-                values.push_chunk();
+                values.push_token();
                 state = State::Initial;
                 break;
             case '"':
@@ -284,8 +340,9 @@ text:
             case '\r':
                 state = State::CarriageReturnAfterText;
                 break;
+            case ';':
             case '\n':
-                values.push_chunk();
+                values.push_token();
                 state = State::Done;
                 break;
             default:
@@ -305,7 +362,7 @@ text:
 
         case State::CarriageReturnAfterText:
             if ((*it) == '\n') {
-                values.push_chunk();
+                values.push_token();
                 state = State::Done;
             } else {
                 result = Error::UnexpectedLineEnd;
@@ -318,6 +375,7 @@ text:
             case '\r':
                 state = State::CarriageReturn;
                 break;
+            case ';':
             case '\n':
                 state = State::Initial;
                 break;
@@ -326,6 +384,7 @@ text:
 
         case State::EscapedText: {
             switch (*it) {
+            case ';':
             case '\r':
             case '\n':
                 result = Error::UnexpectedLineEnd;
@@ -334,7 +393,7 @@ text:
                 state = State::EscapedByteLhs;
                 break;
             default:
-                values.append_chunk(unescape_char(*it));
+                values.append_token(unescape_char(*it));
                 break;
             }
             break;
@@ -362,8 +421,9 @@ text:
 
         case State::SingleQuote:
             switch (*it) {
-            case '\r':
+            case ';':
             case '\n':
+            case '\r':
                 result = Error::UnterminatedQuote;
                 goto out;
             case '\\':
@@ -381,7 +441,7 @@ text:
         case State::EscapedQuote:
             switch (*it) {
             case '\'':
-                values.chunk.concat(*it);
+                values.append_token(*it);
                 state = State::SingleQuote;
                 break;
             default:
@@ -397,11 +457,12 @@ text:
                 break;
             case ' ':
             case '\t':
-                values.push_chunk();
+                values.push_token();
                 state = State::Initial;
                 break;
+            case ';':
             case '\n':
-                values.push_chunk();
+                values.push_token();
                 state = State::Done;
                 break;
             default:
@@ -412,8 +473,9 @@ text:
 
         case State::DoubleQuote:
             switch (*it) {
-            case '\r':
+            case ';':
             case '\n':
+            case '\r':
                 result = Error::UnterminatedQuote;
                 goto out;
             case '"':
@@ -432,8 +494,31 @@ text:
     }
 
 out:
+    switch (state) {
+    case State::CarriageReturn:
+    case State::CarriageReturnAfterText:
+    case State::Text:
+    case State::Initial:
+    case State::SkipUntilNewLine:
+    case State::AfterQuote:
+        if (inject_newline) {
+            inject_newline = false;
+            it = Lf.begin();
+            end = Lf.end();
+            goto loop;
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    if ((it >= line.begin()) && (it <= line.end())) {
+        result = StringView(it, end);
+    }
+
     if (state == State::Done) {
-        result = std::move(values.argv);
+        result = std::move(values);
     }
 
     // whenever line ends before we are done parsing, make sure
@@ -468,38 +553,215 @@ out:
     return result;
 }
 
-CommandLine parse_line(StringView line) {
-    static Parser parser;
-    return parser(line).get();
+Parser parser_instance;
+
+ParsedLine parse_line(StringView line, bool inject_newline) {
+    return parser_instance(line, inject_newline).get();
+}
+
+} // namespace
+} // namespace parser
+
+ParsedLine parse_line(StringView value) {
+    return parser::parse_line(value, false);
+}
+
+ParsedLine parse_terminated(StringView value) {
+    return parser::parse_line(value, true);
+}
+
+} // namespace terminal
+
+namespace {
+
+// rough implementation for an arbitrary string<->string 'first match' of rhs within lhs
+const char* find_first(StringView lhs, StringView rhs) {
+    auto begin = lhs.begin();
+    auto end = lhs.end();
+
+    auto rhs_begin = rhs.begin();
+    auto rhs_end = rhs.end();
+
+    for (;;) {
+        auto it = begin;
+
+        for (auto rhs_it = rhs_begin;; ++it, ++rhs_it) {
+            if (rhs_it == rhs_end) {
+                return begin;
+            }
+
+            if (it == end) {
+                return end;
+            }
+
+            if (*rhs_it != *it) {
+                break;
+            }
+        }
+
+        ++begin;
+    }
+
+    return end;
 }
 
 } // namespace
 
-// Fowler–Noll–Vo hash function to hash command strings that treats input as lowercase
-// ref: https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
-//
-// This is here in case `std::unordered_map` becomes viable
-// TODO: afaik, map implementation should handle collisions (however rare they are in our case)
-// if not, we can always roll static commands allocation and just match strings with strcmp_P
-
-uint32_t lowercase_fnv1_hash(StringView value) {
-    constexpr uint32_t fnv_prime = 16777619u;
-    constexpr uint32_t fnv_basis = 2166136261u;
-
-    uint32_t hash = fnv_basis;
-    for (auto it = value.begin(); it != value.end(); ++it) {
-        hash = hash ^ static_cast<uint32_t>(tolower(pgm_read_byte(it)));
-        hash = hash * fnv_prime;
+StringView without_trailing(StringView value, char c) {
+    if (value.length()) {
+        const auto last = value.length() - 1;
+        if (value[last] == c) {
+            return value.slice(0, last);
+        }
     }
 
-    return hash;
+    return value;
 }
 
-} // namespace parser
+LineView::LineView(StringView value) :
+    DelimiterView(value, terminal::parser::Lf)
+{}
 
-CommandLine parse_line(StringView value) {
-    return parser::parse_line(value);
+StringView LineView::next() {
+    return without_trailing(DelimiterView::next(), '\r');
 }
 
-} // namespace terminal
+namespace line_buffer_impl {
+
+Base::Result Base::next() {
+    auto next = DelimiterBuffer::next();
+    return Result{
+        .value = without_trailing(next.value, '\r'),
+        .overflow = next.overflow,
+    };
+}
+
+Base::Base(char *data, size_t size) :
+    DelimiterBuffer(data, size, terminal::parser::Lf)
+{}
+
+} // namespace line_buffer_impl
+
+DelimiterBuffer::DelimiterBuffer(char* storage, size_t capacity, StringView delimiter) :
+    _storage(storage),
+    _capacity(capacity),
+    _delimiter(delimiter)
+{}
+
+DelimiterBuffer::DelimiterBuffer(char* storage, size_t capacity) :
+    DelimiterBuffer(storage, capacity, terminal::parser::Lf)
+{}
+
+DelimiterBuffer::Result DelimiterBuffer::next() {
+    const auto current = get();
+
+    if (current.length()) {
+        if (!_delimiter.length()) {
+            auto overflow = _overflow;
+            reset();
+
+            return Result{
+                .value = current,
+                .overflow = overflow,
+            };
+        }
+
+        auto first = find_first(current, _delimiter);
+        if (first != current.end()) {
+            const auto value = StringView{current.begin(), first};
+            const auto out = Result{
+                .value = value,
+                .overflow = _overflow
+            };
+
+            const auto after = value.length() + _delimiter.length();
+            const auto cursor = _cursor + after;
+            if (cursor != _size) {
+                _cursor = cursor;
+            } else {
+                reset();
+            }
+
+            return out;
+        }
+    }
+
+    return Result{
+        .value = StringView(),
+        .overflow = _overflow
+    };
+}
+
+void DelimiterBuffer::append(const char* data, size_t length) {
+    // adjust pointer and length when they immediatelly cause overflow
+    auto output = &_storage[_size];
+
+    auto capacity = _capacity - _size;
+    while (length > capacity) {
+        data += capacity;
+        length -= capacity;
+        capacity = _capacity;
+        output = &_storage[0];
+        _size = 0;
+        _overflow = true;
+    }
+
+    if (length) {
+        std::memcpy(output, data, length);
+        _size += length;
+    }
+}
+
+void DelimiterBuffer::append(Stream& stream, size_t length) {
+    auto output = &_storage[_size];
+    auto capacity = _capacity - _size;
+
+    while (length > capacity) {
+        const auto chunk = std::min(_capacity - _size, length);
+
+#if defined(ARDUINO_ESP8266_RELEASE_2_7_2) \
+|| defined(ARDUINO_ESP8266_RELEASE_2_7_3) \
+|| defined(ARDUINO_ESP8266_RELEASE_2_7_4)
+        stream.readBytes(_storage, chunk);
+#else
+        stream.peekConsume(chunk);
+#endif
+
+        length -= capacity;
+        capacity = _capacity;
+        output = &_storage[0];
+
+        _size = 0;
+        _overflow = true;
+    }
+
+    if (length) {
+        stream.readBytes(output, length);
+        _size += length;
+    }
+}
+
+StringView DelimiterView::next() {
+    const auto current = get();
+
+    if (current.length()) {
+        if (!_delimiter.length()) {
+            _cursor = _view.length();
+            return current;
+        }
+
+        const auto first = find_first(current, _delimiter);
+        if (first != current.end()) {
+            const auto value = StringView{current.begin(), first};
+
+            _cursor += value.length();
+            _cursor += _delimiter.length();
+
+            return value;
+        }
+    }
+
+    return StringView();
+}
+
 } // namespace espurna

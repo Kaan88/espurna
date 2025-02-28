@@ -14,11 +14,12 @@ Copyright (C) 2020 by Maxim Prokhorov <prokhorov dot max at outlook dot com>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <ratio>
 
 #include <ArduinoJson.h>
 
-#include "system.h"
+#include "types.h"
 
 class BaseSensor;
 

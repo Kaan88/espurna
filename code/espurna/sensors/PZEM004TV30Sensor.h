@@ -594,7 +594,7 @@ private:
     static Instance _instance;
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseEmonSensor::Magnitude PZEM004TV30Sensor::Magnitudes[];
 #endif
 

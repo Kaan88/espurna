@@ -521,7 +521,7 @@ private:
     Reading _last_reading;
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude ADE7953Sensor::Magnitudes[];
 #endif
 

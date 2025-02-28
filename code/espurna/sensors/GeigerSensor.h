@@ -224,7 +224,7 @@ TimeSource::time_point _lastreport_sv = _lastreport_cpm;
 
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude GeigerSensor::Magnitudes[];
 #endif
 

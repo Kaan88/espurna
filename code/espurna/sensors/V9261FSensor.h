@@ -76,11 +76,6 @@ class V9261FSensor : public BaseEmonSensor {
             return Name.toString();
         }
 
-        // Address of the sensor (it could be the GPIO or I2C address)
-        String address(unsigned char) const override {
-            return String(V9261F_PORT, 10);
-        }
-
         // Loop-like method, call it in your main loop
         void tick() override {
             _read_some();
@@ -411,7 +406,7 @@ class V9261FSensor : public BaseEmonSensor {
         Stream* _serial { nullptr };
 };
 
-#if __cplusplus < 201703L
+#ifndef __cpp_inline_variables
 constexpr BaseSensor::Magnitude V9261FSensor::Magnitudes[];
 #endif
 
