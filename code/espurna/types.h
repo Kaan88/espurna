@@ -521,14 +521,9 @@ private:
     size_t _size;
 };
 
-template <size_t Size>
-inline Span<uint8_t> make_span(uint8_t (&data)[Size]) {
-    return Span<uint8_t>(&data[0], Size);
-}
-
-template <size_t Size>
-inline Span<const uint8_t> make_span(const uint8_t (&data)[Size]) {
-    return Span<const uint8_t>(&data[0], Size);
+template <typename T, size_t Size>
+constexpr inline Span<T> make_span(T (&data)[Size]) {
+    return Span<T>(&data[0], Size);
 }
 
 template <size_t Size>
@@ -550,35 +545,6 @@ template <typename T>
 inline Span<const T> make_span(const std::vector<T>& data) {
     return Span<const T>(data.data(), data.size());
 }
-
-struct SplitStringView {
-    explicit SplitStringView(StringView view) :
-        _source(view)
-    {}
-
-    SplitStringView(StringView view, char delim) :
-        _source(view),
-        _delim(delim)
-    {}
-
-    StringView current() const {
-        return _current;
-    }
-
-    StringView remaining() const {
-        return _view;
-    }
-
-    bool next();
-
-private:
-    StringView _source;
-
-    StringView _view { _source };
-    char _delim { ' ' };
-
-    StringView _current;
-};
 
 namespace duration {
 

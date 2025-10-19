@@ -5,44 +5,27 @@
 import {
     listenEnumerable,
     onGroupSettingsDel,
-    setGroupElement,
     setInputValue,
     setOriginalsFromValuesForNode,
     setSelectValue,
     setSpanValue,
 } from './settings.mjs';
 
-import { moreElem } from './core.mjs';
+import {
+    setGroupElement,
+} from './settings/utils.mjs';
+
+import {
+    loadTemplate,
+    mergeTemplate,
+} from './settings/template.mjs';
+
+import { passwordReveal } from './password.mjs';
+import { moreParent } from './core.mjs';
 
 /**
- * @param {Event} event
+ * @import { InputOrSelect } from './settings.mjs'
  */
-function moreParent(event) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) {
-        return;
-    }
-
-    const parent = target?.parentElement?.parentElement;
-    if (parent) {
-        moreElem(parent);
-    }
-}
-
-/**
- * @param {string} name
- * @returns {DocumentFragment}
- */
-export function loadTemplate(name) {
-    const template = /** @type {HTMLTemplateElement} */
-        (document.getElementById(`template-${name}`));
-    return document.importNode(template.content, true);
-}
-
-/** @import { InputOrSelect } from './settings.mjs' */
 
 /**
  * @param {string} name
@@ -58,10 +41,6 @@ export function loadConfigTemplate(name) {
         elem.addEventListener("click", onGroupSettingsDel);
     }
 
-    for (let elem of template.querySelectorAll("button.button-more-parent")) {
-        elem.addEventListener("click", moreParent);
-    }
-
     for (let elem of template.querySelectorAll("[data-enumerable]")) {
         if (!(elem instanceof HTMLElement)) {
             continue;
@@ -69,6 +48,9 @@ export function loadConfigTemplate(name) {
 
         listenEnumerable(elem);
     }
+
+    moreParent(template);
+    passwordReveal(template);
 
     return template;
 }
@@ -121,24 +103,15 @@ export function fillTemplateFromCfg(fragment, id, cfg = {}) {
 }
 
 /**
- * @param {HTMLElement} target
- * @param {DocumentFragment} template
- */
-export function mergeTemplate(target, template) {
-    for (let child of Array.from(template.children)) {
-        target.appendChild(child);
-    }
-}
-
-/**
  * @param {HTMLElement} container
  * @param {string} name
  * @param {TemplateConfig} cfg
+ * @returns {Element | null}
  */
 export function addFromTemplate(container, name, cfg) {
     const fragment = loadConfigTemplate(name);
     fillTemplateFromCfg(fragment, container.childElementCount, cfg);
-    mergeTemplate(container, fragment);
+    return mergeTemplate(container, fragment);
 }
 
 // TODO: note that we also include kv schema as 'data-settings-schema' on the container.

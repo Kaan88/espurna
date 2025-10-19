@@ -3,7 +3,7 @@
 ESPurna ("spark" in Catalan) is a custom firmware for ESP8285/ESP8266 based smart switches, lights and sensors.
 It uses the Arduino Core for ESP8266 framework and a number of 3rd party libraries.
 
-[![latest snapshot build](https://img.shields.io/github/v/release/xoseperez/espurna?include_prereleases&label=latest%20snapshot%20build)](https://github.com/xoseperez/espurna/releases?q=prerelease%3Atrue&expanded=true)
+[![latest snapshot build](https://img.shields.io/github/v/release/xoseperez/espurna?include_prereleases&label=latest%20snapshot%20build)](https://github.com/xoseperez/espurna/releases?expanded=true)
 [![branch](https://img.shields.io/badge/branch-dev-orange.svg)](https://github.com/xoseperez/espurna/tree/dev/)
 [![license](https://img.shields.io/github/license/xoseperez/espurna.svg)](LICENSE)
 [![ci build](https://github.com/xoseperez/espurna/actions/workflows/push.yml/badge.svg?branch=dev)](https://github.com/xoseperez/espurna/actions/workflows/push.yml)
@@ -21,7 +21,7 @@ Since November 2018, Max Prokhorov (**@mcspr**) is also actively working as a co
 
 ## Contributors
 
-**Without your help this project would not be possible**. I (**@xoseperez**) simply can't spend all the time I wish on ESPurna but luckly I recieve a lot of contributions, bug fixes, enhancement suggestions,... from people all around the world. I would like to thank each and every one of you. The [contributors](https://github.com/xoseperez/espurna/graphs/contributors) page shows the ones that have done a PR in the past, but I also get contributions in the issues, by email or via the [gitter ESPurna channel](https://gitter.im/tinkerman-cat/espurna), those I also want to thank.
+**Without your help this project would not be possible**. I (**@xoseperez**) simply can't spend all the time I wish on ESPurna but luckily I receive a lot of contributions, bug fixes, enhancement suggestions,... from people all around the world. I would like to thank each and every one of you. The [contributors](https://github.com/xoseperez/espurna/graphs/contributors) page shows the ones that have done a PR in the past, but I also get contributions in the issues, by email or via the [gitter ESPurna channel](https://gitter.im/tinkerman-cat/espurna), those I also want to thank.
 
 **Thank you all very much**.
 

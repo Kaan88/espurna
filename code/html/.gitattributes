@@ -1,0 +1,6 @@
+*.html.gz    -diff -merge
+*.html.gz    linguist-generated=true
+*.html.br    -diff -merge
+*.html.br    linguist-generated=true
+
+index.html diff merge

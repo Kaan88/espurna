@@ -37,23 +37,41 @@ namespace settings {
 // TODO: multi-byte access
 // {blob} read(size_t)
 // void write(size_t, {blob})
-
 class EepromStorage {
 public:
+    using storage_type = StorageEEPROM_Rotate;
+
+    EepromStorage() = delete;
+
+    EepromStorage(EepromStorage&) = delete;
+    EepromStorage& operator=(EepromStorage&) = delete;
+
+    EepromStorage(EepromStorage&&);
+    EepromStorage& operator=(EepromStorage&&);
+
+    explicit EepromStorage(storage_type& instance) :
+        _instance(std::addressof(instance))
+    {}
+
     uint8_t read(size_t pos) const {
-        return eepromRead(pos);
+        return _instance->read(pos);
     }
 
     void write(size_t pos, uint8_t value) const {
-        eepromWrite(pos, value);
+        _instance->write(pos, value);
     }
 
     void commit() const {
         autosaveSettings();
     }
+
+private:
+    storage_type* _instance;
 };
 
 using kvs_type = embedis::KeyValueStore<EepromStorage>;
+
+kvs_type& kvs_instance();
 
 namespace traits {
 
@@ -86,6 +104,9 @@ size_t size();
 using KeyValueResultCallback = std::function<void(settings::kvs_type::KeyValueResult&&)>;
 void foreach(KeyValueResultCallback&&);
 
+using KeyValueResultWithTokenCallback = std::function<void(settings::kvs_type::KeyValueResult&&, settings::kvs_type::StopToken)>;
+void foreach(KeyValueResultWithTokenCallback&&);
+
 using PrefixResultCallback = std::function<void(StringView prefix, String key, const kvs_type::ReadResult& value)>;
 void foreach_prefix(PrefixResultCallback&&, settings::query::StringViewIterator);
 
@@ -110,9 +131,10 @@ espurna::settings::query::Result settingsQuery(espurna::StringView key);
 
 // --------------------------------------------------------------------------
 
-void moveSetting(const String& from, const String& to);
-void moveSetting(const String& from, const String& to, size_t index);
-void moveSettings(const String& from, const String& to);
+bool moveSetting(const String& from, const String& to, size_t index);
+bool moveSetting(const String& from, const String& to);
+
+bool moveSettings(const String& from, const String& to);
 
 String getSetting(const char* key);
 String getSetting(const String& key);

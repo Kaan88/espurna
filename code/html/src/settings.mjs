@@ -1,9 +1,8 @@
-import { notifyError } from './errors.mjs';
 import {
-    count,
     capitalize,
     pageReloadIn,
     showPanelByName,
+    stringToBoolean,
 } from './core.mjs';
 
 import {
@@ -12,64 +11,43 @@ import {
     listenAppConnected,
 } from './connection.mjs';
 
-import { validateForms, resetCustomValidity } from './validate.mjs';
+import { validateFormsReportValidity, validateFormsPasswords, resetCustomValidity } from './validate.mjs';
+import { notifyError } from './notify.mjs';
+
+import {
+    countChangedElements,
+    isChangedElement,
+    isGroupElement,
+    isIgnoredElement,
+    setChangedElement,
+    resetChangedElement,
+    resetSettingsGroup,
+} from './settings/utils.mjs';
 
 /**
- * @param {HTMLElement} elem
+ * generic value type to set to or get from an element. usually an editable type, like input or select
+ * @typedef { string | number | boolean | null } ElementValue
  */
-export function isChangedElement(elem) {
-    return stringToBoolean(elem.dataset["changed"] ?? "");
-}
 
 /**
- * @param {Element} node
+ * generic value to be set to an element. usually cannot be edited after setting, expected to be updated from the device side
+ * @typedef { ElementValue | ElementValue[] } DisplayValue
  */
-export function getElements(node) {
-    return /** @type {Array<InputOrSelect>} */(
-        Array.from(node.querySelectorAll(
-            "input[data-changed],select[data-changed]")));
-}
 
 /**
- * @param {Element} node
+ * @typedef { HTMLInputElement | HTMLSelectElement } InputOrSelect
  */
-export function countChangedElements(node) {
-    return count(getElements(node), isChangedElement);
-}
 
 /**
- * @param {HTMLElement} elem
+ * @typedef {{element: InputOrSelect, key: string, value: ElementValue}} GroupElementInfo
  */
-export function setChangedElement(elem) {
-    elem.dataset["changed"] = "true";
-}
-
-/**
- * @param {HTMLElement} elem
- */
-export function resetChangedElement(elem) {
-    elem.dataset["changed"] = "false";
-}
-
-/**
- * @param {HTMLElement} elem
- */
-function resetGroupPending(elem) {
-    delete elem.dataset["settingsGroupPending"];
-}
 
 // Right now, group additions happen from:
 // - WebSocket, likely to happen exactly once per connection through processData handler(s). Specific keys trigger functions that append into the container element.
 // - User input. Same functions are triggered, but with an additional event for the container element that causes most recent element to be marked as changed.
 // Removal only happens from user input by triggering 'settings-group-del' from the target element.
-//
-// TODO: distinguish 'current' state to avoid sending keys when adding and immediatly removing the latest node?
-// TODO: previous implementation relied on defaultValue and / or jquery $(...).val(), but this does not really work where 'line' only has <select>
 
 /**
- * @typedef {HTMLInputElement | HTMLSelectElement} InputOrSelect
- * @typedef {{element: InputOrSelect, key: string, value: ElementValue}} GroupElementInfo
- *
  * @param {Element} target
  * @returns {GroupElementInfo[]}
  */
@@ -118,54 +96,6 @@ function getGroupPending(elem) {
     }
 
     return raw.split(" ");
-}
-
-const SETTINGS_GROUP_ELEMENT = "settingsGroupElement";
-
-/**
- * @param {HTMLElement} elem
- */
-export function setGroupElement(elem) {
-    elem.dataset[SETTINGS_GROUP_ELEMENT] = "true";
-}
-
-/**
- * @param {HTMLElement} elem
- */
-export function resetGroupElement(elem) {
-    delete elem.dataset[SETTINGS_GROUP_ELEMENT];
-}
-
-/**
- * @param {HTMLElement} elem
- * @returns {boolean}
- */
-export function isGroupElement(elem) {
-    return elem.dataset[SETTINGS_GROUP_ELEMENT] !== undefined;
-}
-
-const SETTINGS_IGNORED_ELEMENT = "settingsIgnore";
-
-/**
- * @param {HTMLElement} elem
- */
-export function setIgnoredElement(elem) {
-    elem.dataset[SETTINGS_IGNORED_ELEMENT] = "true";
-}
-
-/**
- * @param {HTMLElement} elem
- */
-export function resetIgnoredElement(elem) {
-    delete elem.dataset[SETTINGS_IGNORED_ELEMENT];
-}
-
-/**
- * @param {HTMLElement} elem
- * @returns {boolean}
- */
-export function isIgnoredElement(elem) {
-    return elem.dataset[SETTINGS_IGNORED_ELEMENT] !== undefined;
 }
 
 /**
@@ -238,6 +168,8 @@ function delGroupPending(group) {
 
     setGroupPending(group, pending);
 }
+
+// TODO: 'current' state is maintaned through element data. track it externally?
 
 /**
  * @param {HTMLElement} group
@@ -439,19 +371,6 @@ function groupSettingsCleanup(container, keys) {
 }
 
 /**
- * besides gathering the data, func is expected to also provide
- * - del: 'cleanup' keys, usually from setting groups that marked certain keys for deletion
- * - set: kvs only for 'changed' keys, or everything available
- * @typedef {{cleanup?: boolean, assumeChanged?: boolean}} GetDataOptions
- */
-
-/**
- * kvs for the device settings storage
- * @typedef {string | number} DataValue
- * @typedef {{[k: string]: DataValue}} SetRequest
- */
-
-/**
  * @param {string | number |boolean} value
  * @returns {DataValue}
  */
@@ -475,13 +394,21 @@ function maybeAdjustDataValue(value) {
 }
 
 /**
- * specific 'key' string to remove from the device settings storage
- * @typedef {string} DelRequest
+ * besides gathering the data, func is expected to also provide
+ * - del: 'cleanup' keys, usually from setting groups that marked certain keys for deletion
+ * - set: kvs only for 'changed' keys, or everything available
+ * @typedef {{cleanup?: boolean, assumeChanged?: boolean}} GetDataOptions
+ */
+
+/**
+ * kvs for the device settings storage
+ * @typedef {string | number} DataValue
+ * @typedef {{[k: string]: DataValue}} SetRequest
  */
 
 /**
  * usually, settings request is sent as a single object
- * @typedef {{set: SetRequest, del: DelRequest[]}} DataRequest
+ * @typedef {{set: SetRequest, del: string[]}} DataRequest
  */
 
 /**
@@ -584,16 +511,6 @@ export function getData(forms, {cleanup = true, assumeChanged = false} = {}) {
 // - initial setup. it is shown programatically, but is still available from the global list of forms
 
 /**
- * generic value type to set to or get from an element. usually an editable type, like input or select
- * @typedef {boolean | number | string | null} ElementValue
- */
-
-/**
- * generic value to be set to an element. usually cannot be edited after setting, expected to be updated from the device side
- * @typedef {ElementValue | ElementValue[]} DisplayValue
- */
-
-/**
  * @param {InputOrSelect} elem
  * @returns {ElementValue}
  */
@@ -673,32 +590,6 @@ export function getOriginalForElement(elem) {
     }
 
     return null;
-}
-
-function resetSettingsGroup() {
-    const elems = document.getElementsByClassName("settings-group");
-    for (let elem of elems) {
-        if (!(elem instanceof HTMLElement)) {
-            continue;
-        }
-
-        resetChangedElement(elem);
-        resetGroupPending(elem);
-    }
-}
-
-/**
- * @param {string} value
- * @returns {boolean}
- */
-function stringToBoolean(value) {
-    return [
-        "1",
-        "y",
-        "yes",
-        "true",
-        "on",
-    ].includes(value.toLowerCase());
 }
 
 /**
@@ -904,16 +795,26 @@ export function setOriginalsFromValuesForNode(node) {
 }
 
 /**
- * @typedef {[number, string]} EnumerableTuple
+ * Automatically updates element contents using named entries.
+ *
+ * Consumer is expected to
+ * - set 'data-<NAME>' attribute on the element, either statically or dynamically
+ * - install default or custom listener for the respective <NAME>d event
+ *
+ * Element behaviour varies
+ * - <select> recreates <options> with value=$key and labeled with the string contents
+ * - <span> inner text is updated with the all of the string contents joined together
+ *
+ * @typedef {[string, string]} EnumerableTuple
+ * @typedef {{[k: string]: string}} EnumerableNames
  */
 
-/**
- * automatically generate <select> options for know entities
- * @typedef {{id: number, name: string}} EnumerableEntry
- */
 
-/** @type {{[k: string]: EnumerableEntry[]}} */
+/** @type {{[k: string]: EnumerableNames}} */
 const Enumerable = {};
+
+/** PREFIX + NAME propogated to every "data-enumerable='NAME'" */
+const ENUMERABLE_EVENT_PREFIX = 'enumerable-update-';
 
 // <select> initialization from simple {id: ..., name: ...} that map as <option> value=... and textContent
 // To avoid depending on order of incoming messages, always store real value inside of dataset["original"] and provide a way to re-initialize every 'enumerable' <select> element on the page
@@ -921,37 +822,66 @@ const Enumerable = {};
 // Notice that <select multiple> input and output format is u32 number, but the 'original' string is comma-separated <option> value=... attributes
 
 /**
- * @typedef {{id: number, name: string}} SelectValue
- *
- * @param {HTMLSelectElement} select
- * @param {SelectValue[]} values
+ * @typedef {{value: string, text: string}} ElementOption
  */
-export function initSelect(select, values) {
+
+/**
+ * @param {HTMLSelectElement | HTMLDataListElement} elem
+ * @param {ElementOption[]} options
+ */
+export function initElementOptions(elem, options) {
     const initial = document.createElement("option");
     initial.disabled = true;
     initial.value = "";
 
-    select.appendChild(initial);
-    select.selectedIndex = 0;
+    elem.appendChild(initial);
+    if (elem instanceof HTMLSelectElement) {
+        elem.selectedIndex = 0;
+    }
 
-    for (let value of values) {
-        const option = document.createElement("option");
-        option.textContent = value.name;
-        option.value = value.id.toString();
-        select.appendChild(option);
+    for (const option of options) {
+        const child = document.createElement("option");
+        child.value = option.value;
+        child.textContent = option.text;
+        elem.appendChild(child);
+    }
+}
+
+/**
+ * @param {EnumerableNames} names
+ * @returns {ElementOption[]}
+ */
+function elementOptionsFromEnumerable(names) {
+    /** @type {ElementOption[]} */
+    const out = [];
+
+    Object.entries(names)
+        .forEach(([id, name]) => {
+            out.push({
+                "value": id,
+                "text": name,
+            });
+        });
+
+    return out;
+}
+
+/**
+ * @param {HTMLElement} elem
+ */
+function cleanupChildElements(elem) {
+    while (elem.childElementCount && elem.firstElementChild) {
+        elem.removeChild(elem.firstElementChild);
     }
 }
 
 /**
  * @param {HTMLSelectElement} select
- * @param {EnumerableEntry[]} enumerables
+ * @param {EnumerableNames} names
  */
-function onEnumerableUpdateSelect(select, enumerables) {
-    while (select.childElementCount && select.firstElementChild) {
-        select.removeChild(select.firstElementChild);
-    }
-
-    initSelect(select, enumerables);
+function onEnumerableUpdateSelect(select, names) {
+    cleanupChildElements(select);
+    initElementOptions(select, elementOptionsFromEnumerable(names));
 
     const original = getOriginalForElement(select);
     if (original !== null) {
@@ -961,37 +891,48 @@ function onEnumerableUpdateSelect(select, enumerables) {
 
 /**
  * @param {HTMLSpanElement} span
- * @param {EnumerableEntry[]} enumerables
+ * @param {EnumerableNames} names
  */
-function onEnumerableUpdateSpan(span, enumerables) {
-    const id = parseInt(span.dataset["enumerableId"] ?? "");
-    if ((id < 0) || isNaN(id)) {
+function onEnumerableUpdateSpan(span, names) {
+    const id = span.dataset["enumerableId"] ?? "";
+    if (id.length === 0) {
         return;
     }
 
-    const [entry] = enumerables.filter((x) => x.id === id);
-    if (!entry) {
+    const name = names[id];
+    if (!name) {
         return;
     }
 
-    setSpanValue(span, entry.name);
+    setSpanValue(span, name);
+}
+
+/**
+ * @param {HTMLDataListElement} datalist
+ * @param {EnumerableNames} names
+ */
+function onEnumerableUpdateDataList(datalist, names) {
+    cleanupChildElements(datalist);
+    initElementOptions(datalist, elementOptionsFromEnumerable(names));
 }
 
 /**
  * @callback EnumerableElemCallback
  * @param {HTMLElement} elem
- * @param {EnumerableEntry[]} enumerables
+ * @param {EnumerableNames} names
  * @returns {void}
  */
 
 /**
  * @type {EnumerableElemCallback}
  */
-function onEnumerableUpdateElem(elem, enumerables) {
+function onEnumerableUpdateElem(elem, names) {
     if (elem instanceof HTMLSelectElement) {
-        onEnumerableUpdateSelect(elem, enumerables);
+        onEnumerableUpdateSelect(elem, names);
     } else if (elem instanceof HTMLSpanElement) {
-        onEnumerableUpdateSpan(elem, enumerables);
+        onEnumerableUpdateSpan(elem, names);
+    } else if (elem instanceof HTMLDataListElement) {
+        onEnumerableUpdateDataList(elem, names);
     }
 }
 
@@ -1001,14 +942,14 @@ function onEnumerableUpdateElem(elem, enumerables) {
  */
 function onEnumerableUpdate(event, callback) {
     const elem = /** @type {!HTMLElement} */(event.target);
-    const enumerables = /** @type {CustomEvent<{enumerables: EnumerableEntry[]}>} */
+    const enumerables = /** @type {CustomEvent<{enumerables: EnumerableNames}>} */
         (event).detail.enumerables;
     callback(elem, enumerables);
 }
 
 /**
  * @param {string} name
- * @param {EnumerableEntry[]} enumerables
+ * @param {EnumerableNames} enumerables
  */
 function notifyEnumerables(name, enumerables) {
     document.querySelectorAll(`[data-enumerable=${name}]`)
@@ -1018,15 +959,11 @@ function notifyEnumerables(name, enumerables) {
             }
 
             elem.dispatchEvent(
-                new CustomEvent(`enumerable-update-${name}`,
+                new CustomEvent(
+                    `${ENUMERABLE_EVENT_PREFIX}${name}`,
                     {detail: {enumerables}}));
         });
 }
-
-/**
- * @param {HTMLElement} elem
- * @param {EnumerableEntry[]} enumerables
- */
 
 /**
  * @param {HTMLElement} elem
@@ -1036,11 +973,11 @@ function notifyEnumerables(name, enumerables) {
 export function listenEnumerableName(elem, name, callback = null) {
     callback = callback ?? onEnumerableUpdateElem;
     elem.addEventListener(
-        `enumerable-update-${name}`,
+        `${ENUMERABLE_EVENT_PREFIX}${name}`,
         (event) => onEnumerableUpdate(event, callback));
 
     const current = Enumerable[name];
-    if (!current || !current.length) {
+    if (!current) {
         return;
     }
 
@@ -1085,27 +1022,30 @@ export function listenEnumerable(elem, callback = null) {
 
 /**
  * @param {string} name
- * @returns {EnumerableEntry[]}
+ * @returns {EnumerableNames}
  */
 export function getEnumerables(name) {
-    return Enumerable[name] ?? [];
+    return Enumerable[name] ?? {};
 }
 
 /**
  * @param {string} name
- * @param {EnumerableEntry[] | EnumerableTuple[]} enumerables
+ * @param {EnumerableNames | EnumerableTuple[]} enumerables
  */
 export function addEnumerables(name, enumerables) {
-    enumerables = enumerables.map((x) => {
-        if (Array.isArray(x)) {
-            return {id: x[0], name: x[1]};
-        }
+    /** @type {EnumerableNames} */
+    let names = {};
 
-        return x;
-    });
+    if (Array.isArray(enumerables)) {
+        enumerables.forEach(([id, name]) => {
+            names[id] = name;
+        });
+    } else {
+        names = enumerables;
+    }
 
-    Enumerable[name] = enumerables;
-    notifyEnumerables(name, enumerables);
+    Enumerable[name] = names;
+    notifyEnumerables(name, names);
 }
 
 /**
@@ -1118,12 +1058,13 @@ export function addSimpleEnumerables(name, prettyName, count) {
         return;
     }
 
-    const enumerables = [];
+    /** @type {EnumerableNames} */
+    const names = {};
     for (let id = 0; id < count; ++id) {
-        enumerables.push({"id": id, "name": `${prettyName} #${id}`});
+        names[id.toString()] = `${prettyName} #${id}`;
     }
 
-    addEnumerables(name, enumerables);
+    addEnumerables(name, names);
 }
 
 // track <input> values, count total number of changes and their side-effects / needed actions
@@ -1432,6 +1373,15 @@ export function applySettingsFromForms(forms) {
     waitForSaved();
 }
 
+/**
+ * @param {HTMLFormElement[]} forms
+ * @returns {boolean}
+ */
+function validateForms(forms) {
+    return validateFormsReportValidity(forms)
+        && validateFormsPasswords(forms, {strict: false});
+}
+
 /** @param {Event} event */
 function applySettingsFromAllForms(event) {
     event.preventDefault();
@@ -1575,6 +1525,8 @@ export function init() {
             elem.addEventListener("click", onGroupSettingsAddClick);
         });
 
+    // aka elements that already have "dataset['enumerable']" set
+    // most likely, merged static .html contains this reference
     document.querySelectorAll("[data-enumerable]")
         .forEach((elem) => {
             if (!(elem instanceof HTMLElement)) {

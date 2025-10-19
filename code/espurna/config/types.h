@@ -287,6 +287,7 @@
 // These should remain over time, do not modify them, only add new ones at the end
 //--------------------------------------------------------------------------------
 
+#define SENSOR_DUMMY_ID             0
 #define SENSOR_DHTXX_ID             1
 #define SENSOR_DALLAS_ID            2
 #define SENSOR_EMON_ANALOG_ID       3
@@ -333,6 +334,8 @@
 #define SENSOR_PM1006_ID            44
 #define SENSOR_INA219_ID            45
 #define SENSOR_A02YYU_ID            46
+
+#define SENSOR_ID_MAX               47
 
 //--------------------------------------------------------------------------------
 // Magnitudes
@@ -381,8 +384,9 @@
 
 #define MAGNITUDE_MAX               39
 
-// TODO: backwards compatible sensor integer values. should probably allow custom messsages
-// (even with the increased flash arequirements)
+//--------------------------------------------------------------------------------
+// Sensor error codes
+//--------------------------------------------------------------------------------
 
 #define SENSOR_ERROR_OK             0       // No error
 #define SENSOR_ERROR_OUT_OF_RANGE   1       // Result out of sensor range

@@ -6,6 +6,8 @@
 #include <espurna/libs/PrintString.h>
 #include <espurna/terminal_commands.h>
 
+#include <unity_extra.hpp>
+
 namespace espurna {
 namespace terminal {
 namespace test {
@@ -461,11 +463,31 @@ void test_line_buffer() {
 
     buffer.append("\r\n");
 
-    const auto next = buffer.next();
+    const auto first = buffer.next();
     TEST_ASSERT_EQUAL(0, buffer.size());
-    TEST_ASSERT_EQUAL(__builtin_strlen(input), next.value.length());
-    TEST_ASSERT_EQUAL_CHAR_ARRAY(
-        &input[0], next.value.data(), __builtin_strlen(input));
+    TEST_ASSERT_FALSE(first.overflow);
+    TEST_ASSERT_EQUAL_STRING_VIEW(input, first.value);
+
+    StreamString stream;
+    stream.concat(&input[0], __builtin_strlen(input));
+
+    buffer.append(stream);
+
+    TEST_ASSERT_EQUAL(buffer.size(), __builtin_strlen(input));
+    TEST_ASSERT_EQUAL(0, stream.length());
+    TEST_ASSERT_EQUAL(0, buffer.next().value.length());
+
+    stream.write('\r');
+    stream.write('\n');
+
+    buffer.append(stream);
+
+    TEST_ASSERT_EQUAL(buffer.size(), 2 + __builtin_strlen(input));
+    TEST_ASSERT_EQUAL(0, stream.length());
+
+    const auto second = buffer.next();
+    TEST_ASSERT_FALSE(second.overflow);
+    TEST_ASSERT_EQUAL_STRING_VIEW(input, second.value);
 }
 
 // Ensure that when buffer overflows, we set 'overflow' flags
@@ -525,6 +547,155 @@ void test_line_buffer_multiple() {
     TEST_ASSERT(Second.slice(0, Second.length() - 1) == second.value);
 }
 
+void test_delimiter_view() {
+    const char input[] { "255,254,253,123" };
+    auto delim = DelimiterView{input, ","};
+
+    TEST_ASSERT_EQUAL_STRING_VIEW(input, delim.get());
+
+    const auto r = StringView(&input[0], 3);
+    const auto g = StringView(r.end() + 1, 3);
+    const auto b = StringView(g.end() + 1, 3);
+    const auto a = StringView(b.end() + 1, 3);
+
+    const auto first = delim.next();
+    TEST_ASSERT_EQUAL_STRING_VIEW(r, first);
+    TEST_ASSERT_EQUAL(g.length() + b.length() + a.length() + 2, delim.length());
+
+    const auto second = delim.next();
+    TEST_ASSERT_EQUAL_STRING_VIEW(g, second);
+    TEST_ASSERT_EQUAL(b.length() + a.length() + 1, delim.length());
+
+    const auto third = delim.next();
+    TEST_ASSERT_EQUAL_STRING_VIEW(b, third);
+    TEST_ASSERT_EQUAL(a.length(), delim.length());
+
+    const auto fourth = delim.next();
+    TEST_ASSERT_EQUAL(0, fourth.length());
+    TEST_ASSERT_EQUAL_STRING_VIEW(a, delim.get());
+}
+
+void test_split_view() {
+    const char input[] { "120,75,25" };
+
+    auto split = StatefulSplitView{input, " "};
+    TEST_ASSERT(split.next());
+
+    TEST_ASSERT_EQUAL_STRING_VIEW(input, split.current());
+    TEST_ASSERT_EQUAL(0, split.remaining().length());
+
+    TEST_ASSERT_FALSE(split.next());
+    TEST_ASSERT_EQUAL(0, split.current().length());
+    TEST_ASSERT_EQUAL(0, split.remaining().length());
+
+    split = StatefulSplitView{input, ","};
+
+    const auto h = StringView(&input[0], 3);
+    const auto s = StringView(h.end() + 1, 2);
+    const auto l = StringView(s.end() + 1, 2);
+
+    TEST_ASSERT(split.next());
+    TEST_ASSERT_EQUAL_STRING_VIEW(h, split.current());
+    TEST_ASSERT_EQUAL_STRING_VIEW(StringView(s.begin(), l.end()), split.remaining());
+
+    TEST_ASSERT(split.next());
+    TEST_ASSERT_EQUAL_STRING_VIEW(s, split.current());
+    TEST_ASSERT_EQUAL_STRING_VIEW(l, split.remaining());
+
+    TEST_ASSERT(split.next());
+    TEST_ASSERT_EQUAL_STRING_VIEW(l, split.current());
+
+    TEST_ASSERT_EQUAL(0, split.remaining().length());
+
+    TEST_ASSERT_FALSE(split.next());
+    TEST_ASSERT_EQUAL(0, split.current().length());
+    TEST_ASSERT_EQUAL(0, split.remaining().length());
+
+    const char uneven[] { "111,22,," };
+
+    split = StatefulSplitView{uneven, ","};
+
+    TEST_ASSERT(split.next());
+    TEST_ASSERT_EQUAL_STRING_VIEW("111", split.current());
+    TEST_ASSERT_EQUAL_STRING_VIEW("22,,", split.remaining());
+
+    TEST_ASSERT(split.next());
+    TEST_ASSERT_EQUAL_STRING_VIEW("22", split.current());
+    TEST_ASSERT_EQUAL_STRING_VIEW(",", split.remaining());
+
+    TEST_ASSERT(split.next());
+    TEST_ASSERT_EQUAL(0, split.current().length());
+    TEST_ASSERT_EQUAL(0, split.remaining().length());
+
+    TEST_ASSERT_FALSE(split.next());
+
+    const char table[] { "ase3|123123|kasjd|56789" };
+    split = StatefulSplitView{table, "|"};
+
+    auto it = split.find("foobar");
+    TEST_ASSERT(it == split.end());
+
+    it = split.find("kasjd");
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW("kasjd", (*it));
+
+    ++it;
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW("56789", (*it));
+
+    ++it;
+    TEST_ASSERT(it == split.end());
+}
+
+void test_split_view_iterator() {
+    const char input[] { "1,22,333,44,5,61" };
+    const char* expected[] {
+        "1",
+        "22",
+        "333",
+        "44",
+        "5",
+        "61",
+    };
+
+    auto split = SplitView(input, ",");
+
+    size_t index { 0 };
+    for (auto value : split) {
+        TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], value);
+    }
+
+    TEST_ASSERT_EQUAL(std::size(expected), index);
+    index = 0;
+
+    auto it = split.begin();
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], (*it));
+    ++it;
+
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], (*it));
+    ++it;
+
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], (*it));
+    ++it;
+
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], (*it));
+    ++it;
+
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], (*it));
+    ++it;
+
+    TEST_ASSERT(it != split.end());
+    TEST_ASSERT_EQUAL_STRING_VIEW(expected[index++], (*it));
+    ++it;
+    
+    TEST_ASSERT(it == split.end());
+}
+
 void test_error_output() {
     PrintString out(64);
     PrintString err(64);
@@ -578,8 +749,11 @@ int main(int, char**) {
     RUN_TEST(test_case_insensitive);
     RUN_TEST(test_output);
     RUN_TEST(test_new_line);
-    RUN_TEST(test_line_view);
+    RUN_TEST(test_delimiter_view);
+    RUN_TEST(test_split_view);
+    RUN_TEST(test_split_view_iterator);
     RUN_TEST(test_line_buffer);
+    RUN_TEST(test_line_view);
     RUN_TEST(test_line_buffer_overflow);
     RUN_TEST(test_line_buffer_multiple);
     RUN_TEST(test_error_output);

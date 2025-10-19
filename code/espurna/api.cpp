@@ -357,7 +357,7 @@ bool is_json(AsyncWebServerRequest* request) {
 // - Server never checks for request closing in filter or canHandle, so if we don't want to handle large content-length, it
 //   will still flow through the lwip backend.
 // - `request->_tempObject` is used to keep API request state, but it's just a plain void pointer
-// - `request->send(..., payload)` creates a heap-allocated `reponse` object that will copy the payload and tracks it by a basic pointer.
+// - `request->send(..., payload)` creates a heap-allocated `response` object that will copy the payload and tracks it by a basic pointer.
 //   In case we call `request->send` a 2nd time (regardless of the type of the send()), it creates a 2nd object without de-allocating the 1st one.
 // - espasyncwebserver will `free(_tempObject)` when request is disconnected, but only after this callbackhandler is done.
 //   make sure it's set to nullptr via `AsyncWebServerRequest::onDisconnect`
@@ -495,7 +495,7 @@ public:
         request->send(500);
     }
 
-    void _handlePut(AsyncWebServerRequest* request, uint8_t* data, size_t size) {
+    void _handlePut(AsyncWebServerRequest* request, const uint8_t* data, size_t size) {
         // XXX: arduinojson v5 de-serializer will happily read garbage from raw ptr, since there's no length limit
         //      this is fixed in v6 though. for now, use a wrapper, but be aware that this actually uses more mem for the jsonbuffer
         auto* ptr = reinterpret_cast<const char*>(data);
@@ -523,8 +523,23 @@ public:
         return;
     }
 
-    void handleBody(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t, size_t total) override {
-        if (total && (len == total)) {
+    void handleBody(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) override {
+        static constexpr auto BufferSize = size_t{ 1024 };
+        if (BufferSize > total) {
+            return;
+        }
+
+        auto& helper = *reinterpret_cast<RequestHelper*>(request->_tempObject);
+        if (total != (len + index)) {
+            auto& buffer = helper.reserved_buffer(BufferSize);
+            buffer.append(data, len);
+            return;
+        }
+
+        if (helper.buffering()) {
+            const auto& buffer = helper.buffer();
+            _handlePut(request, buffer.data(), buffer.size());
+        } else {
             _handlePut(request, data, total);
         }
     }
@@ -627,11 +642,10 @@ public:
             return;
         }
 
-        auto method = request->method();
-        const bool is_put = (
-            (!apiRestFul()|| (HTTP_PUT == method))
-            && request->hasParam("value", HTTP_PUT == method)
-        );
+        const auto method = request->method();
+        const auto is_put =
+            (!apiRestFul() || (HTTP_PUT == method))
+            && _check_unhandled_params(request);
 
         switch (method) {
         case HTTP_HEAD:
@@ -685,6 +699,18 @@ public:
     using BaseWebHandler::parts;
 
 private:
+    bool _check_unhandled_params(AsyncWebServerRequest* request) {
+        const auto params = request->params();
+        for (size_t param = 0; param < params; ++param) {
+            const auto* value = request->getParam(param);
+            if (!apiReservedParam(value->name())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     BasicHandler _get;
     BasicHandler _put;
 };

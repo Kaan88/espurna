@@ -339,6 +339,7 @@ struct Led {
 
 private:
     unsigned char _pin;
+    bool _status;
     bool _inverse;
     LedMode _mode;
     Pattern _pattern;
@@ -350,13 +351,13 @@ void Led::init() {
 }
 
 bool Led::status() {
-    bool result = digitalRead(_pin);
-    return _inverse ? !result : result;
+    return _status;
 }
 
 bool Led::status(bool new_status) {
+    _status = new_status;
     digitalWrite(_pin, _inverse ? !new_status : new_status);
-    return new_status;
+    return _status;
 }
 
 bool Led::toggle() {
@@ -574,20 +575,28 @@ void migrate(int version) {
 // (TODO: template params containing structs like duration need -std=c++2a)
 
 #define LED_STATIC_DELAY(NAME, ON, OFF)\
-    static constexpr auto NAME ## MillisecondsOn PROGMEM = espurna::duration::Milliseconds(ON);\
-    static constexpr auto NAME ## MillisecondsOff PROGMEM = espurna::duration::Milliseconds(OFF);\
-    static_assert(NAME ## MillisecondsOn < Delay::MillisecondsMax, "");\
-    static_assert(NAME ## MillisecondsOff < Delay::MillisecondsMax, "");\
-    static constexpr Delay NAME PROGMEM = Delay {\
-        std::chrono::duration_cast<Delay::Duration>(NAME ## MillisecondsOn),\
-        std::chrono::duration_cast<Delay::Duration>(NAME ## MillisecondsOff),\
-        Delay::RepeatsMin }
+    static constexpr auto NAME PROGMEM = Delay(\
+        std::chrono::duration_cast<Delay::Duration>(duration::Milliseconds(ON)),\
+        std::chrono::duration_cast<Delay::Duration>(duration::Milliseconds(OFF)),\
+        Delay::RepeatsMin);\
+    static_assert((NAME).on() < Delay::MillisecondsMax, "");\
+    static_assert((NAME).off() < Delay::MillisecondsMax, "")
 
 LED_STATIC_DELAY(NetworkConnected, 100, 4900);
 LED_STATIC_DELAY(NetworkConnectedInverse, 4900, 100);
 LED_STATIC_DELAY(NetworkConfig, 100, 900);
 LED_STATIC_DELAY(NetworkConfigInverse, 900, 100);
 LED_STATIC_DELAY(NetworkIdle, 500, 500);
+
+Delay network_delay() {
+    if (wifiConnected()) {
+        return NetworkConnected;
+    } else if (wifiConnectable()) {
+        return NetworkConfig;
+    }
+
+    return NetworkIdle;
+}
 
 namespace internal {
 
@@ -651,12 +660,19 @@ void setup() {
 
 #if RELAY_SUPPORT
 namespace relay {
-namespace internal {
+
+enum class Status {
+    Unknown,
+    On,
+    Off,
+};
 
 struct Link {
     Led& led;
     size_t relayId;
 };
+
+namespace internal {
 
 std::forward_list<Link> relays;
 
@@ -665,34 +681,36 @@ bool linked(const Link& link, const Led& led) {
 }
 
 void unlink(Led& led) {
-    relays.remove_if([&](const Link& link) {
-        return linked(link, led);
-    });
+    relays.remove_if(
+        [&](const Link& link) {
+            return linked(link, led);
+        });
+}
+
+Link* find(const Led& led) {
+    auto it = std::find_if(
+        relays.begin(),
+        relays.end(),
+        [&](const Link& link) {
+            return linked(link, led);
+        });
+
+    if (it != relays.end()) {
+        return std::addressof(*it);
+    }
+
+    return nullptr;
 }
 
 void link(Led& led, size_t id) {
-    auto it = std::find_if(relays.begin(), relays.end(), [&](const Link& link) {
-        return linked(link, led);
-    });
+    auto link = find(led);
 
-    if (it != relays.end()) {
-        (*it).relayId = id;
+    if (link) {
+        link->relayId = id;
         return;
     }
 
     relays.emplace_front(Link{led, id});
-}
-
-size_t find(Led& led) {
-    auto it = std::find_if(relays.begin(), relays.end(), [&](const Link& link) {
-        return linked(link, led);
-    });
-
-    if (it != relays.end()) {
-        return (*it).relayId;
-    }
-
-    return RelaysMax;
 }
 
 } // namespace internal
@@ -705,24 +723,71 @@ void link(Led& led, size_t id) {
     internal::link(led, id);
 }
 
-size_t find(Led& led) {
-    return internal::find(led);
+Status mode_status(const Led& led) {
+    auto out = Status::Unknown;
+
+    const auto* link = internal::find(led);
+    if (!link || (link->relayId >= RelaysMax)) {
+        return out;
+    }
+
+    const auto id = link->relayId;
+    auto status = false;
+
+    switch (led.mode()) {
+    case LedMode::Relay:
+        status = relayStatus(id);
+        break;
+
+    case LedMode::RelayInverse:
+        status = !relayStatus(id);
+        break;
+
+    case LedMode::FindMe:
+        status = relayStatus();
+        break;
+
+    case LedMode::Relays:
+        status = !relayStatus();
+        break;
+
+    default:
+        break;
+    }
+
+    if (status) {
+        out = Status::On;
+    } else {
+        out = Status::Off;
+    }
+
+    return out;
 }
 
-bool status(Led& led) {
-    return relayStatus(find(led));
-}
-
-bool areAnyOn() {
-    bool result { false };
-    for (size_t id = 0; id < relayCount(); ++id) {
-        if (relayStatus(id)) {
-            result = true;
-            break;
+Delay network_delay(bool status) {
+    if (wifiConnected()) {
+        if (status) {
+            return NetworkConnected;
+        } else {
+            return NetworkConnectedInverse;
+        }
+    } else if (wifiConnectable()) {
+        if (status) {
+            return NetworkConfig;
+        } else {
+            return NetworkConfigInverse;
         }
     }
 
-    return result;
+    return NetworkIdle;
+}
+
+Delay findme_delay() {
+    return network_delay(relayStatus());
+}
+
+Delay relays_delay() {
+    return network_delay(!relayStatus());
 }
 
 } // namespace relay
@@ -733,15 +798,16 @@ size_t count() {
 }
 
 bool scheduled() {
-    return internal::update;
+    if (internal::update) {
+        internal::update = false;
+        return true;
+    }
+
+    return false;
 }
 
 void schedule() {
     internal::update = true;
-}
-
-void cancel() {
-    internal::update = false;
 }
 
 bool status(Led& led) {
@@ -791,23 +857,41 @@ void pattern(Led& led, Pattern&& other) {
     status(led, true);
 }
 
+bool payload_mode(Led& led, StringView payload) {
+    using espurna::settings::internal::LedModeOptions;
+
+    for (auto& opt : LedModeOptions) {
+        if (payload == opt.string()) {
+            led.mode(opt.value());
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void payload_status(Led& led, StringView payload) {
     led.stop();
-    led.status(false);
-
     led.mode(LedMode::Manual);
 
     const auto value = rpcParsePayload(payload);
     switch (value) {
     case PayloadStatus::On:
-    case PayloadStatus::Off:
-        led::status(led, (value == PayloadStatus::On));
+        led.mode(LedMode::On);
         break;
+
+    case PayloadStatus::Off:
+        led.mode(LedMode::Off);
+        break;
+
     case PayloadStatus::Toggle:
         led::status(led, !led::status(led));
         break;
+
     case PayloadStatus::Unknown:
-        pattern(led, Pattern(payload));
+        if (!payload_mode(led, payload)) {
+            pattern(led, Pattern(payload));
+        }
         break;
     }
 }
@@ -842,105 +926,62 @@ void configure() {
         }
 #endif
     }
+
     schedule();
 }
 
-void loop(Led& led) {
+void loop(Led& led, bool scheduled) {
     switch (led.mode()) {
 
     case LedMode::Manual:
         break;
 
     case LedMode::WiFi:
-        if (wifiConnected()) {
-            run(led, NetworkConnected);
-        } else if (wifiConnectable()) {
-            run(led, NetworkConfig);
-        } else {
-            run(led, NetworkIdle);
-        }
+        run(led, network_delay());
         break;
 
     case LedMode::FindMeWiFi:
 #if RELAY_SUPPORT
-        if (wifiConnected()) {
-            if (relay::areAnyOn()) {
-                run(led, NetworkConnected);
-            } else {
-                run(led, NetworkConnectedInverse);
-            }
-        } else if (wifiConnectable()) {
-            if (relay::areAnyOn()) {
-                run(led, NetworkConfig);
-            } else {
-                run(led, NetworkConfigInverse);
-            }
-        } else {
-            run(led, NetworkIdle);
-        }
+        run(led, relay::findme_delay());
 #endif
         break;
 
     case LedMode::RelaysWiFi:
 #if RELAY_SUPPORT
-        if (wifiConnected()) {
-            if (!relay::areAnyOn()) {
-                run(led, NetworkConnected);
-            } else {
-                run(led, NetworkConnectedInverse);
-            }
-        } else if (wifiConnectable()) {
-            if (!relay::areAnyOn()) {
-                run(led, NetworkConfig);
-            } else {
-                run(led, NetworkConfigInverse);
-            }
-        } else {
-            run(led, NetworkIdle);
-        }
+        run(led, relay::relays_delay());
 #endif
         break;
 
     case LedMode::Relay:
-#if RELAY_SUPPORT
-        if (scheduled()) {
-            status(led, relay::status(led));
-        }
-#endif
-        break;
-
     case LedMode::RelayInverse:
-#if RELAY_SUPPORT
-        if (scheduled()) {
-            status(led, !relay::status(led));
-        }
-#endif
-        break;
-
     case LedMode::FindMe:
-#if RELAY_SUPPORT
-        if (scheduled()) {
-            led::status(led, !relay::areAnyOn());
-        }
-#endif
-        break;
-
     case LedMode::Relays:
 #if RELAY_SUPPORT
-        if (scheduled()) {
-            led::status(led, relay::areAnyOn());
+        if (scheduled) {
+            switch (relay::mode_status(led)) {
+            case relay::Status::Unknown:
+                break;
+
+            case relay::Status::On:
+                status(led, true);
+                break;
+
+            case relay::Status::Off:
+                status(led, false);
+                break;
+            }
         }
 #endif
         break;
 
     case LedMode::On:
-        if (scheduled()) {
+        if (scheduled) {
             status(led, true);
         }
         break;
 
     case LedMode::Off:
-        if (scheduled()) {
+        if (scheduled) {
             status(led, false);
         }
         break;
@@ -951,10 +992,10 @@ void loop(Led& led) {
 }
 
 void loop() {
+    const auto is_scheduled = scheduled();
     for (auto& led : internal::leds) {
-        loop(led);
+        loop(led, is_scheduled);
     }
-    cancel();
 }
 
 #if MQTT_SUPPORT

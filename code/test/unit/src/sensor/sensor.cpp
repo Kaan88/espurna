@@ -15,13 +15,19 @@
 // TODO is ..._SUPPORT wrapping necessary inside of sensor includes?
 // TODO ..._PORT should not be used in the class itself?
 
+// TODO ignore -Wunused-value that comes up here from interrupts() / noInterrupts() usage
+#undef xt_rsil
+#define xt_rsil(X)
+
 #define SENSOR_SUPPORT 1
 #define CSE7766_SUPPORT 1
 #define A02YYU_SUPPORT 1
+#define DHT_SUPPORT 1
 
 #include <espurna/config/sensors.h>
 #include <espurna/sensors/CSE7766Sensor.h>
 #include <espurna/sensors/A02YYUSensor.h>
+#include <espurna/sensors/DHTSensor.h>
 
 #include <memory>
 #include <vector>
@@ -161,6 +167,7 @@ void test_cse7766_data() {
 }
 
 void test_a02yyu_data() {
+    // baseline test for port reader
     StreamEcho port;
 
     auto ptr = std::make_unique<A02YYUSensor>();
@@ -169,6 +176,7 @@ void test_a02yyu_data() {
     TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
     TEST_ASSERT_EQUAL_DOUBLE(0.0, ptr->value(0));
 
+    // lhs part stores intermediate result, but does not error out
     constexpr uint8_t one[] {0xff, 0x07};
     port.write(&one[0], std::size(one));
 
@@ -184,6 +192,7 @@ void test_a02yyu_data() {
     TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
     TEST_ASSERT_EQUAL_DOUBLE(0.0, ptr->value(0));
 
+    // then rhs part finishes up and yields the value
     constexpr uint8_t two[] {0xa1, 0xa7};
     port.write(&two[0], std::size(two));
 
@@ -191,6 +200,160 @@ void test_a02yyu_data() {
 
     TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
     TEST_ASSERT_EQUAL_DOUBLE(1.953, ptr->value(0));
+
+    // some sampled data to verify possible outputs
+    // tnx @toniSg for the captures
+    static constexpr std::array<uint8_t, 4> samples[] = {
+        { 0xFF, 0x2, 0xBF, 0xC0 }, // 703
+        { 0xFF, 0x2, 0xB6, 0xB7 }, // 694
+        { 0xFF, 0x2, 0xB7, 0xB8 }, // 695
+        { 0xFF, 0x2, 0xC3, 0xC4 }, // 707
+        { 0xFF, 0x2, 0xB2, 0xB3 }, // 690
+        { 0xFF, 0x2, 0xC4, 0xC5 }, // 708
+        { 0xFF, 0x2, 0xB2, 0xB3 }, // 690
+        { 0xFF, 0x2, 0xBF, 0xC0 }, // 703
+        { 0xFF, 0x2, 0xC8, 0xC9 }, // 712
+        { 0xFF, 0x2, 0xC4, 0xC5 }, // 708
+        { 0xFF, 0x2, 0xB2, 0xB3 }, // 690
+        { 0xFF, 0x2, 0xB3, 0xB4 }, // 691
+        { 0xFF, 0x2, 0xB7, 0xB8 }, // 695
+        { 0xFF, 0x2, 0xBF, 0xC0 }, // 703
+        { 0xFF, 0x2, 0xB7, 0xB8 }, // 695
+        { 0xFF, 0x2, 0xB2, 0xB3 }, // 690
+        { 0xFF, 0x2, 0xF1, 0xF2 }, // 753
+        { 0xFF, 0x2, 0xFD, 0xFE }, // 765
+        { 0xFF, 0x2, 0xF9, 0xFA }, // 761
+        { 0xFF, 0x2, 0xF9, 0xFA }, // 761
+        { 0xFF, 0x2, 0xCB, 0xCC }, // 715
+        { 0xFF, 0x2, 0x13, 0x14 }, // 531
+        { 0xFF, 0x1, 0x30, 0x30 }, // 304
+        { 0xFF, 0x0, 0xE5, 0xE4 }, // 229
+        { 0xFF, 0x1, 0x02, 0x02 }, // 258
+        { 0xFF, 0x1, 0x03, 0x03 }, // 259
+        { 0xFF, 0x1, 0x04, 0x04 }, // 260
+        { 0xFF, 0x1, 0x06, 0x06 }, // 262
+        { 0xFF, 0x1, 0x04, 0x04 }, // 260
+        { 0xFF, 0x1, 0x04, 0x04 }, // 260
+        { 0xFF, 0x1, 0x05, 0x05 }, // 261
+        { 0xFF, 0x1, 0x07, 0x07 }, // 263
+        { 0xFF, 0x1, 0x0B, 0x0B }, // 267
+        { 0xFF, 0x1, 0x07, 0x07 }, // 263
+        { 0xFF, 0x1, 0x04, 0x04 }, // 260
+        { 0xFF, 0x1, 0x04, 0x04 }, // 260
+        { 0xFF, 0x1, 0x05, 0x05 }, // 261
+        { 0xFF, 0x1, 0x06, 0x06 }, // 262
+        { 0xFF, 0x1, 0x05, 0x05 }, // 261
+        { 0xFF, 0x1, 0x0A, 0x0A }, // 266
+        { 0xFF, 0x1, 0x06, 0x06 }, // 262
+        { 0xFF, 0x1, 0x0A, 0x0A }, // 266
+        { 0xFF, 0x1, 0x06, 0x06 }, // 262
+        { 0xFF, 0x1, 0x07, 0x07 }, // 263
+        { 0xFF, 0x1, 0x07, 0x07 }, // 263
+        { 0xFF, 0x1, 0x07, 0x07 }, // 263
+        { 0xFF, 0x1, 0x0C, 0x0C }, // 268
+        { 0xFF, 0x1, 0x0B, 0x0B }, // 267
+        { 0xFF, 0x1, 0x10, 0x10 }, // 272
+        { 0xFF, 0x1, 0x15, 0x15 }, // 277
+        { 0xFF, 0x1, 0x10, 0x10 }, // 272
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x12, 0x12 }, // 274
+        { 0xFF, 0x1, 0x19, 0x19 }, // 281
+        { 0xFF, 0x2, 0x10, 0x11 }, // 528
+        { 0xFF, 0x2, 0xC0, 0xC1 }, // 704
+        { 0xFF, 0x2, 0xB7, 0xB8 }, // 695
+        { 0xFF, 0x2, 0x51, 0x52 }, // 593
+        { 0xFF, 0x2, 0x4C, 0x4D }, // 588
+        { 0xFF, 0x2, 0xC4, 0xC5 }, // 708
+        { 0xFF, 0x2, 0x33, 0x34 }, // 563
+        { 0xFF, 0x2, 0xB7, 0xB8 }, // 695
+        { 0xFF, 0x2, 0x51, 0x52 }, // 593
+        { 0xFF, 0x2, 0xB7, 0xB8 }, // 695
+        { 0xFF, 0x2, 0x51, 0x52 }, // 593
+        { 0xFF, 0x2, 0x50, 0x51 }, // 592
+        { 0xFF, 0x2, 0x43, 0x44 }, // 579
+        { 0xFF, 0x2, 0x4C, 0x4D }, // 588
+        { 0xFF, 0x2, 0xB7, 0xB8 }  // 695
+    };
+
+    auto raw_distance = [](std::array<uint8_t, 2> pair) {
+        double out = (pair[0] << 8) | pair[1];
+        out /= 1000.0;
+
+        return out;
+    };
+
+    for (auto& sample : samples) {
+        port.write(sample.data(), sample.size());
+        ptr->tick();
+
+        TEST_ASSERT_EQUAL(SENSOR_ERROR_OK, ptr->error());
+        TEST_ASSERT_EQUAL_DOUBLE(
+            raw_distance({sample[1], sample[2]}), ptr->value(0));
+    }
+}
+
+void test_dht_data() {
+    TEST_ASSERT_EQUAL_FLOAT(43.f,
+        dht_humidity(DHT_CHIP_DHT11, {0x2b, 0x0}));
+    TEST_ASSERT_EQUAL_FLOAT(43.f,
+        dht_humidity(DHT_CHIP_DHT11, {0x2b, 0xe}));
+
+    TEST_ASSERT_EQUAL_FLOAT(23.f,
+        dht_temperature(DHT_CHIP_DHT11, {0x17, 0x0}));
+    TEST_ASSERT_EQUAL_FLOAT(23.f,
+        dht_temperature(DHT_CHIP_DHT11, {0x17, 0xf}));
+
+    TEST_ASSERT_EQUAL_FLOAT(56.8f,
+        dht_humidity(DHT_CHIP_DHT12, {0x38, 0x8}));
+    TEST_ASSERT_EQUAL_FLOAT(26.6f,
+        dht_temperature(DHT_CHIP_DHT12, {0x1a, 0x6}));
+    TEST_ASSERT_EQUAL_FLOAT(-26.6f,
+        dht_temperature(DHT_CHIP_DHT12, {0x1a, 0x86}));
+
+    TEST_ASSERT(dht_checksum({0x1, 0xc1, 0x0, 0x2, 0xc4}));
+    TEST_ASSERT(dht_checksum({0x1, 0xc8, 0x80, 0x2, 0x4b}));
+
+    TEST_ASSERT_EQUAL_FLOAT(44.9f,
+        dht_humidity(DHT_CHIP_DHT22, {0x1, 0xc1}));
+    TEST_ASSERT_EQUAL_FLOAT(45.6f,
+        dht_humidity(DHT_CHIP_DHT22, {0x1, 0xc8}));
+    TEST_ASSERT_EQUAL_FLOAT(0.2f,
+        dht_temperature(DHT_CHIP_DHT22, {0x0, 0x2}));
+    TEST_ASSERT_EQUAL_FLOAT(-0.2f,
+        dht_temperature(DHT_CHIP_DHT22, {0x80, 0x2}));
+
+    TEST_ASSERT_EQUAL_FLOAT(92.3f,
+        dht_humidity(DHT_CHIP_DHT22, {0x3, 0x9b}));
+    TEST_ASSERT_EQUAL_FLOAT(2.9f,
+        dht_temperature(DHT_CHIP_DHT22, {0x0, 0x1d}));
+
+    TEST_ASSERT(dht_checksum({0x2, 0x33, 0xff, 0xf7, 0x2b}));
+    TEST_ASSERT(dht_checksum({0x2, 0x11, 0xff, 0xf1, 0x03}));
+    TEST_ASSERT(dht_checksum({0x2, 0x10, 0xff, 0xf1, 0x02}));
+
+    TEST_ASSERT_EQUAL_FLOAT(56.3f,
+        dht_humidity(DHT_CHIP_DHT22, {0x2, 0x33}));
+    TEST_ASSERT_EQUAL_FLOAT(-0.9f,
+        dht_temperature(DHT_CHIP_DHT22, {0xff, 0xf7}));
+
+    TEST_ASSERT_EQUAL_FLOAT(93.0f,
+        dht_humidity(DHT_CHIP_DHT22, {0x3, 0xa2}));
+    TEST_ASSERT_EQUAL_FLOAT(-4.8f,
+        dht_temperature(DHT_CHIP_DHT22, {0xff, 0xd0}));
+    TEST_ASSERT_EQUAL_FLOAT(-4.7f,
+        dht_temperature(DHT_CHIP_DHT22, {0xff, 0xd1}));
+    TEST_ASSERT_EQUAL_FLOAT(-4.6f,
+        dht_temperature(DHT_CHIP_DHT22, {0xff, 0xd2}));
+
+    TEST_ASSERT_EQUAL_FLOAT(88.9f,
+        dht_humidity(DHT_CHIP_DHT22, {0x3, 0x79}));
+    TEST_ASSERT_EQUAL_FLOAT(-2.2f,
+        dht_temperature(DHT_CHIP_DHT22, {0xf, 0xea}));
 }
 
 } // namespace
@@ -202,5 +365,6 @@ int main(int, char**) {
     using namespace espurna::test;
     RUN_TEST(test_cse7766_data);
     RUN_TEST(test_a02yyu_data);
+    RUN_TEST(test_dht_data);
     return UNITY_END();
 }

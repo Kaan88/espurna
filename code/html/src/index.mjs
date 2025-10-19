@@ -1,6 +1,27 @@
-/// <reference path="index.build.d.mts" />
+import {
+    MODULE_API,
+    MODULE_CMD,
+    MODULE_CURTAIN,
+    MODULE_DBG,
+    MODULE_DCZ,
+    MODULE_DEV,
+    MODULE_GARLAND,
+    MODULE_HA,
+    MODULE_LED,
+    MODULE_LIGHT,
+    MODULE_LIGHTFOX,
+    MODULE_OTA,
+    MODULE_RELAY,
+    MODULE_RFB,
+    MODULE_RFM69,
+    MODULE_RPN,
+    MODULE_SCH,
+    MODULE_SNS,
+    MODULE_THERMOSTAT,
+    MODULE_TSPK,
+} from '@build-preset/constants.mjs';
 
-import { notifyError, notifyErrorEvent } from './errors.mjs';
+import { notifyError, notifyErrorEvent } from './notify.mjs';
 window.addEventListener("error", (event) => {
     notifyErrorEvent(event);
     console.error(event.error);
@@ -41,16 +62,18 @@ import { init as initHa } from './ha.mjs';
 import { init as initLed } from './led.mjs';
 import { init as initLight } from './light.mjs';
 import { init as initLightfox } from './lightfox.mjs';
+import { init as initNtp } from './ntp.mjs';
 import { init as initOta } from './ota.mjs';
 import { init as initRelay } from './relay.mjs';
-import { init as initRfm69 } from './rfm69.mjs';
 import { init as initRfbridge } from './rfbridge.mjs';
+import { init as initRfm69 } from './rfm69.mjs';
 import { init as initRules } from './rules.mjs';
 import { init as initSchedule } from './schedule.mjs';
 import { init as initSensor } from './sensor.mjs';
 import { init as initThermostat } from './thermostat.mjs';
 import { init as initThingspeak } from './thingspeak.mjs';
-import { init as initLocal } from './local.mjs';
+
+import { init as initDev } from './dev.mjs';
 
 /** @type {number | null} */
 let KeepTime = null;
@@ -334,7 +357,7 @@ function onJsonPayload(event) {
     }
 }
 
-function init() {
+async function init() {
     // Sidebar menu & buttons
     document.querySelector(".menu-link")
         ?.addEventListener("click", onMenuLinkClick);
@@ -358,11 +381,15 @@ function init() {
 
     variableListeners(listeners());
 
-    initConnection();
+    if (!MODULE_DEV) {
+        initConnection();
+    }
+
     initSettings();
     initPassword();
     initWiFi();
     initGpio();
+    initNtp();
 
     if (MODULE_OTA) {
         initOta();
@@ -436,8 +463,8 @@ function init() {
         initCurtain();
     }
 
-    if (MODULE_LOCAL) {
-        initLocal();
+    if (MODULE_DEV) {
+        initDev();
         KeepTime = window.setInterval(keepTime, 1000);
         modulesVisibleAll();
         return;

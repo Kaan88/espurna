@@ -28,10 +28,10 @@ void onVisible(JsonObject& root) {
 void sendResponse(AsyncWebServerRequest *request, int code, const String& payload = "") {
     auto *response = request->beginResponseStream(F("text/plain"), 256);
 
-    response->addHeader(F("Connection"), F("close"));
-    response->addHeader(F("X-XSS-Protection"), F("1; mode=block"));
-    response->addHeader(F("X-Content-Type-Options"), F("nosniff"));
-    response->addHeader(F("X-Frame-Options"), F("deny"));
+    webSecurityHeaders(response);
+    response->addHeader(
+        STRING_VIEW("Connection").toString(),
+        STRING_VIEW("close").toString());
 
     response->setCode(code);
 

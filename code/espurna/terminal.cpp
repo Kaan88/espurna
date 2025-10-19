@@ -387,21 +387,21 @@ void adc(CommandContext&& ctx) {
 #if SYSTEM_CHECK_ENABLED
 PROGMEM_STRING(Stable, "STABLE");
 
-void stable(CommandContext&& ctx) {
+void stable(CommandContext&&) {
     systemForceStable();
     prepareReset(CustomResetReason::Stability);
 }
 
 PROGMEM_STRING(Unstable, "UNSTABLE");
 
-void unstable(CommandContext&& ctx) {
+void unstable(CommandContext&&) {
     systemForceUnstable();
     prepareReset(CustomResetReason::Stability);
 }
 
 PROGMEM_STRING(Trap, "TRAP");
 
-void trap(CommandContext&& ctx) {
+void trap(CommandContext&&) {
     __builtin_trap();
 }
 #endif
@@ -549,124 +549,47 @@ void setup() {
 #if WEB_SUPPORT
 namespace web {
 
-struct Output {
-    static constexpr auto Timeout = espurna::duration::Seconds(2);
-    static constexpr auto Wait = espurna::duration::Milliseconds(100);
-    static constexpr int Limit { 8 };
-
-    Output() = delete;
-    Output(const Output&) = default;
-    Output(Output&&) = default;
-
-    explicit Output(uint32_t id) :
-        _id(id)
-    {}
-
-    ~Output() {
-        send();
-    }
-
-    void operator()(const char* line) {
-        if (wsConnected(_id)) {
-            if ((_count > Limit) && !send()) {
-                return;
-            }
-
-            ++_count;
-            _output += line;
-        }
-    }
-
-    void clear() {
-        _output = String();
-        _count = 0;
-    }
-
-    bool send() {
-        if (!_count || !_output.length()) {
-            clear();
-            return false;
-        }
-
-        if (!wsConnected(_id)) {
-            clear();
-            return false;
-        }
-
-        using Clock = time::CoreClock;
-
-        auto start = Clock::now();
-        bool ready { false };
-
-        while (Clock::now() - start < Timeout) {
-            auto info = wsClientInfo(_id);
-            if (!info.connected) {
-                clear();
-                return false;
-            }
-
-            if (!info.stalled) {
-                ready = true;
-                break;
-            }
-
-            time::blockingDelay(Wait);
-        }
-
-        if (ready) {
-            DynamicJsonBuffer buffer((2 * JSON_OBJECT_SIZE(1)) + JSON_ARRAY_SIZE(1));
-
-            JsonObject& root = buffer.createObject();
-            JsonObject& log = root.createNestedObject("log");
-
-            JsonArray& msg = log.createNestedArray("msg");
-            msg.add(_output.c_str());
-
-            wsSend(root);
-            clear();
-
-            return true;
-        }
-
-        clear();
-        return false;
-    }
-
-private:
-    String _output;
-    uint32_t _id { 0 };
-    int _count { 0 };
-};
-
-constexpr espurna::duration::Seconds Output::Timeout;
-constexpr espurna::duration::Milliseconds Output::Wait;
-
 STRING_VIEW_INLINE(Prefix, "cmd");
+
+constexpr auto BufferHint = espurna::web::ws::InplaceLog::BufferHint;
+using Output = PrintLine<espurna::web::ws::InplaceLog>;
+
+struct Command {
+    String line;
+    uint32_t id;
+};
 
 void onVisible(JsonObject& root) {
     wsPayloadModule(root, Prefix);
 }
 
 void onAction(uint32_t client_id, const char* action, JsonObject& data) {
-    PROGMEM_STRING(Cmd, "cmd");
-    if (strncmp_P(action, &Cmd[0], __builtin_strlen(Cmd)) != 0) {
+    STRING_VIEW_INLINE(Cmd, "cmd");
+    if (Cmd != action) {
         return;
     }
 
-    PROGMEM_STRING(Line, "line");
-    if (!data.containsKey(FPSTR(Line)) || !data[FPSTR(Line)].is<String>()) {
+    STRING_VIEW_INLINE(Line, "line");
+    auto cmd = Command{
+        .line = data[Line].as<String>(),
+        .id = client_id,
+    };
+
+    if (!cmd.line.length()) {
         return;
     }
 
-    const auto cmd = std::make_shared<String>(
-        data[FPSTR(Line)].as<String>());
-    if (!cmd->length()) {
-        return;
-    }
+    const auto shared =
+        std::make_shared<Command>(std::move(cmd));
 
-    espurnaRegisterOnce([cmd, client_id]() {
-        PrintLine<Output> out(client_id);
-        api_find_and_call(*cmd, out);
+    espurnaRegisterOnce([shared]() {
+        wsPostManual(shared->id,
+            [shared](JsonObject& root) {
+                Output out(root, shared->id);
+                out.output().wait_time(espurnaLoopDelay());
+                api_find_and_call(shared->line, out);
+            },
+            BufferHint);
     });
 }
 
@@ -686,11 +609,33 @@ void setup() {
 #if TERMINAL_WEB_API_SUPPORT
 namespace api {
 
+STRING_VIEW_INLINE(Value, "line");
+
 STRING_VIEW_INLINE(Path, TERMINAL_WEB_API_PATH);
 STRING_VIEW_INLINE(Key, "termWebApiPath");
 
 // XXX: new `apiRegister()` depends that `webServer()` is available, meaning we can't call this setup func
 // before the `webSetup()` is called. ATM, just make sure it is in order.
+
+using Commands = std::shared_ptr<std::vector<String>>;
+
+#define API_UPDATE_COMMANDS(OUT, NAME, VALUE) \
+    if (!OUT) {\
+        OUT = std::make_shared<Commands::element_type>();\
+    }\
+\
+    if (NAME == Value) {\
+        (OUT)->push_back(VALUE);\
+    }\
+
+#define API_SCHEDULE_COMMANDS(REQUEST, COMMANDS) \
+    espurna::web::print::scheduleFromRequest(\
+        REQUEST,\
+        [COMMANDS](Print& out) {\
+            for (const auto& cmd : *COMMANDS) {\
+                api_find_and_call(cmd, out);\
+            }\
+        });\
 
 void setup() {
 #if API_SUPPORT
@@ -699,9 +644,10 @@ void setup() {
         [](ApiRequest& api) {
             api.handle([](AsyncWebServerRequest* request) {
                 auto* response = request->beginResponseStream(F("text/plain"));
-                for (auto name : names()) {
+                for (const auto view : names()) {
+                    const auto name = view.toString();
                     response->write(name.c_str(), name.length());
-                    response->print("\r\n");
+                    response->write("\r\n", 2);
                 }
 
                 request->send(response);
@@ -710,21 +656,19 @@ void setup() {
             return true;
         },
         [](ApiRequest& api) {
-            // TODO: since HTTP spec allows query string to contain repeating keys, allow iteration
-            // over every received 'line' to provide a way to call multiple commands at once
-            auto line = api.param(F("line"));
-            if (!line.length()) {
+            Commands cmds;
+
+            api.param_foreach(
+                [&](const String& name, const String& value) {
+                    API_UPDATE_COMMANDS(cmds, name, value);
+                });
+
+            if (!cmds || !cmds->size()) {
                 return false;
             }
 
-            auto cmd = std::make_shared<String>(line.toString());
-
-            api.handle([cmd](AsyncWebServerRequest* request) {
-                espurna::web::print::scheduleFromRequest(
-                    request,
-                    [cmd](Print& out) {
-                        api_find_and_call(*cmd, out);
-                    });
+            api.handle([cmds](AsyncWebServerRequest* request) {
+                API_SCHEDULE_COMMANDS(request, cmds);
             });
 
             return true;
@@ -747,29 +691,31 @@ void setup() {
             return true;
         }
 
-        auto* line_param = request->getParam("line", (request->method() == HTTP_PUT));
-        if (!line_param) {
+        Commands cmds;
+
+        for (size_t n = 0; n < request->params(); ++n) {
+            const auto* param = request->getParam(n);
+            const auto& name = param->name();
+            const auto& value = param->value();
+            if (!apiReservedParam(name)) {
+                API_UPDATE_COMMANDS(cmds, name, value);
+            }
+        }
+
+        if (!cmds || !cmds->size()) {
             request->send(500);
             return true;
         }
 
-        auto line = line_param->value();
-        if (!line.length()) {
-            request->send(500);
-            return true;
-        }
-
-        auto cmd = std::make_shared<String>(std::move(line));
-        espurna::web::print::scheduleFromRequest(
-            request,
-            [cmd](Print& out) {
-                api_find_and_call(*cmd, out);
-            });
+        API_SCHEDULE_COMMANDS(request, cmds);
 
         return true;
     });
 #endif // API_SUPPORT
 }
+
+#undef API_SCHEDULE_COMMANDS
+#undef API_UPDATE_COMMANDS
 
 } // namespace api
 #endif // TERMINAL_WEB_API_SUPPORT
@@ -808,6 +754,10 @@ void setup() {
 
 void terminalOK(const espurna::terminal::CommandContext& ctx) {
     espurna::terminal::ok(ctx);
+}
+
+void terminalError(const espurna::terminal::CommandContext& ctx) {
+    espurna::terminal::error(ctx, String());
 }
 
 void terminalError(const espurna::terminal::CommandContext& ctx, const String& message) {

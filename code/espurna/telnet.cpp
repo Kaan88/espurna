@@ -240,7 +240,7 @@ struct ClientWriter {
         }
     }
 
-    size_t writeable(tcp_pcb* pcb) const {
+    size_t writable(tcp_pcb* pcb) const {
         return _list.empty() && (tcp_sndbuf(pcb) > 0);
     }
 
@@ -308,7 +308,7 @@ struct ExhaustingPrint : public Print {
 
         while (!flag.wait(duration::Seconds(3))
             && _client->connected()
-            && !_client->writeable())
+            && !_client->writable())
         {
             _client->flush();
             time::blockingDelay(
@@ -510,9 +510,9 @@ public:
     }
 
     // our network & internal buffers are free
-    bool writeable() {
+    bool writable() {
         if (_pcb) {
-            return _writer.writeable(_pcb);
+            return _writer.writable(_pcb);
         }
 
         return false;
@@ -583,7 +583,7 @@ private:
     }
 
     // TODO: timeout when buffers are filled for a long time?
-    static err_t s_on_tcp_poll(void* arg, tcp_pcb* pcb) {
+    static err_t s_on_tcp_poll(void* arg, tcp_pcb*) {
         reinterpret_cast<Client*>(arg)->flush();
         return ERR_OK;
     }
@@ -718,7 +718,7 @@ next:
         return ERR_OK;
     }
 
-    static err_t s_on_tcp_connected(void* arg, tcp_pcb* pcb, err_t) {
+    static err_t s_on_tcp_connected(void* arg, tcp_pcb*, err_t) {
         return reinterpret_cast<Client*>(arg)->on_tcp_connected();
     }
 
@@ -783,8 +783,12 @@ struct Clients {
         return out > 0;
     }
 
+    bool write(const char* data, size_t len) {
+        return write(reinterpret_cast<const uint8_t*>(data), len);
+    }
+
     bool write(StringView data) {
-        return write(reinterpret_cast<const uint8_t*>(data.c_str()), data.length());
+        return write(data.data(), data.length());
     }
 
     void process() {
@@ -839,9 +843,12 @@ struct Clients<1> {
         return false;
     }
 
+    bool write(const char* data, size_t len) {
+        return write(reinterpret_cast<const uint8_t*>(data), len);
+    }
+
     bool write(StringView data) {
-        // TODO: `span`, convert type in-place for {ptr, len}
-        return write(reinterpret_cast<const uint8_t*>(data.c_str()), data.length());
+        return write(data.data(), data.length());
     }
 
     void process() {
@@ -893,8 +900,8 @@ bool connected() {
     return internal::clients.connected();
 }
 
-bool write(StringView data) {
-    return internal::clients.write(data);
+bool write(const char* data, size_t len) {
+    return internal::clients.write(data, len);
 }
 
 void flush() {
@@ -1158,15 +1165,15 @@ bool telnetConnected() {
     return espurna::telnet::connected();
 }
 
-bool telnetDebugSend(const char* prefix, const char* data) {
+bool telnetDebugSend(const DebugPrefix& prefix, const char* message, size_t length) {
     size_t out = 0;
 
     if (telnetConnected()) {
-        if (prefix && (prefix[0] != '\0')) {
-            out += espurna::telnet::write(prefix);
+        if (debugWithPrefix(prefix)) {
+            out += espurna::telnet::write(prefix, debugPrefixLength(prefix));
         }
 
-        out += espurna::telnet::write(data);
+        out += espurna::telnet::write(message, length);
     }
 
     return out > 0;

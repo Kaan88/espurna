@@ -1,18 +1,16 @@
 import { assert, expect, test } from 'vitest';
 import {
-    addEnumerables,
-    addSimpleEnumerables,
     checkAndSetElementChanged,
     getDataForElement,
     getOriginalForElement,
-    getEnumerables,
-    isChangedElement,
     setOriginalsFromValues,
     setOriginalsFromValuesForNode,
     setSpanValue,
     setInputValue,
     setSelectValue,
 } from '../src/settings.mjs';
+
+import { isChangedElement } from '../src/settings/utils.mjs';
 
 test('select unchanged with empty value when original is missing', () => {
     const node = document.createElement('select');
@@ -80,7 +78,7 @@ test('text input unchanged with empty value when original is missing', () => {
     expect(getDataForElement(node))
         .toEqual(getOriginalForElement(node));
 
-    const data = 'this never gets commited';
+    const data = 'this value does not make the element changed';
     expect(getDataForElement(node)).toBe('');
     assert(!isChangedElement(node));
 
@@ -121,42 +119,6 @@ test('element input data with and without original', () => {
     node.value = `${data}${data}`;
     assert(checkAndSetElementChanged(node));
     assert(isChangedElement(node));
-});
-
-test('enumerables with an explicit structure', () => {
-    const name = 'explicit';
-
-    const first = getEnumerables(name);
-    expect(first.length).toBe(0);
-
-    const enumerables = [{id: 1, name: 'foo'}, {id: 2, name: 'bar'}];
-    addEnumerables(name, enumerables);
-
-    const second = getEnumerables(name);
-    expect(second.length).toBe(2);
-
-    expect(second[0].id).toBe(1);
-    expect(second[0].name).toBe('foo');
-
-    expect(second[1].id).toBe(2);
-    expect(second[1].name).toBe('bar');
-});
-
-test('enumerables generated from a range', () => {
-    const name = 'generated';
-
-    const first = getEnumerables(name);
-    expect(first.length).toBe(0);
-
-    const number = 5;
-    addSimpleEnumerables(name, name.toUpperCase(), number);
-
-    const second = getEnumerables(name);
-    expect(second.length).toBe(number);
-
-    for (let entry of second) {
-        assert(entry.name.startsWith(name.toUpperCase()));
-    }
 });
 
 test('span value replacement', () => {

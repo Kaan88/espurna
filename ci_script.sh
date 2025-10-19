@@ -5,6 +5,11 @@ set -x -e -v
 cd code
 
 case "$1" in
+("generated")
+    # checks whether arduino.h was modified
+    scripts/generate_arduino_h.py espurna/config/arduino.h
+    git --no-pager diff --stat --exit-code
+    ;;
 ("host")
     # runs unit tests, using the host compiler and the esp8266 mock framework
     # - https://github.com/esp8266/Arduino/blob/master/tests/host/Makefile
@@ -16,15 +21,10 @@ case "$1" in
     popd
     ;;
 ("webui")
-    npm exec --no -- vitest --environment jsdom --dir html/spec --run
-    npm exec --no -- eslint
-    npm exec --no -- html-validate html/src/*.html
     # checks whether the webui can be built
-    ./build.sh -f environments
-    # TODO: gzip inserts an OS-dependant byte in the header, ref.
-    # - https://datatracker.ietf.org/doc/html/rfc1952
-    # - https://github.com/nodejs/node/blob/e46c680bf2b211bbd52cf959ca17ee98c7f657f5/deps/zlib/deflate.c#L901
-    # - windowBits description in the https://zlib.net/manual.html#Advanced
+    npm ci
+    node node_modules/gulp/bin/gulp.js
+    # note of varying zlib output, especially when using pigz
     git --no-pager diff --stat
     ;;
 ("build")
@@ -34,10 +34,6 @@ case "$1" in
 ("test")
     # run generic build test with the specified environment as base
     scripts/test_build.py -e $2
-    ;;
-("release")
-    # TODO: pending removal in favour of code/scripts/generate_release_sh.py
-    ./build.sh -r
     ;;
 (*)
     echo -e "\e[1;33mUnknown stage name, exiting!\e[0m"

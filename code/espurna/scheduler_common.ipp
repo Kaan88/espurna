@@ -694,7 +694,7 @@ bool closest_offset_result(Search& search, const SearchValidate::Validate& valid
 
             reconstruct = true;
 
-        // daylight saving time shift occured, probe for duplicate hour
+        // daylight saving time shift occurred, probe for duplicate hour
         } else if (tmp.tm_isdst != search.result.tm_isdst) {
             tm test;
             test = tmp;
@@ -916,7 +916,7 @@ constexpr auto DefaultSeconds = datetime::Seconds{ -1 };
 using time_point = datetime::Clock::time_point;
 constexpr auto DefaultTimePoint = time_point{ DefaultSeconds };
 
-time_point make_time_point(const datetime::Context& ctx) {
+inline time_point make_time_point(const datetime::Context& ctx) {
     return time_point(to_minutes(ctx));
 }
 

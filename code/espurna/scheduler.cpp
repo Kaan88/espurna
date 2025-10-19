@@ -34,6 +34,7 @@ Copyright (C) 2019-2024 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 
 #include "libs/EphemeralPrint.h"
 #include "libs/PrintString.h"
+#include "libs/Delimiter.h"
 
 // -----------------------------------------------------------------------------
 
@@ -497,7 +498,7 @@ Types types() {
 size_t count() {
     size_t out { 0 };
 
-    foreach_type([&](Type type) {
+    foreach_type([&](Type) {
         ++out;
     });
 
@@ -1315,6 +1316,7 @@ void update_from(const Schedule& schedule) {
 
 bool set(JsonObject& root, const size_t id) {
     Schedule out;
+    out.id = id;
     out.restore = -1;
 
     // always need type, time and action
@@ -1566,7 +1568,7 @@ namespace terminal_stub {
 #if RELAY_SUPPORT
 namespace relay {
 
-void action(SplitStringView split) {
+void action(SplitView split) {
     if (!split.next()) {
         return;
     }
@@ -1602,7 +1604,7 @@ void action(SplitStringView split) {
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 namespace light {
 
-void action(SplitStringView split) {
+void action(SplitView split) {
     if (!split.next()) {
         return;
     }
@@ -1627,7 +1629,7 @@ void action(SplitStringView split) {
 #if CURTAIN_SUPPORT
 namespace curtain {
 
-void action(SplitStringView split) {
+void action(SplitView split) {
     if (!split.next()) {
         return;
     }
@@ -1649,7 +1651,7 @@ void action(SplitStringView split) {
 #endif
 
 void parse_action(String action) {
-    auto split = SplitStringView{ action };
+    auto split = SplitView{ action };
     if (!split.next()) {
         return;
     }
@@ -1830,7 +1832,9 @@ void run_today(Context& ctx) {
     }
 }
 
-void run(const datetime::Context& base) {
+using Results = decltype(Context::results);
+
+auto prepare(const datetime::Context& base) -> Results {
     Context ctx{ base };
 
     run_today(ctx);
@@ -1838,12 +1842,27 @@ void run(const datetime::Context& base) {
 
     ctx.sort();
 
-    for (auto& result : ctx.results) {
+    return ctx.results;
+}
+
+void filter_last_action(Results& results) {
+    auto filtered = std::remove_if(
+        results.begin(),
+        results.end(),
+        [](const Offset& offset) {
+            return last_action(offset.index) != event::DefaultTimePoint;
+        });
+
+    results.erase(filtered, results.end());
+}
+
+void run(const datetime::Context& ctx, const Results& results) {
+    for (auto& result : results) {
         const auto action = settings::action(result.index);
         DEBUG_MSG_P(PSTR("[SCH] Restoring #%zu => %s (%sm)\n"),
             result.index, action.c_str(),
             String(result.offset.count(), 10).c_str());
-        last_action(base, result.index);
+        last_action(ctx, result.index);
         parse_action(action);
     }
 }
@@ -1939,7 +1958,7 @@ bool Calendar::before(const datetime::Context& ctx) {
     return false;
 }
 
-bool Calendar::after(const datetime::Context& ctx) {
+bool Calendar::after(const datetime::Context&) {
     _time_point = last_action(_index);
     return event::is_valid(_time_point);
 }
@@ -2235,10 +2254,11 @@ void tick(NtpTick tick) {
         return;
     }
 
+    static std::vector<Offset> restored;
+
     if (initial) {
-        initial = false;
         settings::gc(settings::count());
-        restore::run(ctx);
+        restored = restore::prepare(ctx);
 #if SCHEDULER_SUN_SUPPORT
         sun::update_before(ctx);
 #endif
@@ -2265,6 +2285,13 @@ void tick(NtpTick tick) {
         relative::handle_after(ctx, prepared);
         relative::process_valid_event_offsets(
             ctx, prepared.event_offsets, relative::Order::After);
+    }
+
+    if (initial) {
+        initial = false;
+        restore::filter_last_action(restored);
+        restore::run(ctx, restored);
+        restored = std::vector<Offset>();
     }
 }
 

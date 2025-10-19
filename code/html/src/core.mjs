@@ -39,7 +39,7 @@ export function pageReloadIn(timeout) {
 /**
  * @param {HTMLElement} container
  */
-export function moreElem(container) {
+function moreElem(container) {
     container.querySelectorAll(".more")
         .forEach((elem) => {
             if (!(elem instanceof HTMLElement)) {
@@ -49,6 +49,33 @@ export function moreElem(container) {
             elem.style.display = (elem.style.display === "")
                 ? "inherit" : "";
         });
+}
+
+/**
+ * @param {Event} event
+ */
+export function onMoreParent(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+        return;
+    }
+
+    const parent = target?.parentElement?.parentElement;
+    if (parent) {
+        moreElem(parent);
+    }
+}
+
+/**
+ * @param {Element | DocumentFragment} container
+ */
+export function moreParent(container) {
+    for (let elem of container.querySelectorAll("button.button-more-parent")) {
+        elem.addEventListener("click", onMoreParent);
+    }
 }
 
 /**
@@ -119,6 +146,19 @@ export function showPanel(elem) {
     if (document.documentElement) {
         document.documentElement.scrollTop = 0;
     }
+}
+
+/**
+ * @param {HTMLElement} elem
+ * @param {function(HTMLElement): void} callback
+ */
+export function findPanel(elem, callback) {
+    const panel = elem.closest(".panel");
+    if (!(panel instanceof HTMLElement)) {
+        return;
+    }
+
+    callback(panel);
 }
 
 /**
@@ -235,4 +275,18 @@ export function capitalize(value) {
     return value === ""
         ? value
         : `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+/**
+ * @param {string} value
+ * @returns {boolean}
+ */
+export function stringToBoolean(value) {
+    return [
+        "1",
+        "y",
+        "yes",
+        "true",
+        "on",
+    ].includes(value.toLowerCase());
 }

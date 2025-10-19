@@ -1,57 +1,63 @@
-import globals from "globals";
-import js from "@eslint/js";
+import globals from 'globals';
+import js from '@eslint/js';
+
+import {
+    BUILD_SCRIPTS,
+    TEST_SCRIPTS,
+    SOURCE_SCRIPTS,
+} from './gulpfile.mjs';
 
 export default [
     {
-        files: ["gulpfile.mjs"],
+        ignores: [
+            'libraries/**/*',
+            'espurna/**/*',
+            'hardware/**/*',
+            'scripts/**/*',
+            'test/**/*',
+            '**/*.js',
+        ],
+    },
+    {
+        ...js.configs.recommended,
         languageOptions: {
-            "globals": {
-                ...globals.es2021,
-                ...globals.node,
-            }
+            'globals': {
+                ...globals.es2022,
+            },
         },
         rules: {
-            ...js.configs.recommended.rules,
-            "quotes": ["error", "single"],
-            "no-throw-literal": "error",
-            "no-unused-vars": ["error", {
-                "argsIgnorePattern": "^_",
+            'no-unused-vars': ['error', {
+                'argsIgnorePattern': '^_',
+                'caughtErrorsIgnorePattern': '^_',
             }],
         }
     },
     {
-        files: ["html/src/**/*.mjs"],
+        files: BUILD_SCRIPTS,
         languageOptions: {
-            "globals": {
-                ...globals.es2021,
-                ...globals.browser,
-                "MODULE_API": "readonly",
-                "MODULE_CMD": "readonly",
-                "MODULE_CURTAIN": "readonly",
-                "MODULE_DBG": "readonly",
-                "MODULE_DCZ": "readonly",
-                "MODULE_GARLAND": "readonly",
-                "MODULE_HA": "readonly",
-                "MODULE_LED": "readonly",
-                "MODULE_LIGHT": "readonly",
-                "MODULE_LIGHTFOX": "readonly",
-                "MODULE_LOCAL": "readonly",
-                "MODULE_OTA": "readonly",
-                "MODULE_RELAY": "readonly",
-                "MODULE_RFB": "readonly",
-                "MODULE_RFM69": "readonly",
-                "MODULE_RPN": "readonly",
-                "MODULE_SCH": "readonly",
-                "MODULE_SNS": "readonly",
-                "MODULE_THERMOSTAT": "readonly",
-                "MODULE_TSPK": "readonly",
+            'globals': {
+                ...globals.node,
             }
         },
         rules: {
-            ...js.configs.recommended.rules,
-            "no-invalid-this": "error",
-            "eqeqeq": "error",
-            "prefer-arrow-callback": "error"
+            'quotes': ['error', 'single'],
+            'no-throw-literal': 'error',
+        }
+    },
+    {
+        files: [
+            ...SOURCE_SCRIPTS,
+            ...TEST_SCRIPTS,
+        ],
+        languageOptions: {
+            'globals': {
+                ...globals.browser,
+            }
+        },
+        rules: {
+            'no-invalid-this': 'error',
+            'eqeqeq': 'error',
+            'prefer-arrow-callback': 'error'
         }
     }
 ];

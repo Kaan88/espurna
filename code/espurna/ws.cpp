@@ -32,6 +32,137 @@ Copyright (C) 2016-2019 by Xose Pérez <xose dot perez at gmail dot com>
 namespace espurna {
 namespace web {
 namespace ws {
+
+// Non-string-based printer implementation. Write char data directly, without '\0' at the end
+class AsyncWebSocketPrint {
+public:
+    AsyncWebSocketPrint(::AsyncWebSocketMessageBuffer& out) :
+        _end(reinterpret_cast<char*>(out.get() + out.length())),
+        _ptr(reinterpret_cast<char*>(out.get()))
+    {}
+
+    size_t print(char c) {
+        if (_ptr < _end) {
+            *_ptr++ = c;
+            return 1;
+        }
+
+        return 0;
+    }
+
+    size_t print(const char *s) {
+        const auto* start = _ptr;
+        while (_ptr < _end && *s) {
+            *_ptr++ = *s++;
+        }
+
+        return size_t(_ptr - start);
+    }
+
+private:
+    char* _end;
+    char* _ptr;
+};
+
+Callbacks& Callbacks::onVisible(Callbacks::OnSend cb, Callbacks::Prepend) {
+    on_visible.insert(on_visible.begin(), cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onVisible(Callbacks::OnSend cb, Callbacks::Append) {
+    on_visible.push_back(cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onConnected(Callbacks::OnSend cb, Callbacks::Prepend) {
+    on_connected.insert(on_connected.begin(), cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onConnected(Callbacks::OnSend cb, Callbacks::Append) {
+    on_connected.push_back(cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onData(Callbacks::OnSend cb, Callbacks::Prepend) {
+    on_data.insert(on_data.begin(), cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onData(Callbacks::OnSend cb, Callbacks::Append) {
+    on_data.push_back(cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onAction(Callbacks::OnAction cb, Callbacks::Prepend) {
+    on_action.insert(on_action.begin(), cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onAction(Callbacks::OnAction cb, Callbacks::Append) {
+    on_action.push_back(cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onKeyCheck(Callbacks::OnKeyCheck cb, Callbacks::Prepend) {
+    on_keycheck.insert(on_keycheck.begin(), cb);
+    return *this;
+}
+
+Callbacks& Callbacks::onKeyCheck(Callbacks::OnKeyCheck cb, Callbacks::Append) {
+    on_keycheck.push_back(cb);
+    return *this;
+}
+
+constexpr size_t PostponedCallback::DefaultBufferHint;
+
+void PostponedCallback::Storage::Destructor::operator()(Callback& callback) const noexcept {
+    callback.~Callback();
+}
+
+void PostponedCallback::Storage::Destructor::operator()(Storage::Pointer&) const noexcept {
+}
+
+void PostponedCallback::Storage::Destructor::operator()(Storage::Instance& obj) const noexcept {
+    obj.obj.~Container();
+}
+
+PostponedCallback::Storage::Impl::Impl() :
+    empty{}
+{}
+
+PostponedCallback::Storage::Impl::~Impl() {
+}
+
+PostponedCallback::Storage::Move::Move(Storage& storage) :
+    _storage(storage)
+{}
+
+void PostponedCallback::Storage::Move::operator()(Callback& callback) const noexcept {
+    ::new (&_storage._impl.callback) Callback(std::move(callback));
+}
+
+void PostponedCallback::Storage::Move::operator()(Storage::Pointer& ptr) const noexcept {
+    ::new (&_storage._impl.pointer) Storage::Pointer(std::move(ptr));
+    ptr.ptr = nullptr;
+    ptr.offset = 0;
+}
+
+void PostponedCallback::Storage::Move::operator()(Storage::Instance& obj) const noexcept {
+    ::new (&_storage._impl.instance) Storage::Instance(std::move(obj));
+    obj.offset = 0;
+}
+
+PostponedCallback::Storage::~Storage() {
+    visit(Destructor());
+}
+
+PostponedCallback::Storage::Storage(Storage&& other) noexcept :
+    _type(other._type)
+{
+    other.visit(Move(*this));
+}
+
 namespace {
 
 namespace internal {
@@ -42,15 +173,25 @@ STRING_VIEW_INLINE(SchemaKey, "schema");
 
 namespace build {
 
-constexpr uint16_t port() {
-    return WEB_PORT;
-}
-
 constexpr bool authentication() {
     return 1 == WS_AUTHENTICATION;
 }
 
 } // namespace build
+
+namespace settings {
+namespace keys {
+
+STRING_VIEW_INLINE(Prefix, "ws");
+STRING_VIEW_INLINE(Auth, "wsAuth");
+
+} // namespace keys
+
+bool authentication() {
+    return getSetting(keys::Auth, build::authentication());
+}
+
+} // namespace settings
 
 } // namespace
 
@@ -107,7 +248,7 @@ EnumerablePayload::EnumerablePayload(JsonObject& root, StringView name) :
     _root(root.createNestedObject(name))
 {}
 
-void EnumerablePayload::operator()(StringView name, settings::Iota iota, Check check, Pairs&& pairs) {
+void EnumerablePayload::operator()(StringView name, espurna::settings::Iota iota, Check check, Pairs&& pairs) {
     JsonArray& entries = _root.createNestedArray(name);
 
     if (_root.containsKey(internal::SchemaKey)) {
@@ -144,6 +285,218 @@ void EnumerableTypes::operator()(int value, StringView text) {
     entry.add(text);
 }
 
+PostponedPayload::PostponedPayload() = default;
+
+PostponedPayload::Flag::~Flag() {
+    if (_ref._pending) {
+        _ref._data = String();
+        _ref._count = 0;
+    }
+
+    _ref._pending = false;
+}
+
+PostponedPayload::Flag::Flag(PostponedPayload& ref) :
+    _ref(ref)
+{
+    _ref._pending = true;
+}
+
+bool PostponedPayload::connected() const {
+    return _id ? wsConnected(_id) : wsConnected();
+}
+
+std::shared_ptr<PostponedPayload::Flag> PostponedPayload::make_flag() {
+    if (!_pending) {
+        return std::make_shared<Flag>(*this);
+    }
+
+
+    return nullptr;
+}
+
+bool PostponedPayload::post(bool connected) {
+    if (!connected) {
+        if (_data.length()) {
+            _data = String();
+        }
+
+        _count = 0;
+        _pending = false;
+
+        return false;
+    }
+
+    if (connected && !_pending && _count) {
+        auto flag = make_flag();
+        auto cb = [flag](JsonObject& root) {
+            if (flag->pending()) {
+                auto& log = root.createNestedArray("log");
+                log.add(flag->data());
+            }
+        };
+
+        wsPost(_id, std::move(cb), BufferHint);
+        return true;
+    }
+
+    return false;
+}
+
+bool PostponedPayload::post() {
+    return post(connected());
+}
+
+void PostponedPayload::buffer(const char* data, size_t size) {
+    if (!connected()) {
+        return;
+    }
+
+    if (_count < CountMax) {
+        buffer_impl(data, size);
+        ++_count;
+    }
+
+    post();
+}
+
+void PostponedPayload::buffer_impl(StringView data) {
+    _data.concat(data.data(), data.length());
+}
+
+void PostponedPayload::buffer_impl(const char* data, size_t length) {
+    _data.concat(data, length);
+}
+
+void PostponedDebug::buffer(const DebugPrefix& prefix, const char* message, size_t length) {
+    if (!connected()) {
+        return;
+    }
+
+    if (_count < CountMax) {
+        const auto prefixLen = debugPrefixLength(prefix);
+        const auto bufferLen = _data.length()
+            + prefixLen + length;
+
+        _data.reserve(bufferLen);
+
+        if (prefixLen) {
+            buffer_impl(prefix, prefixLen);
+        }
+
+        buffer_impl(message, length);
+        ++_count;
+    }
+
+    post();
+}
+
+constexpr duration::Milliseconds InplacePayload::DefaultWait;
+constexpr duration::Seconds InplacePayload::DefaultTimeout;
+
+InplacePayload::InplacePayload(JsonObject& root, uint32_t id) :
+    _root(root),
+    _id(id)
+{}
+
+void InplacePayload::reset() {
+    if (_data.length()) {
+        _data = String();
+    }
+
+    _count = 0;
+}
+
+bool InplacePayload::connected() const {
+    return wsConnected(_id);
+}
+
+void InplacePayload::write_impl(const char* data, size_t length) {
+    if (!connected()) {
+        return;
+    }
+
+    if (_count > CountMax) {
+        return;
+    }
+
+    _data.concat(data, length);
+    ++_count;
+}
+
+void InplacePayload::write(const char* data, size_t length) {
+    write_impl(data, length);
+    send();
+}
+
+bool InplacePayload::can_send() const {
+    return connected() && _count && _data.length();
+}
+
+bool InplacePayload::poll_send() {
+    if (!can_send()) {
+        reset();
+        return false;
+    }
+
+    auto start = Clock::now();
+
+    while (Clock::now() - start < _timeout) {
+        auto info = wsClientInfo(_id);
+        if (!info.connected) {
+            reset();
+            return false;
+        }
+
+        if (!info.stalled) {
+            return true;
+        }
+
+        time::blockingDelay(_wait);
+    }
+
+    return false;
+}
+
+bool InplacePayload::send() {
+    if (poll_send()) {
+        send_impl();
+        return true;
+    }
+
+    return false;
+}
+
+void InplacePayload::send_impl() {
+    wsSend(_id, _root);
+    reset();
+}
+
+InplaceLog::InplaceLog(JsonObject& root, uint32_t id) :
+    InplacePayload(root, id),
+    _log(root.createNestedArray("log"))
+{}
+
+void InplaceLog::write(const char* data, size_t length) {
+    write_impl(data, length);
+    send();
+}
+
+bool InplaceLog::send() {
+    if (poll_send()) {
+        if (_log.size()) {
+            _log[0] = _data.c_str();
+        } else {
+            _log.add(_data.c_str());
+        }
+
+        send_impl();
+        return true;
+    }
+
+    return false;
+}
+
 } // namespace ws
 } // namespace web
 } // namespace espurna
@@ -153,10 +506,6 @@ void EnumerableTypes::operator()(int value, StringView text) {
 // -----------------------------------------------------------------------------
 
 namespace {
-
-template <typename T>
-struct BaseTimeFormat {
-};
 
 void _wsUpdateAp(JsonObject& root) {
     IPAddress ip{};
@@ -245,94 +594,110 @@ void _wsDoUpdate(const bool connected) {
 
 namespace {
 
+bool _ws_auth { espurna::web::ws::build::authentication() };
+
 AsyncWebSocket _ws("/ws");
-std::queue<WsPostponedCallbacks> _ws_queue;
-ws_callbacks_t _ws_callbacks;
-
-} // namespace
-
-void wsPost(uint32_t client_id, ws_on_send_callback_f&& cb) {
-    _ws_queue.emplace(client_id, std::move(cb));
-}
-
-void wsPost(ws_on_send_callback_f&& cb) {
-    wsPost(0, std::move(cb));
-}
-
-void wsPost(uint32_t client_id, const ws_on_send_callback_f& cb) {
-    _ws_queue.emplace(client_id, cb);
-}
-
-void wsPost(const ws_on_send_callback_f& cb) {
-    wsPost(0, cb);
-}
-
-namespace {
+std::queue<espurna::web::ws::PostponedCallback> _ws_queue;
+espurna::web::ws::Callbacks _ws_callbacks;
 
 template <typename T>
-void _wsPostCallbacks(uint32_t client_id, T&& cbs, WsPostponedCallbacks::Mode mode) {
-    _ws_queue.emplace(client_id, std::forward<T>(cbs), mode);
+void _wsPostCallbacks(uint32_t client_id, T&& cbs) {
+    _ws_queue.emplace(client_id, espurna::web::ws::PostponedCallback::Storage(std::forward<T>(cbs)));
+}
+
+template <typename T>
+void _wsPostCallbacks(uint32_t client_id, T&& cbs, espurna::web::ws::PostponedCallback::Mode mode) {
+    _ws_queue.emplace(client_id, espurna::web::ws::PostponedCallback::Storage(std::forward<T>(cbs)), mode);
+}
+
+void _wsBufferHint(size_t buffer_hint) {
+    _ws_queue.back().buffer_hint(buffer_hint);
 }
 
 } // namespace
 
-void wsPostAll(uint32_t client_id, ws_on_send_callback_list_t&& cbs) {
-    _wsPostCallbacks(client_id, std::move(cbs), WsPostponedCallbacks::Mode::All);
+void wsPost(uint32_t client_id, espurna::web::ws::OnSend&& cb, size_t buffer_hint) {
+    wsPost(client_id, std::move(cb));
+    _wsBufferHint(buffer_hint);
 }
 
-void wsPostAll(ws_on_send_callback_list_t&& cbs) {
+void wsPost(uint32_t client_id, espurna::web::ws::OnSend&& cb) {
+    _wsPostCallbacks(client_id, std::move(cb));
+}
+
+void wsPost(espurna::web::ws::OnSend&& cb) {
+    _wsPostCallbacks(0, std::move(cb));
+}
+
+void wsPost(uint32_t client_id, const espurna::web::ws::OnSend& cb, size_t buffer_hint) {
+    wsPost(client_id, cb);
+    _wsBufferHint(buffer_hint);
+}
+
+void wsPost(uint32_t client_id, const espurna::web::ws::OnSend& cb) {
+    _wsPostCallbacks(client_id, cb);
+}
+
+void wsPost(const espurna::web::ws::OnSend& cb) {
+    _wsPostCallbacks(0, cb);
+}
+
+void wsPostManual(uint32_t client_id, espurna::web::ws::OnSend&& cb) {
+    _wsPostCallbacks(client_id, std::move(cb), espurna::web::ws::PostponedCallback::Mode::Manual);
+}
+
+void wsPostManual(espurna::web::ws::OnSend&& cb) {
+    wsPostManual(0, std::move(cb));
+}
+
+void wsPostManual(uint32_t client_id, espurna::web::ws::OnSend&& cb, size_t buffer_hint) {
+    wsPostManual(client_id, std::move(cb));
+    _wsBufferHint(buffer_hint);
+}
+
+void wsPostManual(uint32_t client_id, const espurna::web::ws::OnSend& cb) {
+    _wsPostCallbacks(client_id, cb, espurna::web::ws::PostponedCallback::Mode::Manual);
+}
+
+void wsPostManual(const espurna::web::ws::OnSend& cb) {
+    wsPostManual(0, cb);
+}
+
+void wsPostManual(uint32_t client_id, const espurna::web::ws::OnSend& cb, size_t buffer_hint) {
+    wsPostManual(client_id, cb);
+    _wsBufferHint(buffer_hint);
+}
+
+void wsPostAll(uint32_t client_id, espurna::web::ws::Callbacks::OnSendContainer&& cbs) {
+    _wsPostCallbacks(client_id, std::move(cbs), espurna::web::ws::PostponedCallback::Mode::All);
+}
+
+void wsPostAll(espurna::web::ws::Callbacks::OnSendContainer&& cbs) {
     wsPostAll(0, std::move(cbs));
 }
 
-void wsPostAll(uint32_t client_id, const ws_on_send_callback_list_t& cbs) {
-    _wsPostCallbacks(client_id, cbs, WsPostponedCallbacks::Mode::All);
+void wsPostAll(uint32_t client_id, const espurna::web::ws::Callbacks::OnSendContainer& cbs) {
+    _wsPostCallbacks(client_id, cbs, espurna::web::ws::PostponedCallback::Mode::All);
 }
 
-void wsPostAll(const ws_on_send_callback_list_t& cbs) {
+void wsPostAll(const espurna::web::ws::Callbacks::OnSendContainer& cbs) {
     wsPostAll(0, cbs);
 }
 
-void wsPostSequence(uint32_t client_id, ws_on_send_callback_list_t&& cbs) {
-    _wsPostCallbacks(client_id, std::move(cbs), WsPostponedCallbacks::Mode::Sequence);
+void wsPostSequence(uint32_t client_id, espurna::web::ws::Callbacks::OnSendContainer&& cbs) {
+    _wsPostCallbacks(client_id, std::move(cbs), espurna::web::ws::PostponedCallback::Mode::Sequence);
 }
 
-void wsPostSequence(ws_on_send_callback_list_t&& cbs) {
+void wsPostSequence(espurna::web::ws::Callbacks::OnSendContainer&& cbs) {
     wsPostSequence(0, std::move(cbs));
 }
 
-void wsPostSequence(uint32_t client_id, const ws_on_send_callback_list_t& cbs) {
-    _wsPostCallbacks(client_id, cbs, WsPostponedCallbacks::Mode::Sequence);
+void wsPostSequence(uint32_t client_id, const espurna::web::ws::Callbacks::OnSendContainer& cbs) {
+    _wsPostCallbacks(client_id, cbs, espurna::web::ws::PostponedCallback::Mode::Sequence);
 }
 
-void wsPostSequence(const ws_on_send_callback_list_t& cbs) {
+void wsPostSequence(const espurna::web::ws::Callbacks::OnSendContainer& cbs) {
     wsPostSequence(0, cbs);
-}
-
-// -----------------------------------------------------------------------------
-
-ws_callbacks_t& ws_callbacks_t::onVisible(ws_callbacks_t::on_send_f cb) {
-    on_visible.push_back(cb);
-    return *this;
-}
-
-ws_callbacks_t& ws_callbacks_t::onConnected(ws_callbacks_t::on_send_f cb) {
-    on_connected.push_back(cb);
-    return *this;
-}
-
-ws_callbacks_t& ws_callbacks_t::onData(ws_callbacks_t::on_send_f cb) {
-    on_data.push_back(cb);
-    return *this;
-}
-
-ws_callbacks_t& ws_callbacks_t::onAction(ws_callbacks_t::on_action_f cb) {
-    on_action.push_back(cb);
-    return *this;
-}
-
-ws_callbacks_t& ws_callbacks_t::onKeyCheck(ws_callbacks_t::on_keycheck_f cb) {
-    on_keycheck.push_back(cb);
-    return *this;
 }
 
 // -----------------------------------------------------------------------------
@@ -410,75 +775,13 @@ bool _wsAuth(AsyncWebSocketClient* client) {
 
 namespace {
 
-struct WsDebug {
-    static constexpr int Limit { 8 };
-
-    WsDebug() = default;
-    WsDebug(const WsDebug&) = delete;
-    WsDebug(WsDebug&&) = delete;
-
-    void clear() {
-        _buffer = String();
-        _count = 0;
-    }
-
-    void operator()(const char* prefix, const char* message) {
-        if (wsConnected()) {
-            if ((_count > Limit) && !send()) {
-                return;
-            }
-
-            auto pre_len = strlen(prefix);
-            auto msg_len = strlen(message);
-            _buffer.reserve(_buffer.length() + pre_len + msg_len);
-            _buffer.concat(prefix, pre_len);
-            _buffer.concat(message, msg_len);
-
-            ++_count;
-        }
-    }
-
-    bool send(bool connected) {
-        if (!connected && (_count || _buffer.length())) {
-            clear();
-            return false;
-        }
-
-        // ref: http://arduinojson.org/v5/assistant/ for pre-allocation math
-        if (_count && connected) {
-            DynamicJsonBuffer buffer((2 * JSON_OBJECT_SIZE(1)) + JSON_ARRAY_SIZE(1));
-
-            JsonObject& root = buffer.createObject();
-            JsonObject& log = root.createNestedObject("log");
-
-            JsonArray& msg = log.createNestedArray("msg");
-            msg.add(_buffer.c_str());
-
-            wsSend(root);
-            clear();
-
-            return true;
-        }
-
-        return false;
-    }
-
-    bool send() {
-        return send(wsConnected());
-    }
-
-private:
-    String _buffer;
-    int _count { 0 };
-};
-
-WsDebug _ws_debug;
+espurna::web::ws::PostponedDebug _ws_debug;
 
 } // namespace
 
-bool wsDebugSend(const char* prefix, const char* message) {
+bool wsDebugSend(const DebugPrefix& prefix, const char* message, size_t length) {
     if ((wifiConnected() || wifiApStations()) && wsConnected()) {
-        _ws_debug(prefix, message);
+        _ws_debug.buffer(prefix, message, length);
         return true;
     }
 
@@ -495,10 +798,10 @@ namespace {
 
 // Check the existing setting before saving it
 // (we only care about the settings storage, don't mind the build values)
-bool _wsStore(String key, const String& value) {
-    const auto current = espurna::settings::get(key);
+bool _wsStore(espurna::settings::kvs_type& instance, String key, const String& value) {
+    const auto current = instance.get(key);
     if (!current || (current.ref() != value)) {
-        return espurna::settings::set(key, value);
+        return instance.set(key, value);
     }
 
     return false;
@@ -507,18 +810,6 @@ bool _wsStore(String key, const String& value) {
 // TODO: generate "accepted" keys in the initial phase of the connection?
 // TODO: is value ever used... by anything?
 bool _wsCheckKey(const String& key, const JsonVariant& value) {
-#if NTP_SUPPORT
-    if (key == STRING_VIEW("ntpTZ")) {
-        _wsResetUpdateTimer();
-        return true;
-    }
-#endif
-
-    if (key == STRING_VIEW("adminPass")) {
-        const auto pass = systemPassword();
-        return !pass.equalsConstantTime(value.as<String>());
-    }
-
     for (auto& callback : _ws_callbacks.on_keycheck) {
         if (callback(key, value)) {
             return true;
@@ -542,6 +833,7 @@ void _wsPostParse(uint32_t client_id, bool save, bool reload) {
             root[F("message")] = F("Changes saved");
         });
 
+        _wsResetUpdateTimer();
         return;
     }
 
@@ -639,12 +931,14 @@ void _wsParse(AsyncWebSocketClient* client, uint8_t* payload, size_t length) {
         delSetting(value.as<String>());
     }
 
+    auto& instance = espurna::settings::kvs_instance();
+
     // TODO: pass key as string, we always attempt to use it as such
     JsonObject& toAssign = settings["set"];
     for (auto& kv : toAssign) {
         const String key = kv.key;
         if (_wsCheckKey(key, kv.value)) {
-            if (_wsStore(key, kv.value.as<String>())) {
+            if (_wsStore(instance, key, kv.value.as<String>())) {
                 save = true;
             }
         }
@@ -654,12 +948,11 @@ void _wsParse(AsyncWebSocketClient* client, uint8_t* payload, size_t length) {
 }
 
 bool _wsOnKeyCheck(espurna::StringView key, const JsonVariant&) {
-    return (key == STRING_VIEW("webPort"))
-        || key.startsWith(STRING_VIEW("ws"));
+    return key.startsWith(espurna::web::ws::settings::keys::Prefix);
 }
 
 void _wsOnConnected(JsonObject& root) {
-    root[F("webMode")] = WEB_MODE_NORMAL;
+    root["webMode"] = WEB_MODE_NORMAL;
 
     const auto info = buildInfo();
     root[F("sdk")] = info.sdk.base.c_str();
@@ -683,9 +976,10 @@ void _wsOnConnected(JsonObject& root) {
 
     root[F("sketch_size")] = ESP.getSketchSize();
     root[F("free_size")] = ESP.getFreeSketchSpace();
+}
 
-    root[F("webPort")] = getSetting(F("webPort"), espurna::web::ws::build::port());
-    root[F("wsAuth")] = getSetting(F("wsAuth"), espurna::web::ws::build::authentication());
+void _wsOnVisible(JsonObject& root) {
+    root[espurna::web::ws::settings::keys::Auth] = _ws_auth ? 1 : 0;
 }
 
 void _wsConnected(uint32_t client_id) {
@@ -695,10 +989,9 @@ void _wsConnected(uint32_t client_id) {
         : false;
 
     if (changePassword) {
-        DynamicJsonBuffer jsonBuffer(32);
-        JsonObject& root = jsonBuffer.createObject();
-        root[F("webMode")] = WEB_MODE_PASSWORD;
-        wsSend(client_id, root);
+        wsPost(client_id, [](JsonObject& root) {
+            root["webMode"] = WEB_MODE_PASSWORD;
+        }, JSON_OBJECT_SIZE(1));
         return;
     }
 
@@ -713,7 +1006,7 @@ void _wsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType
     {
         const auto ip = client->remoteIP().toString();
 #ifndef NOWSAUTH
-        if (!_wsAuth(client)) {
+        if (_ws_auth && !_wsAuth(client)) {
             DEBUG_MSG_P(PSTR("[WEBSOCKET] #%u session expired for %s\n"),
                 client->id(), ip.c_str());
             client->close();
@@ -772,7 +1065,10 @@ void _wsHandlePostponedCallbacks(bool connected) {
         return;
     }
 
-    if (_ws_queue.empty()) return;
+    if (_ws_queue.empty()) {
+        return;
+    }
+
     auto& callbacks = _ws_queue.front();
 
     // avoid stalling forever when can't send anything
@@ -780,7 +1076,7 @@ void _wsHandlePostponedCallbacks(bool connected) {
     using CpuSeconds = std::chrono::duration<TimeSource::rep>;
 
     constexpr CpuSeconds WsQueueTimeoutClockCycles { 10 };
-    if (TimeSource::now() - callbacks.timestamp() > WsQueueTimeoutClockCycles) {
+    if (TimeSource::now() - callbacks.start() > WsQueueTimeoutClockCycles) {
         _ws_queue.pop();
         return;
     }
@@ -805,17 +1101,27 @@ void _wsHandlePostponedCallbacks(bool connected) {
     // XXX: block allocation will try to create *2 next time,
     // likely failing and causing wsSend to reference empty objects
     // XXX: arduinojson6 will not do this, but we may need to use per-callback buffers
-    constexpr size_t WsQueueJsonBufferSize = 3192;
-    DynamicJsonBuffer jsonBuffer(WsQueueJsonBufferSize);
+    DynamicJsonBuffer jsonBuffer(callbacks.buffer_hint());
     JsonObject& root = jsonBuffer.createObject();
 
     callbacks.send(root);
-    if (callbacks.id()) {
-        wsSend(callbacks.id(), root);
-    } else {
-        wsSend(root);
+
+    using Mode = decltype(callbacks.mode());
+
+    switch (callbacks.mode()) {
+    case Mode::Manual:
+        break;
+
+    case Mode::All:
+    case Mode::Sequence:
+        if (callbacks.id()) {
+            wsSend(callbacks.id(), root);
+        } else {
+            wsSend(root);
+        }
+        yield();
+        break;
     }
-    yield();
 
     if (callbacks.done()) {
         _ws_queue.pop();
@@ -823,12 +1129,22 @@ void _wsHandlePostponedCallbacks(bool connected) {
 }
 
 void _wsLoop() {
-    const bool connected = wsConnected();
+    const auto connected = wsConnected();
     _wsDoUpdate(connected);
     _wsHandlePostponedCallbacks(connected);
-    #if DEBUG_WEB_SUPPORT
-        _ws_debug.send(connected);
-    #endif
+}
+
+} // namespace
+
+// -----------------------------------------------------------------------------
+// ArduinoJson <-> WS printer
+// -----------------------------------------------------------------------------
+
+namespace {
+
+void _wsPrintTo(JsonObject& root, ::AsyncWebSocketMessageBuffer* buffer) {
+    auto wrapper = espurna::web::ws::AsyncWebSocketPrint(*buffer);
+    root.printTo(wrapper);
 }
 
 } // namespace
@@ -840,11 +1156,10 @@ void _wsLoop() {
 WsClientInfo wsClientInfo(uint32_t client_id) {
     auto* client = _ws.client(client_id);
 
-    WsClientInfo out;
-    out.connected = (client != nullptr);
-    out.stalled = out.connected && client->queueIsFull();
-
-    return out;
+    return WsClientInfo{
+        .connected = (client != nullptr),
+        .stalled = (client != nullptr) && client->queueIsFull(),
+    };
 }
 
 bool wsConnected() {
@@ -863,36 +1178,39 @@ void wsPayloadModule(JsonObject& root, espurna::StringView name) {
     modules.add(name);
 }
 
-ws_callbacks_t& wsRegister() {
+espurna::web::ws::Callbacks& wsRegister() {
     return _ws_callbacks;
 }
 
+// Note: 'measurement' tries to serialize json contents byte-by-byte by using a dummy printer
+// Make sure there is no off-by-one errors, since *some* output impelementations inject '\0'
+
 void wsSend(JsonObject& root) {
-    // Note: 'measurement' tries to serialize json contents byte-by-byte,
-    //       which is somewhat costly, but likely unavoidable for us.
-    size_t len = root.measureLength();
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    const auto len = root.measureLength();
+    auto* buffer = _ws.makeBuffer(len);
 
     if (buffer) {
-        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        _wsPrintTo(root, buffer);
         _ws.textAll(buffer);
     }
 }
 
 void wsSend(uint32_t client_id, JsonObject& root) {
     AsyncWebSocketClient* client = _ws.client(client_id);
-    if (client == nullptr) return;
+    if (client == nullptr) {
+        return;
+    }
 
-    size_t len = root.measureLength();
-    AsyncWebSocketMessageBuffer* buffer = _ws.makeBuffer(len);
+    const auto len = root.measureLength();
+    auto* buffer = _ws.makeBuffer(len);
 
     if (buffer) {
-        root.printTo(reinterpret_cast<char*>(buffer->get()), len + 1);
+        _wsPrintTo(root, buffer);
         client->text(buffer);
     }
 }
 
-void wsSend(ws_on_send_callback_f callback) {
+void wsSend(espurna::web::ws::OnSend callback) {
     if (_ws.count() > 0) {
         DynamicJsonBuffer jsonBuffer(512);
         JsonObject& root = jsonBuffer.createObject();
@@ -908,7 +1226,7 @@ void wsSend(const char * payload) {
     }
 }
 
-void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
+void wsSend(uint32_t client_id, espurna::web::ws::OnSend callback) {
     AsyncWebSocketClient* client = _ws.client(client_id);
     if (client == nullptr) return;
 
@@ -918,26 +1236,20 @@ void wsSend(uint32_t client_id, ws_on_send_callback_f callback) {
     wsSend(client_id, root);
 }
 
-void wsSend(uint32_t client_id, const char * payload) {
+void wsSend(uint32_t client_id, const char* payload) {
     _ws.text(client_id, payload);
 }
 
 void wsSetup() {
-
     _ws.onEvent(_wsEvent);
     webServer().addHandler(&_ws);
 
-    // CORS
-    const String webDomain = getSetting(F("webDomain"), F(WEB_REMOTE_DOMAIN));
-    DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Origin"), webDomain);
-    if (!webDomain.equals("*")) {
-        DefaultHeaders::Instance().addHeader(F("Access-Control-Allow-Credentials"), F("true"));
-    }
-
+    _ws_auth = espurna::web::ws::settings::authentication();
     webServer().on("/auth", HTTP_GET, _onAuth);
 
     wsRegister()
         .onConnected(_wsOnConnected)
+        .onVisible(_wsOnVisible)
         .onKeyCheck(_wsOnKeyCheck);
 
     espurnaRegisterLoop(_wsLoop);
