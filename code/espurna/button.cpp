@@ -1177,10 +1177,12 @@ void buttonEvent(size_t id, ButtonEvent event) {
         break;
 
     case ButtonAction::Reset:
+        systemForceStable();
         prepareReset(CustomResetReason::Button);
         break;
 
     case ButtonAction::FactoryReset:
+        systemForceStable();
         factoryReset();
         break;
 
@@ -1568,6 +1570,26 @@ void buttonSetup() {
         espurnaRegisterReload(_buttonConfigure);
 
         espurnaRegisterLoop(buttonLoop);
+    }
+}
+
+void buttonSetupUnstable() {
+#if SYSTEM_CHECK_ENABLED
+    buttonSetup();
+#endif
+
+    for (auto& button : espurna::button::internal::buttons) {
+        const auto mode = button.event_emitter->config().mode;
+        switch (mode) {
+        case debounce_event::types::Mode::Pushbutton:
+            button.actions.click = ButtonAction::Reset;
+            button.actions.dblclick = ButtonAction::AccessPoint;
+            button.actions.lnglngclick = ButtonAction::FactoryReset;
+            break;
+
+        default:
+            break;
+        }
     }
 }
 

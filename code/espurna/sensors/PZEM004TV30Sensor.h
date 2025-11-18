@@ -176,9 +176,10 @@ public:
         bool locked { false };
     };
 
-    void modbusDebugBuffer(const String& message, buffer_type& buffer, size_t size) {
+    void modbusDebugBuffer(espurna::StringView message, buffer_type& buffer, size_t size) {
         hexEncode(buffer.data(), size, _debug_buffer, sizeof(_debug_buffer));
-        PZEM_DEBUG_MSG_P(PSTR("[PZEM004TV3] %s: %s (%u bytes)\n"), message.c_str(), _debug_buffer, size);
+        PZEM_DEBUG_MSG_P(PSTR("[PZEM004TV3] %.*s: %s (%u bytes)\n"),
+            message.length(), message.data(), _debug_buffer, size);
     }
 
     static size_t modbusExpect(const adu_builder& builder) {
@@ -201,25 +202,20 @@ public:
         }
     }
 
-    template <typename Callback>
-    void modbusProcess(const adu_builder& builder, Callback callback) {
+    bool modbussProcessInternal(buffer_type& buffer, size_t& bytes, const adu_builder& builder) {
         if (!builder.locked) {
-            return;
+            return false;
         }
 
         _port->write(builder.buffer.data(), builder.size);
 
         size_t expect = modbusExpect(builder);
         if (!expect) {
-            return;
+            return false;
         }
 
         uint8_t code = builder.buffer[1];
         uint8_t error_code = ErrorMask | code;
-
-        size_t bytes = 0;
-
-        buffer_type buffer;
 
         // In case we need multiple devices, we need to manually set each one with an unique address **and** also provide
         // a way to distinguish between bus messages based on addresses received. Multiple instances **could** work,
@@ -250,13 +246,13 @@ public:
         }
 
         if (bytes && _debug) {
-            modbusDebugBuffer(F("Received"), buffer, bytes);
+            modbusDebugBuffer(STRING_VIEW("Received"), buffer, bytes);
         }
 
         if (bytes != expect) {
             PZEM_DEBUG_MSG_P(PSTR("[PZEM004TV3] ERROR: Expected %u bytes, got %u\n"), expect, bytes);
             _error = SENSOR_ERROR_OTHER; // TODO: more error codes
-            return;
+            return false;
         }
 
         uint16_t received_crc = static_cast<uint16_t>(buffer[bytes - 1] << 8) | static_cast<uint16_t>(buffer[bytes - 2]);
@@ -264,16 +260,26 @@ public:
         if (received_crc != crc) {
             PZEM_DEBUG_MSG_P(PSTR("[PZEM004TV3] ERROR: CRC invalid: expected %04X expected, received %04X\n"), crc, received_crc);
             _error = SENSOR_ERROR_CRC;
-            return;
+            return false;
         }
 
         if (buffer[1] & ErrorMask) {
             PZEM_DEBUG_MSG_P(PSTR("[PZEM004TV3] ERROR: %s (0x%02X)\n"),
-                errorToString(buffer[2]).c_str(), buffer[2]);
-            return;
+                errorToString(buffer[2]).toString().c_str(), buffer[2]);
+            return false;
         }
 
-        callback(std::move(buffer), bytes);
+        return true;
+    }
+
+    template <typename Callback>
+    void modbusProcess(const adu_builder& builder, Callback callback) {
+        buffer_type buffer;
+        size_t bytes = 0;
+
+        if (modbussProcessInternal(buffer, bytes, builder)) {
+            callback(std::move(buffer), bytes);
+        }
     }
 
     // Energy reset is a 'custom' function, and it does not take any function params
@@ -312,36 +318,37 @@ public:
     }
 
     // For more, see MODBUS application protocol specification, 7 MODBUS Exception Responses
-    String errorToString(uint8_t error) {
-        const __FlashStringHelper *ptr = nullptr;
+    espurna::StringView errorToString(uint8_t error) {
+        espurna::StringView out;
+
         switch (error) {
         case 0x01:
-            ptr = F("Illegal function");
+            out = STRING_VIEW("Illegal function");
             break;
         case 0x02:
-            ptr = F("Illegal data address");
+            out = STRING_VIEW("Illegal data address");
             break;
         case 0x03:
-            ptr = F("Illegal data value");
+            out = STRING_VIEW("Illegal data value");
             break;
         case 0x04:
-            ptr = F("Device failure");
+            out = STRING_VIEW("Device failure");
             break;
         case 0x05:
-            ptr = F("Acknowledged");
+            out = STRING_VIEW("Acknowledged");
             break;
         case 0x06:
-            ptr = F("Busy");
+            out = STRING_VIEW("Busy");
             break;
         case 0x08:
-            ptr = F("Memory parity error");
+            out = STRING_VIEW("Memory parity error");
             break;
         default:
-            ptr = F("Unknown");
+            out = STRING_VIEW("Unknown");
             break;
         }
 
-        return ptr;
+        return out;
     }
 
     // Quoting the README.md of the original library repo and datasheet, we have:
@@ -510,8 +517,8 @@ public:
     }
 
     String description() const override {
-        static const String base(F("PZEM004TV30"));
-        return base + " @ 0x" + String(_address, 16);
+        STRING_VIEW_INLINE(Base, "PZEM004TV30 @ 0x");
+        return Base + String(_address, 16);
     }
 
     String address(unsigned char) const override {
@@ -603,11 +610,11 @@ constexpr espurna::duration::Milliseconds PZEM004TV30Sensor::DefaultUpdateInterv
 
 PZEM004TV30Sensor::Instance PZEM004TV30Sensor::_instance{};
 
-PROGMEM_STRING(PzemV3Address, "PZ.ADDRESS");
+STRING_VIEW_INLINE(PzemV3Address, "PZ.ADDRESS");
 
 void PZEM004TV30Sensor::command_address(::terminal::CommandContext&& ctx) {
     if (ctx.argv.size() != 2) {
-        terminalError(ctx, F("PZ.ADDRESS <ADDRESS>"));
+        terminalError(ctx, STRING_VIEW("PZ.ADDRESS <ADDRESS>"));
         return;
     }
 
@@ -616,12 +623,12 @@ void PZEM004TV30Sensor::command_address(::terminal::CommandContext&& ctx) {
     consumeAvailable(*(_instance->_port));
     if (_instance->modbusChangeAddress(address)) {
         _instance->_address = address;
-        setSetting("pzemv30Addr", address);
+        setSetting(STRING_VIEW("pzemv30Addr"), address);
         terminalOK(ctx);
         return;
     }
 
-    terminalError(ctx, F("Could not change the address"));
+    terminalError(ctx, STRING_VIEW("Could not change the address"));
 }
 
 static constexpr ::terminal::Command PzemV3Commands[] PROGMEM {
