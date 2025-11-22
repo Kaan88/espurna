@@ -195,7 +195,7 @@
 //------------------------------------------------------------------------------
 
 #ifndef SYSTEM_CHECK_ENABLED
-#define SYSTEM_CHECK_ENABLED    1               // Enable crash check by default
+#define SYSTEM_CHECK_ENABLED    0               // Enable crash check by default
 #endif
 
 #ifndef SYSTEM_CHECK_TIME
