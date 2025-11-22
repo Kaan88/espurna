@@ -1493,7 +1493,7 @@
 
 // This setting defines whether Alexa support should be built into the firmware
 #ifndef ALEXA_SUPPORT
-#define ALEXA_SUPPORT               1               // Enable Alexa support by default (10.84Kb)
+#define ALEXA_SUPPORT               0               // Enable Alexa support by default (10.84Kb)
 #endif
 
 #ifndef ALEXA_ENABLED
