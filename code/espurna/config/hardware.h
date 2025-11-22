@@ -1802,11 +1802,11 @@
     #define V9261F_SUPPORT          1
 
     // Buttons
-    #define BUTTON1_PIN         2
+    #define BUTTON1_PIN         14
     #define BUTTON1_RELAY       1
 
     // Touch button
-    #define BUTTON1_CONFIG          BUTTON_PUSHBUTTON | BUTTON_DEFAULT_HIGH
+    #define BUTTON1_CONFIG          BUTTON_PUSHBUTTON | BUTTON_SET_PULLUP | BUTTON_DEFAULT_HIGH
     #define BUTTON1_PRESS           BUTTON_ACTION_TOGGLE
     #define BUTTON1_CLICK           BUTTON_ACTION_NONE
     #define BUTTON1_DBLCLICK        BUTTON_ACTION_NONE
@@ -1814,7 +1814,7 @@
     #define BUTTON1_LNGLNGCLICK     BUTTON_ACTION_NONE
 
     // Relay
-    #define RELAY1_PIN          0
+    #define RELAY1_PIN          5
     #define RELAY1_TYPE         RELAY_TYPE_INVERSE
 
     // UART only reads data
@@ -1823,7 +1823,7 @@
 
     #define UART1_BAUDRATE          4800
     #define UART1_TX_PIN            GPIO_NONE
-    #define UART1_RX_PIN            3
+    #define UART1_RX_PIN            2
     #define UART1_INVERT            1
     #define UART1_PARITY            Odd
 
