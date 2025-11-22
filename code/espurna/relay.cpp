@@ -1432,12 +1432,32 @@ struct GpioProvider : public RelayProviderBase {
         if (!_pin) {
             return false;
         }
-
+    
         _pin->pinMode(OUTPUT);
+    
+        // *** NEW: immediately force a known-OFF level ***
+        switch (_type) {
+        case RelayType::Normal:
+            // Active-HIGH relay: LOW = OFF
+            _pin->digitalWrite(LOW);
+            break;
+    
+        case RelayType::Inverse:
+            // Active-LOW relay: HIGH = OFF
+            _pin->digitalWrite(HIGH);
+            break;
+    
+        default:
+            // Latched types are handled by pulses in change()
+            break;
+        }
+    
         if (_reset_pin) {
             _reset_pin->pinMode(OUTPUT);
+            // Optional: ensure reset pin is idle (often LOW) here if you use it
+            //_reset_pin->digitalWrite(LOW);
         }
-
+    
         return true;
     }
 
