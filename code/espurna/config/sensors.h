@@ -1215,15 +1215,15 @@
 #endif
 
 #ifndef V9261F_POWER_ACTIVE_FACTOR
-#define V9261F_POWER_ACTIVE_FACTOR      153699.0
+#define V9261F_POWER_ACTIVE_FACTOR      183700.0
 #endif
 
 #ifndef V9261F_VOLTAGE_FACTOR
-#define V9261F_VOLTAGE_FACTOR           4160651.0
+#define V9261F_VOLTAGE_FACTOR           4165651.0
 #endif
 
 #ifndef V9261F_CURRENT_FACTOR
-#define V9261F_CURRENT_FACTOR           79371434.0
+#define V9261F_CURRENT_FACTOR           94500420.0
 #endif
 
 //------------------------------------------------------------------------------
