@@ -1815,7 +1815,7 @@
 
     // Relay
     #define RELAY1_PIN          5
-    #define RELAY1_TYPE         RELAY_TYPE_INVERSE
+    #define RELAY1_TYPE         RELAY_TYPE_NORMAL
 
     // UART only reads data
     #define UART_SUPPORT            1
