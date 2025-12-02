@@ -199,7 +199,7 @@
 #endif
 
 #ifndef SYSTEM_CHECK_TIME
-#define SYSTEM_CHECK_TIME       60              // The system is considered stable after these many seconds
+#define SYSTEM_CHECK_TIME       3              // The system is considered stable after these many seconds
 #endif
 
 #ifndef SYSTEM_CHECK_MAX
@@ -216,7 +216,7 @@
                                                 // on the number of available sectors
 
 #ifndef SAVE_CRASH_ENABLED
-#define SAVE_CRASH_ENABLED          1           // Save stack trace to EEPROM by default
+#define SAVE_CRASH_ENABLED          0           // Save stack trace to EEPROM by default
                                                 // Depends on DEBUG_SUPPORT == 1
 #endif
 
