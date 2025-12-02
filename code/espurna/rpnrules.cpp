@@ -746,13 +746,38 @@ rpn_error status(rpn_context & ctxt, bool force) {
     rpn_value status;
 
     rpn_stack_pop(ctxt, id);
-    rpn_stack_pop(ctxt, status);
+    rpn_uint id_uint = id.toUint();
 
-    rpn_uint value = status.toUint();
-    if (value == 2) {
-        ::relayToggle(id.toUint());
-    } else if (::relayTargetStatus(id.toUint()) != (value == 1)) {
-        ::relayStatus(id.toUint(), value == 1);
+    rpn_stack_pop(ctxt, status);
+    rpn_uint status_uint = status.toUint();
+
+    switch (status_uint) {
+    case 2:
+        ::relayToggle(id_uint);
+        break;
+
+    case 1:
+    case 0:
+    {
+        bool ok = force;
+        if (!ok) {
+            const auto status_enum =
+                status_uint == 1
+                    ? RelayStatus::On
+                    : RelayStatus::Off;
+            const auto target_status = relayTargetStatus(id_uint);
+            ok = (status_enum != target_status)
+              && ((target_status == RelayStatus::On)
+               || (target_status == RelayStatus::Off));
+        }
+
+        if (ok) {
+            ::relayStatus(id_uint, status_uint == 1);
+        }
+
+        break;
+    }
+
     }
 
     return 0;

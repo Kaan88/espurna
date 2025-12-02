@@ -24,7 +24,6 @@ Copyright (C) 2019-2021 by Maxim Prokhorov <prokhorov dot max at outlook dot com
 
 namespace espurna {
 namespace domoticz {
-namespace {
 
 struct Idx {
     constexpr static size_t Default { 0 };
@@ -54,7 +53,6 @@ private:
     size_t _value { Default };
 };
 
-} // namespace
 } // namespace domoticz
 
 namespace settings {
@@ -69,15 +67,13 @@ espurna::domoticz::Idx convert(const String& value) {
 } // namespace settings
 
 namespace domoticz {
-namespace internal {
 namespace {
+
+namespace internal {
 
 bool enabled { false };
 
-} // namespace
 } // namespace internal
-
-namespace {
 
 bool enabled() {
     return internal::enabled;
@@ -91,10 +87,7 @@ void disable() {
     internal::enabled = false;
 }
 
-} // namespace
-
 namespace build {
-namespace {
 
 static constexpr ::espurna::domoticz::Idx DefaultIdx;
 
@@ -105,7 +98,6 @@ constexpr bool enabled() {
     return 1 == DOMOTICZ_ENABLED;
 }
 
-} // namespace
 } // namespace build
 
 namespace settings {
@@ -128,8 +120,6 @@ PROGMEM_STRING(LightIdx, "dczLightIdx");
 #endif
 
 } // namespace keys
-
-namespace {
 
 bool enabled() {
     return getSetting(FPSTR(keys::Enabled), build::enabled());
@@ -161,20 +151,18 @@ Idx lightIdx() {
 }
 #endif
 
-} // namespace
 } // namespace settings
 
 #if RELAY_SUPPORT
 namespace relay {
 namespace internal {
-namespace {
 
-std::bitset<RelaysMax> status;
+using RelayMask = std::bitset<RelaysMax>;
 
-} // namespace
+RelayMask last_ready;
+RelayMask last_status;
+
 } // namespace internal
-
-namespace {
 
 void send(Idx, bool);
 void send();
@@ -191,31 +179,47 @@ size_t find(Idx idx) {
 }
 
 void status(Idx idx, bool value) {
-    auto id = find(idx);
-    if (id < RelaysMax) {
-        internal::status[id] = value;
+    const auto id = find(idx);
+    if (id >= RelaysMax) {
+        return;
+    }
+
+    if (!internal::last_ready[id]) {
+        return;
+    }
+
+    if (internal::last_status[id] != value) {
+        internal::last_status[id] = value;
         ::relayStatus(id, value);
     }
 }
 
-void callback(size_t id, bool value) {
-    if (internal::status[id] != value) {
-        internal::status[id] = value;
+void on_status(size_t id, bool value) {
+    if (!internal::last_ready[id]) {
+        return;
+    }
+
+    if (internal::last_status[id] != value) {
+        internal::last_status[id] = value;
         send(settings::relayIdx(id), value);
     }
 }
 
-void setup() {
-    ::relayOnStatusChange(callback);
+void on_ready(size_t id, bool status) {
+    internal::last_ready[id] = true;
+    on_status(id, status);
 }
 
-} // namespace
+void setup() {
+    ::relayOnReady(on_ready);
+    ::relayOnStatusChange(on_status);
+}
+
 } // namespace relay
 #endif
 
 #if LIGHT_PROVIDER != LIGHT_PROVIDER_NONE
 namespace light {
-namespace {
 
 void status(const JsonObject& root, unsigned char nvalue) {
     JsonObject& color = root[F("Color")];
@@ -262,12 +266,10 @@ void status(const JsonObject& root, unsigned char nvalue) {
     lightUpdate();
 }
 
-} // namespace
 } // namespace light
 #endif
 
 namespace mqtt {
-namespace {
 
 void subscribe() {
     mqttSubscribeRaw(settings::topicOut().c_str());
@@ -351,31 +353,29 @@ void setup() {
     ::mqttRegister(callback);
 }
 
-} // namespace
 } // namespace mqtt
 
 #if RELAY_SUPPORT
 namespace relay {
-namespace {
 
 void send(Idx idx, bool value) {
     mqtt::send(idx, value ? 1 : 0);
 }
 
 void send() {
-    const size_t Relays { relayCount() };
-    for (size_t id = 0; id < Relays; ++id) {
-        send(settings::relayIdx(id), ::relayStatus(id));
+    const auto relays = relayCount();
+    for (size_t id = 0; id < relays; ++id) {
+        if (internal::last_ready[id]) {
+            send(settings::relayIdx(id), internal::last_status[id]);
+        }
     }
 }
 
-} // namespace
 } // namespace relay
 #endif
 
 #if SENSOR_SUPPORT
 namespace sensor {
-namespace {
 
 void send(unsigned char index, const espurna::sensor::Value& value) {
     if (!enabled()) {
@@ -421,13 +421,11 @@ void send(unsigned char index, const espurna::sensor::Value& value) {
     }
 }
 
-} // namespace
 } // namespace sensor
 #endif // SENSOR_SUPPORT
 
 #if WEB_SUPPORT
 namespace web {
-namespace {
 
 STRING_VIEW_INLINE(Prefix, "dcz");
 
@@ -480,13 +478,10 @@ void setup() {
         .onKeyCheck(onKeyCheck);
 }
 
-} // namespace
 } // namespace web
 #endif // WEB_SUPPORT
 
 //------------------------------------------------------------------------------
-
-namespace {
 
 void configure() {
     auto enabled_in_cfg = settings::enabled();
@@ -497,12 +492,6 @@ void configure() {
             mqtt::unsubscribe();
         }
     }
-
-#if RELAY_SUPPORT
-    for (size_t id = 0; id < relayCount(); ++id) {
-        relay::internal::status[id] = relayStatus(id);
-    }
-#endif
 
     if (enabled_in_cfg) {
         enable();
