@@ -17,7 +17,7 @@
 #endif
 
 #ifndef USE_PASSWORD
-#define USE_PASSWORD            1               // Insecurity caution! Disabling this will disable password querying completely.
+#define USE_PASSWORD            0               // Insecurity caution! Disabling this will disable password querying completely.
 #endif
 
 #ifndef LOOP_DELAY_TIME
@@ -199,7 +199,7 @@
 #endif
 
 #ifndef SYSTEM_CHECK_TIME
-#define SYSTEM_CHECK_TIME       60              // The system is considered stable after these many seconds
+#define SYSTEM_CHECK_TIME       3              // The system is considered stable after these many seconds
 #endif
 
 #ifndef SYSTEM_CHECK_MAX
@@ -216,7 +216,7 @@
                                                 // on the number of available sectors
 
 #ifndef SAVE_CRASH_ENABLED
-#define SAVE_CRASH_ENABLED          1           // Save stack trace to EEPROM by default
+#define SAVE_CRASH_ENABLED          0           // Save stack trace to EEPROM by default
                                                 // Depends on DEBUG_SUPPORT == 1
 #endif
 
@@ -1509,7 +1509,7 @@
 
 // This setting defines whether Alexa support should be built into the firmware
 #ifndef ALEXA_SUPPORT
-#define ALEXA_SUPPORT               1               // Enable Alexa support by default (10.84Kb)
+#define ALEXA_SUPPORT               0               // Enable Alexa support by default (10.84Kb)
 #endif
 
 #ifndef ALEXA_ENABLED
