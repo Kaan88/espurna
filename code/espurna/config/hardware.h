@@ -1823,7 +1823,7 @@
 
     #define UART1_BAUDRATE          4800
     #define UART1_TX_PIN            GPIO_NONE
-    #define UART1_RX_PIN            2
+    #define UART1_RX_PIN            4
     #define UART1_INVERT            1
     #define UART1_PARITY            Odd
 
